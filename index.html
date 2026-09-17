@@ -367,6 +367,10 @@
         const skeletonLinesGroup = new THREE.Group();
         scene.add(skeletonLinesGroup);
 
+        const xrayGizmosGroup = new THREE.Group();
+        xrayGizmosGroup.visible = false;
+        scene.add(xrayGizmosGroup);
+
         // --- PARÂMETROS PADRÃO CALIBRADOS ---
         const params = {
             bodyPosX: 0,
@@ -390,6 +394,7 @@
             irisE: 0.0,
             irisD: 0.0,
             // Visualização
+            xrayMode: false,
             showTelemetry: false,
             showFootTargets: true,
             showSkeletonLines: true,
@@ -404,6 +409,111 @@
             if (telemetryBox) {
                 telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
             }
+        }
+
+        // --- XRAY MODE ASSETS & HELPERS ---
+        const xrayBoundingBoxes = [];
+
+        function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
+            const group = new THREE.Group();
+            group.userData.isXrayHelper = true;
+
+            // Linha Eixo X (Vermelho #ff3b30)
+            const geoX = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-size, 0, 0), new THREE.Vector3(size, 0, 0)
+            ]);
+            const matX = new THREE.LineBasicMaterial({ color: 0xff3b30, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineX = new THREE.Line(geoX, matX);
+            lineX.userData.isXrayHelper = true;
+            group.add(lineX);
+
+            // Linha Eixo Y (Verde #34c759)
+            const geoY = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, -size, 0), new THREE.Vector3(0, size, 0)
+            ]);
+            const matY = new THREE.LineBasicMaterial({ color: 0x34c759, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineY = new THREE.Line(geoY, matY);
+            lineY.userData.isXrayHelper = true;
+            group.add(lineY);
+
+            // Linha Eixo Z (Azul #007aff)
+            const geoZ = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, -size), new THREE.Vector3(0, 0, size)
+            ]);
+            const matZ = new THREE.LineBasicMaterial({ color: 0x007aff, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineZ = new THREE.Line(geoZ, matZ);
+            lineZ.userData.isXrayHelper = true;
+            group.add(lineZ);
+
+            // Ponto / Esfera da Junta no Pivot (Azul Elétrico Neon #00d2ff)
+            const jointGeo = new THREE.SphereGeometry(sphereRadius, 16, 16);
+            const jointMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, depthTest: false, transparent: true, opacity: 0.95 });
+            const jointSphere = new THREE.Mesh(jointGeo, jointMat);
+            jointSphere.userData.isXrayHelper = true;
+            group.add(jointSphere);
+
+            group.renderOrder = 999;
+            return group;
+        }
+
+        function createMeshBoundingBox(mesh) {
+            if (!mesh.geometry) return null;
+            mesh.geometry.computeBoundingBox();
+            const bbox = mesh.geometry.boundingBox;
+            if (!bbox) return null;
+
+            const size = new THREE.Vector3();
+            const center = new THREE.Vector3();
+            bbox.getSize(size);
+            bbox.getCenter(center);
+
+            if (size.x <= 0.0001 && size.y <= 0.0001 && size.z <= 0.0001) return null;
+
+            const bboxGroup = new THREE.Group();
+            bboxGroup.userData.isXrayHelper = true;
+
+            const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+
+            // Bounding box com visual cibernético/holográfico calibrado
+            const edgeLines = new THREE.LineSegments(
+                edgesGeo,
+                new THREE.LineBasicMaterial({ color: 0x00d2ff, linewidth: 1, transparent: true, opacity: 0.35 })
+            );
+            edgeLines.userData.isXrayHelper = true;
+
+            const faceMesh = new THREE.Mesh(
+                boxGeo,
+                new THREE.MeshBasicMaterial({ color: 0x002244, transparent: true, opacity: 0.08, depthWrite: false })
+            );
+            faceMesh.userData.isXrayHelper = true;
+
+            bboxGroup.add(edgeLines);
+            bboxGroup.add(faceMesh);
+            bboxGroup.position.copy(center);
+
+            return bboxGroup;
+        }
+
+        function setXRayMode(enable) {
+            params.xrayMode = enable;
+
+            if (modelRoot) {
+                modelRoot.traverse((child) => {
+                    if (child.isMesh && !child.userData.isXrayHelper) {
+                        if (child.material) {
+                            const mats = Array.isArray(child.material) ? child.material : [child.material];
+                            mats.forEach(m => m.visible = !enable);
+                        }
+                    }
+                });
+            }
+
+            xrayBoundingBoxes.forEach(b => b.visible = enable);
+            xrayGizmosGroup.visible = enable;
+
+            skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
+            footTargetGroup.visible = enable ? true : params.showFootTargets;
         }
 
         const morphMeshes = [];
@@ -457,10 +567,24 @@
         const L3_M = 2.8000; // Tíbia
 
         let modelRoot = null;
+        let headNode = null;
+        let bodyGizmo = null;
+        let headGizmo = null;
+        let bodySpineMesh = null;
         const legs = [];
         const footTargets = [];
         const targetMeshes = [];
         const legLines = [];
+        const legJointGizmos = [];
+
+        const _tempVec1 = new THREE.Vector3();
+        const _tempVec2 = new THREE.Vector3();
+        const _tempVec3 = new THREE.Vector3();
+        const _tempVec4 = new THREE.Vector3();
+        const _tempVec5 = new THREE.Vector3();
+        const _tempVec6 = new THREE.Vector3();
+        const _tempVecBc = new THREE.Vector3();
+        const _tempVecHead = new THREE.Vector3();
 
         // --- CARREGAMENTO DO GLB ---
         const loader = new GLTFLoader();
@@ -575,6 +699,53 @@
             });
 
             initFootTargets();
+
+            // --- LINHAS DE ESQUELETO DO CORPO CENTRAL / ESPINHA DORSAL (ARANHA) ---
+            const spinePosArray = new Float32Array(26 * 3);
+            const spineGeo = new THREE.BufferGeometry();
+            spineGeo.setAttribute('position', new THREE.BufferAttribute(spinePosArray, 3));
+            const spineMat = new THREE.LineBasicMaterial({
+                color: 0x00d2ff,
+                linewidth: 3,
+                transparent: true,
+                opacity: 0.95
+            });
+            bodySpineMesh = new THREE.LineSegments(spineGeo, spineMat);
+            bodySpineMesh.userData.isXrayHelper = true;
+            skeletonLinesGroup.add(bodySpineMesh);
+
+            // --- CRIAR BOUNDING BOXES (XRAY MODE) ---
+            modelRoot.traverse((child) => {
+                if (child.isMesh && !child.userData.isXrayHelper) {
+                    const bbox = createMeshBoundingBox(child);
+                    if (bbox) {
+                        bbox.visible = false;
+                        child.add(bbox);
+                        xrayBoundingBoxes.push(bbox);
+                    }
+                }
+            });
+
+            // --- CRIAR GIZMOS EM CRUZ (X, Y, Z + JUNTA) NOS PIVOTS ---
+            bodyGizmo = createCrossGizmo(0.55, 0.18);
+            xrayGizmosGroup.add(bodyGizmo);
+
+            legs.forEach((leg, index) => {
+                const gizmos = [
+                    createCrossGizmo(0.35, 0.11), // P0 (Base / Quadril)
+                    createCrossGizmo(0.35, 0.11), // P1 (Coxa / Ombro)
+                    createCrossGizmo(0.35, 0.11), // P2 (Joelho)
+                    createCrossGizmo(0.35, 0.11)  // P3 (Pata / Tornozelo)
+                ];
+                gizmos.forEach(g => xrayGizmosGroup.add(g));
+                legJointGizmos[index] = gizmos;
+            });
+
+            headNode = modelRoot.getObjectByName('Arainha_Pernas_v001:Layer5') || modelRoot.getObjectByName('Layer5');
+            if (headNode) {
+                headGizmo = createCrossGizmo(0.35, 0.11);
+                xrayGizmosGroup.add(headGizmo);
+            }
 
             const loadingElem = document.getElementById('loading');
             loadingElem.style.opacity = '0';
@@ -730,13 +901,29 @@
             }
 
             // Atualizar Linha do Esqueleto IK
-            if (lineMesh && params.showSkeletonLines) {
+            if (lineMesh && (params.showSkeletonLines || params.xrayMode)) {
                 const positions = lineMesh.geometry.attributes.position.array;
                 positions[0] = _P0.x; positions[1] = _P0.y; positions[2] = _P0.z;
                 positions[3] = _P1.x; positions[4] = _P1.y; positions[5] = _P1.z;
                 positions[6] = _P2.x; positions[7] = _P2.y; positions[8] = _P2.z;
                 positions[9] = _P3.x; positions[10] = _P3.y; positions[11] = _P3.z;
                 lineMesh.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Atualizar Gizmos e Juntas XRay da Perna (4 juntas: P0, P1, P2, P3)
+            if (legJointGizmos[leg.index]) {
+                const [g0, g1, g2, g3] = legJointGizmos[leg.index];
+                g0.position.copy(_P0);
+                g0.quaternion.copy(_qWorldBase);
+
+                g1.position.copy(_P1);
+                g1.quaternion.copy(_qWorld1);
+
+                g2.position.copy(_P2);
+                g2.quaternion.copy(_qWorld2);
+
+                g3.position.copy(_P3);
+                g3.quaternion.copy(_qWorld3);
             }
         }
 
@@ -765,6 +952,65 @@
             // Resolver IK com a elevação calculada
             for (let i = 0; i < legs.length; i++) {
                 solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation);
+            }
+
+            // Atualizar Gizmo do Corpo e da Cabeça
+            bodyGroup.getWorldPosition(_tempVecBc);
+            if (bodyGizmo) {
+                bodyGizmo.position.copy(_tempVecBc);
+                bodyGizmo.quaternion.copy(bodyGroup.quaternion);
+            }
+            if (headGizmo && headNode) {
+                headNode.getWorldPosition(_tempVecHead);
+                headGizmo.position.copy(_tempVecHead);
+                headNode.getWorldQuaternion(headGizmo.quaternion);
+            }
+
+            // Atualizar Linhas da Espinha Central da Aranha (Conexão do Corpo com as 6 Bases)
+            if (bodySpineMesh && skeletonLinesGroup.visible && legs.length === 6) {
+                const pos = bodySpineMesh.geometry.attributes.position.array;
+                bodyGroup.getWorldPosition(_tempVecBc);
+
+                const pFR = legs[0].baseNode.getWorldPosition(_tempVec1);
+                const pMR = legs[1].baseNode.getWorldPosition(_tempVec2);
+                const pBR = legs[2].baseNode.getWorldPosition(_tempVec3);
+                const pFL = legs[3].baseNode.getWorldPosition(_tempVec4);
+                const pML = legs[4].baseNode.getWorldPosition(_tempVec5);
+                const pBL = legs[5].baseNode.getWorldPosition(_tempVec6);
+
+                let ptr = 0;
+                const bases = [pFR, pMR, pBR, pFL, pML, pBL];
+                // 6 Raios: Centro do Corpo -> Bases das Pernas
+                for (let i = 0; i < 6; i++) {
+                    pos[ptr++] = _tempVecBc.x; pos[ptr++] = _tempVecBc.y; pos[ptr++] = _tempVecBc.z;
+                    pos[ptr++] = bases[i].x;   pos[ptr++] = bases[i].y;   pos[ptr++] = bases[i].z;
+                }
+
+                // 3 Transversais: FR<->FL, MR<->ML, BR<->BL
+                pos[ptr++] = pFR.x; pos[ptr++] = pFR.y; pos[ptr++] = pFR.z;
+                pos[ptr++] = pFL.x; pos[ptr++] = pFL.y; pos[ptr++] = pFL.z;
+
+                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
+                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
+
+                pos[ptr++] = pBR.x; pos[ptr++] = pBR.y; pos[ptr++] = pBR.z;
+                pos[ptr++] = pBL.x; pos[ptr++] = pBL.y; pos[ptr++] = pBL.z;
+
+                // 2 Longitudinais Direita: FR<->MR, MR<->BR
+                pos[ptr++] = pFR.x; pos[ptr++] = pFR.y; pos[ptr++] = pFR.z;
+                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
+
+                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
+                pos[ptr++] = pBR.x; pos[ptr++] = pBR.y; pos[ptr++] = pBR.z;
+
+                // 2 Longitudinais Esquerda: FL<->ML, ML<->BL
+                pos[ptr++] = pFL.x; pos[ptr++] = pFL.y; pos[ptr++] = pFL.z;
+                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
+
+                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
+                pos[ptr++] = pBL.x; pos[ptr++] = pBL.y; pos[ptr++] = pBL.z;
+
+                bodySpineMesh.geometry.attributes.position.needsUpdate = true;
             }
 
             // Atualizar Telemetria
@@ -852,13 +1098,14 @@
             fLights.close();
 
             const fVis = gui.addFolder('Exibição & Auxiliares');
+            fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
             fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
             fVis.add(params, 'ikEnabled').name('IK Habilitado');
             fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
-                skeletonLinesGroup.visible = v;
+                if (!params.xrayMode) skeletonLinesGroup.visible = v;
             });
             fVis.add(params, 'showFootTargets').name('Mostrar Âncoras Patas').onChange(v => {
-                footTargetGroup.visible = v;
+                if (!params.xrayMode) footTargetGroup.visible = v;
             });
             fVis.add(gridHelper, 'visible').name('Mostrar Grade');
             fVis.close();
@@ -877,6 +1124,9 @@
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
             if (e.key === 'i' || e.key === 'I') {
                 toggleTelemetry();
+            }
+            if (e.key === 'x' || e.key === 'X') {
+                setXRayMode(!params.xrayMode);
             }
         });
 
