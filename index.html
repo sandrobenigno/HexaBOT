@@ -709,7 +709,7 @@
             fRim1.add(rimLight.position, 'x', -30, 30, 0.5).name('Pos X');
             fRim1.add(rimLight.position, 'y', -10, 30, 0.5).name('Pos Y');
             fRim1.add(rimLight.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim1.add(rimLight.distance, 0, 200, 1).name('Distância');
+            fRim1.add(rimLight, 'distance', 0, 200, 1).name('Distância');
 
             const fRim2 = fLights.addFolder('🔵 Rim Light 2');
             fRim2.add(rimLight2, 'intensity', 0, 20, 0.2).name('Intensidade');
@@ -717,7 +717,7 @@
             fRim2.add(rimLight2.position, 'x', -30, 30, 0.5).name('Pos X');
             fRim2.add(rimLight2.position, 'y', -10, 30, 0.5).name('Pos Y');
             fRim2.add(rimLight2.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim2.add(rimLight2.distance, 0, 200, 1).name('Distância');
+            fRim2.add(rimLight2, 'distance', 0, 200, 1).name('Distância');
 
             const fAmb = fLights.addFolder('🌫️ Luz Ambiente');
             fAmb.add(ambientLight, 'intensity', 0, 3, 0.05).name('Intensidade');
