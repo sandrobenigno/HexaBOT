@@ -725,7 +725,7 @@
             fRim2.add(rimLight2.position, 'x', -30, 30, 0.5).name('Pos X');
             fRim2.add(rimLight2.position, 'y', -10, 30, 0.5).name('Pos Y');
             fRim2.add(rimLight2.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim2.add(rimLight2.distance, 0, 200, 1).name('Distância');
+            fRim2.add(rimLight2, 'distance', 0, 200, 1).name('Distância');
             fRim2.close();
 
             const fAmb = fLights.addFolder('🌫️ Luz Ambiente');
