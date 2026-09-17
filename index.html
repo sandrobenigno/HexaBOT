@@ -30,7 +30,6 @@
             left: 16px;
             pointer-events: none;
             z-index: 10;
-            display: none;
         }
         .panel {
             background: rgba(13, 17, 23, 0.94);
@@ -144,14 +143,16 @@
 
     <div id="ui-overlay">
         <div class="panel">
-            <span class="posture-badge">🤖 Auto-Balanço Calibrado</span>
             <h1>🤖 HexaBOT IK</h1>
-            <p>Velocidade 2.0, Altura Média 0.6m (±0.3m), Yaw 25°, Pitch/Roll 5°, Deslocamento 0.25m com curva adaptativa.</p>
-            <div class="telemetry">
-                <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Resolvendo...</span></div>
-                <div class="telemetry-row"><span>Altura do Corpo (Y):</span> <span id="tel-height">0.60 m</span></div>
-                <div class="telemetry-row"><span>Elevação da Coxa:</span> <span id="tel-coxa">40.6° (Auto)</span></div>
-                <div class="telemetry-row"><span>Perna FL / FR:</span> <span id="tel-fl">Ativo</span></div>
+			<span class="posture-badge">IK Solver By Sandro Benigno (EvilPlaymobil)</span>
+            <div id="telemetry-box" style="display: none; margin-top: 6px;">
+                <p>Velocidade 2.0, Altura Média 0.6m (±0.3m), Yaw 25°, Pitch/Roll 5°, Deslocamento 0.25m com curva adaptativa.</p>
+                <div class="telemetry">
+                    <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Resolvendo...</span></div>
+                    <div class="telemetry-row"><span>Altura do Corpo (Y):</span> <span id="tel-height">0.60 m</span></div>
+                    <div class="telemetry-row"><span>Elevação da Coxa:</span> <span id="tel-coxa">40.6° (Auto)</span></div>
+                    <div class="telemetry-row"><span>Perna FL / FR:</span> <span id="tel-fl">Ativo</span></div>
+                </div>
             </div>
         </div>
     </div>
@@ -284,7 +285,7 @@
             irisE: 0.0,
             irisD: 0.0,
             // Visualização
-            showOverlay: false,
+            showTelemetry: false,
             showFootTargets: true,
             showSkeletonLines: true,
             showLightHelpers: false,
@@ -292,11 +293,11 @@
             resetPose: () => resetPose()
         };
 
-        const overlayElem = document.getElementById('ui-overlay');
-        function toggleOverlay(val) {
-            params.showOverlay = (val !== undefined) ? val : !params.showOverlay;
-            if (overlayElem) {
-                overlayElem.style.display = params.showOverlay ? 'block' : 'none';
+        const telemetryBox = document.getElementById('telemetry-box');
+        function toggleTelemetry(val) {
+            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
+            if (telemetryBox) {
+                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
             }
         }
 
@@ -746,7 +747,7 @@
             fLights.close();
 
             const fVis = gui.addFolder('Exibição & Auxiliares');
-            fVis.add(params, 'showOverlay').name('Painel Métricas (Tecla I)').listen().onChange(toggleOverlay);
+            fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
             fVis.add(params, 'ikEnabled').name('IK Habilitado');
             fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
                 skeletonLinesGroup.visible = v;
@@ -770,7 +771,7 @@
         window.addEventListener('keydown', (e) => {
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
             if (e.key === 'i' || e.key === 'I') {
-                toggleOverlay();
+                toggleTelemetry();
             }
         });
 
