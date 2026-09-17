@@ -1,0 +1,9 @@
+﻿# Pastas temporárias
+tmp/
+/tmp/
+
+# Sistema Operacional / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexapod ThreeJS - IK Adaptativo & Auto-Balanço Calibrado</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background-color: #0b0f17;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .panel {
+            background: rgba(13, 17, 23, 0.94);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 16px 20px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+            max-width: 380px;
+        }
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        p {
+            font-size: 0.82rem;
+            color: #8b949e;
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+        .posture-badge {
+            display: inline-block;
+            background: rgba(46, 213, 115, 0.15);
+            color: #2ed573;
+            border: 1px solid rgba(46, 213, 115, 0.3);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .telemetry {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.74rem;
+            line-height: 1.5;
+            color: #7ee787;
+        }
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .telemetry-row span:first-child {
+            color: #8b949e;
+        }
+        #loading {
+            position: absolute;
+            inset: 0;
+            background: #0b0f17;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(88, 166, 255, 0.15);
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .lil-gui {
+            --background-color: rgba(13, 17, 23, 0.94) !important;
+            --text-color: #e6edf3 !important;
+            --title-background-color: rgba(22, 27, 34, 0.95) !important;
+            --widget-color: #21262d !important;
+            --hover-color: #30363d !important;
+            --focus-color: #58a6ff !important;
+            --number-color: #79c0ff !important;
+            --string-color: #7ee787 !important;
+            font-family: inherit !important;
+            border-radius: 14px !important;
+            overflow: hidden !important;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        }
+    </style>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+          "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.min.js"
+        }
+      }
+    </script>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p style="color: #e6edf3; font-weight: 500;">Carregando Hexápode com Parâmetros Calibrados...</p>
+    </div>
+
+    <div id="ui-overlay">
+        <div class="panel">
+            <span class="posture-badge">🕷️ Auto-Balanço Calibrado</span>
+            <h1>Hexápode IK</h1>
+            <p>Velocidade 2.0, Altura Média 0.6m (±0.3m), Yaw 25°, Pitch/Roll 5°, Deslocamento 0.25m com curva adaptativa.</p>
+            <div class="telemetry">
+                <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Resolvendo...</span></div>
+                <div class="telemetry-row"><span>Altura do Corpo (Y):</span> <span id="tel-height">0.60 m</span></div>
+                <div class="telemetry-row"><span>Elevação da Coxa:</span> <span id="tel-coxa">42.4° (Auto)</span></div>
+                <div class="telemetry-row"><span>Perna FL / FR:</span> <span id="tel-fl">Ativo</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import GUI from 'lil-gui';
+
+        // --- CENA & RENDERER ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0b0f17');
+        scene.fog = new THREE.FogExp2('#0b0f17', 0.025);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(11, 7, 13);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.01;
+        controls.target.set(0, 0.6, 0);
+
+	    // --- LUZES & CHÃO ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xddeeff, 3.5);
+        dirLight.position.set(10, 22, 30);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0003;
+        scene.add(dirLight);
+
+        const rimLight = new THREE.PointLight(0x58a6ff, 20, 100);
+        rimLight.position.set(-2, 6.5, -0.5);
+        scene.add(rimLight);
+
+        const rimLight2 = new THREE.PointLight(0xfb4141, 12, 100);
+        rimLight2.position.set(5.5, 5, 8);
+        scene.add(rimLight2);
+
+        // --- MARCADORES E HELPERS DE LUZ (VISUALIZADORES TEMPORÁRIOS) ---
+        const dirMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffd700, wireframe: true })
+        );
+        dirLight.add(dirMarker);
+        const dirLightHelper = new THREE.DirectionalLightHelper(dirLight, 3.0, 0xffd700);
+        scene.add(dirLightHelper);
+
+        const rimMarker1 = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
+        );
+        rimLight.add(rimMarker1);
+        const rimLightHelper = new THREE.PointLightHelper(rimLight, 0.8, 0x58a6ff);
+        scene.add(rimLightHelper);
+
+        const rimMarker2 = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
+        );
+        rimLight2.add(rimMarker2);
+        const rimLight2Helper = new THREE.PointLightHelper(rimLight2, 0.8, 0x58a6ff);
+        scene.add(rimLight2Helper);
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(80, 80),
+            new THREE.MeshStandardMaterial({ color: 0x121720, roughness: 0.85, metalness: 0.2 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(30, 60, 0x58a6ff, 0x21262d);
+        gridHelper.position.y = 0.002;
+        scene.add(gridHelper);
+
+        // --- GRUPOS ---
+        const bodyGroup = new THREE.Group();
+        scene.add(bodyGroup);
+
+        const footTargetGroup = new THREE.Group();
+        scene.add(footTargetGroup);
+
+        const skeletonLinesGroup = new THREE.Group();
+        scene.add(skeletonLinesGroup);
+
+        // --- PARÂMETROS PADRÃO CALIBRADOS ---
+        const params = {
+            bodyPosX: 0,
+            bodyPosY: 0.6,
+            bodyPosZ: 0,
+            bodyPitch: 0,
+            bodyRoll: 0,
+            bodyYaw: 0,
+            // Elevação Adaptativa da Coxa
+            adaptiveElevation: true,
+            coxaElevation: 42.4, // Graus
+            // Balanço Automático Calibrado
+            autoSway: true,
+            swaySpeed: 2.0,
+            swayHeightCenter: 0.6,
+            swayHeightAmp: 0.3,
+            swayPitchRoll: 5.0,
+            swayYaw: 25.0,
+            swayShift: 0.25,
+            // BlendShapes / Expressão
+            irisE: 0.0,
+            irisD: 0.0,
+            // Visualização
+            showFootTargets: true,
+            showSkeletonLines: true,
+            showLightHelpers: true,
+            ikEnabled: true,
+            resetPose: () => resetPose()
+        };
+
+        const morphMeshes = [];
+
+        function updateMorphTargets() {
+            for (const mesh of morphMeshes) {
+                if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) {
+                    if ('IRIS_E' in mesh.morphTargetDictionary) {
+                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_E']] = params.irisE;
+                    }
+                    if ('IRIS_D' in mesh.morphTargetDictionary) {
+                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_D']] = params.irisD;
+                    }
+                }
+            }
+        }
+
+        // Função de Curva Adaptativa da Coxa
+        // Y = 2.5m -> 5°
+        // Y = 1.3m -> 35°
+        // Y = 0.0m -> 48°
+        function calculateAdaptiveElevation(yHeight) {
+            const y = THREE.MathUtils.clamp(yHeight, 0.0, 2.5);
+            if (y >= 1.3) {
+                const t = (y - 1.3) / (2.5 - 1.3);
+                const s = t * t * (3 - 2 * t);
+                return 35.0 - s * (35.0 - 5.0);
+            } else {
+                const t = (1.3 - y) / 1.3;
+                const s = t * t * (3 - 2 * t);
+                return 35.0 + s * (48.0 - 35.0);
+            }
+        }
+
+        function resetPose() {
+            params.bodyPosX = 0;
+            params.bodyPosY = 0.6;
+            params.bodyPosZ = 0;
+            params.bodyPitch = 0;
+            params.bodyRoll = 0;
+            params.bodyYaw = 0;
+            params.irisE = 0.0;
+            params.irisD = 0.0;
+            updateMorphTargets();
+            params.coxaElevation = calculateAdaptiveElevation(0.6);
+            if (gui) gui.controllers.forEach(c => c.updateDisplay());
+        }
+
+        const L1_M = 2.3608; // Coxa
+        const L2_M = 2.1611; // Fêmur
+        const L3_M = 2.8000; // Tíbia
+
+        let modelRoot = null;
+        const legs = [];
+        const footTargets = [];
+        const targetMeshes = [];
+        const legLines = [];
+
+        // --- CARREGAMENTO DO GLB ---
+        const loader = new GLTFLoader();
+        loader.load('./glb/aranha.glb', (gltf) => {
+            modelRoot = gltf.scene;
+
+            modelRoot.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.material) {
+                        child.material.roughness = 0.35;
+                        child.material.metalness = 0.65;
+                    }
+                    if (child.morphTargetInfluences && child.morphTargetDictionary) {
+                        morphMeshes.push(child);
+                    }
+                }
+            });
+
+            bodyGroup.add(modelRoot);
+
+			//Teste de Material
+			// 1. Criamos a variável
+			let Luz;
+			let Default;
+			let Tubo;
+			// 2. No traverse, desempacotamos seja 1 ou vários materiais:
+			modelRoot.traverse((child) => {
+				if (child.isMesh && child.material) {
+					// Garante que funcione mesmo se child.material for uma lista
+					const mats = Array.isArray(child.material) ? child.material : [child.material];
+					
+					mats.forEach((mat) => {
+						if (mat.name === 'Luz') Luz = mat;
+						if (mat.name === 'Default') Default = mat;
+						if (mat.name === 'Tubo') Tubo = mat;
+					});
+				}
+			});
+			// 3. Agora sim funciona de verdade!
+			if (Luz) {
+				Luz.emissive.set('#00ff00'); // Verde neon nos faróis
+				Luz.emissiveIntensity = 10.0;
+			}
+
+			// Dica: Teste mudar a carapaça
+			if (Default) {
+				Default.color.set('#bbbbbb'); // Deixa o casco rosa/magenta
+				Default.metalness = 0.8;
+				Default.roughness = 0.37;
+			}
+			
+			if(Tubo) {
+				Tubo.color.set('#ddbbaa');
+				Tubo.metalness = 0.9;
+			}
+
+
+
+            const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
+            const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
+            const legSides = ['D', 'D', 'D', 'E', 'E', 'E'];
+
+            legBaseNames.forEach((baseName, index) => {
+                let baseNode = null;
+                modelRoot.traverse((n) => {
+                    if (n.name && (n.name === baseName || n.name.includes(baseName.replace(/[()]/g, '')))) {
+                        baseNode = n;
+                    }
+                });
+
+                if (baseNode && baseNode.children.length > 0) {
+                    const j1Node = baseNode.children[0];
+                    const j2Node = j1Node.children.length > 0 ? j1Node.children[0] : null;
+                    const j3Node = j2Node && j2Node.children.length > 0 ? j2Node.children[0] : null;
+
+                    const legObj = {
+                        id: legIds[index],
+                        side: legSides[index],
+                        baseNode,
+                        j1Node,
+                        j2Node,
+                        j3Node,
+                        index
+                    };
+                    legs.push(legObj);
+
+                    const targetSphere = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.14, 16, 16),
+                        new THREE.MeshStandardMaterial({
+                            color: legSides[index] === 'D' ? 0xff4757 : 0x2ed573,
+                            emissive: legSides[index] === 'D' ? 0x661111 : 0x115522,
+                            roughness: 0.3
+                        })
+                    );
+                    targetSphere.castShadow = true;
+                    footTargetGroup.add(targetSphere);
+                    targetMeshes.push(targetSphere);
+
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()
+                    ]);
+                    const lineMat = new THREE.LineBasicMaterial({
+                        color: legSides[index] === 'D' ? 0xff6b81 : 0x7bed9f,
+                        linewidth: 3
+                    });
+                    const lineMesh = new THREE.Line(lineGeo, lineMat);
+                    skeletonLinesGroup.add(lineMesh);
+                    legLines.push(lineMesh);
+                }
+            });
+
+            initFootTargets();
+
+            const loadingElem = document.getElementById('loading');
+            loadingElem.style.opacity = '0';
+            setTimeout(() => loadingElem.style.display = 'none', 500);
+
+            document.getElementById('ik-status').innerText = `Ativo (${legs.length}/6 Pernas)`;
+            initGUI();
+            updateMorphTargets();
+        });
+
+        function initFootTargets() {
+            const defaultPositions = [
+                new THREE.Vector3(-5.8, 0.0,  3.2), // FR
+                new THREE.Vector3(-6.4, 0.0, -0.4), // MR
+                new THREE.Vector3(-5.2, 0.0, -4.0), // BR
+                new THREE.Vector3( 5.8, 0.0,  3.2), // FL
+                new THREE.Vector3( 6.4, 0.0, -0.4), // ML
+                new THREE.Vector3( 5.2, 0.0, -4.0)  // BL
+            ];
+
+            footTargets.length = 0;
+            defaultPositions.forEach((pos, i) => {
+                footTargets.push(pos.clone());
+                if (targetMeshes[i]) targetMeshes[i].position.copy(pos);
+            });
+        }
+
+        // --- SOLVER DE CINEMÁTICA VETORIAL COM BASE ORTONORMAL UNIFICADA ---
+        const _P0 = new THREE.Vector3(); // Hip
+        const _P1 = new THREE.Vector3(); // Coxa Tip (subindo)
+        const _P2 = new THREE.Vector3(); // Knee (cume do arco)
+        const _P3 = new THREE.Vector3(); // Foot (chão)
+
+        const _dirH = new THREE.Vector3();
+        const _up = new THREE.Vector3(0, 1, 0);
+        const _vTarget = new THREE.Vector3();
+        const _vTUnit = new THREE.Vector3();
+        const _hingeAxis = new THREE.Vector3();
+        const _perpUp = new THREE.Vector3();
+        const _femurDir = new THREE.Vector3();
+        const _tibiaDir = new THREE.Vector3();
+        const _coxaDir = new THREE.Vector3();
+
+        const _X1 = new THREE.Vector3();
+        const _Y1 = new THREE.Vector3();
+        const _Z1 = new THREE.Vector3();
+        const _X2 = new THREE.Vector3();
+        const _Y2 = new THREE.Vector3();
+        const _Z2 = new THREE.Vector3();
+        const _X3 = new THREE.Vector3();
+        const _Y3 = new THREE.Vector3();
+        const _Z3 = new THREE.Vector3();
+
+        const _matWorld1 = new THREE.Matrix4();
+        const _matWorld2 = new THREE.Matrix4();
+        const _matWorld3 = new THREE.Matrix4();
+
+        const _qWorldBase = new THREE.Quaternion();
+        const _qWorld1 = new THREE.Quaternion();
+        const _qWorld2 = new THREE.Quaternion();
+        const _qWorld3 = new THREE.Quaternion();
+
+        const _qInvBase = new THREE.Quaternion();
+        const _qInv1 = new THREE.Quaternion();
+        const _qInv2 = new THREE.Quaternion();
+
+        function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
+            const { baseNode, j1Node, j2Node, j3Node } = leg;
+            if (!baseNode || !j1Node || !j2Node || !j3Node) return;
+
+            // 1. Posição Mundial do Quadril (P0)
+            baseNode.getWorldPosition(_P0);
+
+            // 2. Direção horizontal do Quadril até a Âncora no chão
+            _dirH.subVectors(worldTarget, _P0);
+            _dirH.y = 0;
+            const horizDist = _dirH.length();
+            if (horizDist > 0.001) _dirH.divideScalar(horizDist);
+
+            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa
+            const gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            _P1.copy(_P0)
+               .addScaledVector(_dirH, L1_M * Math.cos(gamma))
+               .addScaledVector(_up, L1_M * Math.sin(gamma));
+
+            // 4. Cinemática 2-Bone de P1 até worldTarget (Fêmur P1->P2 e Tíbia P2->P3)
+            _vTarget.subVectors(worldTarget, _P1);
+            const dist = _vTarget.length();
+
+            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2_M - L3_M) * 1.02, (L2_M + L3_M) * 0.98);
+            const cosAlpha = THREE.MathUtils.clamp((L2_M * L2_M + dClamped * dClamped - L3_M * L3_M) / (2 * L2_M * dClamped), -1, 1);
+            const alpha = Math.acos(cosAlpha);
+
+            _vTUnit.copy(_vTarget).divideScalar(dist);
+
+            // Eixo da dobradiça UNIFICADO (dirH x UP)
+            _hingeAxis.crossVectors(_dirH, _up).normalize();
+
+            // Vetor perpendicular no plano vertical apontando para CIMA
+            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
+            if (_perpUp.y < 0) _perpUp.negate();
+
+            // Direção do Fêmur rotacionada para CIMA (Elbow-UP)
+            _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
+                     .addScaledVector(_perpUp, Math.sin(alpha))
+                     .normalize();
+
+            // Posição do Joelho (P2)
+            _P2.copy(_P1).addScaledVector(_femurDir, L2_M);
+
+            // Direção da Tíbia apontando para a âncora
+            _tibiaDir.subVectors(worldTarget, _P2).normalize();
+            _P3.copy(_P2).addScaledVector(_tibiaDir, L3_M);
+
+            // Direção da Coxa (P0 -> P1)
+            _coxaDir.subVectors(_P1, _P0).normalize();
+
+            if (params.ikEnabled) {
+                // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK)
+                // --- SEGMENTO 1: COXA ---
+                _X1.copy(_coxaDir);
+                _Y1.copy(_hingeAxis);
+                _Z1.crossVectors(_X1, _Y1).normalize();
+                _matWorld1.makeBasis(_X1, _Y1, _Z1);
+                _qWorld1.setFromRotationMatrix(_matWorld1);
+
+                baseNode.getWorldQuaternion(_qWorldBase);
+                _qInvBase.copy(_qWorldBase).invert();
+                j1Node.quaternion.multiplyQuaternions(_qInvBase, _qWorld1);
+                j1Node.updateMatrixWorld(true);
+
+                // --- SEGMENTO 2: FÊMUR ---
+                _X2.copy(_femurDir);
+                _Y2.copy(_hingeAxis);
+                _Z2.crossVectors(_X2, _Y2).normalize();
+                _matWorld2.makeBasis(_X2, _Y2, _Z2);
+                _qWorld2.setFromRotationMatrix(_matWorld2);
+
+                _qInv1.copy(_qWorld1).invert();
+                j2Node.quaternion.multiplyQuaternions(_qInv1, _qWorld2);
+                j2Node.updateMatrixWorld(true);
+
+                // --- SEGMENTO 3: TÍBIA ---
+                _X3.copy(_tibiaDir);
+                _Y3.copy(_hingeAxis);
+                _Z3.crossVectors(_X3, _Y3).normalize();
+                _matWorld3.makeBasis(_X3, _Y3, _Z3);
+                _qWorld3.setFromRotationMatrix(_matWorld3);
+
+                _qInv2.copy(_qWorld2).invert();
+                j3Node.quaternion.multiplyQuaternions(_qInv2, _qWorld3);
+                j3Node.updateMatrixWorld(true);
+            }
+
+            // Atualizar Linha do Esqueleto IK
+            if (lineMesh && params.showSkeletonLines) {
+                const positions = lineMesh.geometry.attributes.position.array;
+                positions[0] = _P0.x; positions[1] = _P0.y; positions[2] = _P0.z;
+                positions[3] = _P1.x; positions[4] = _P1.y; positions[5] = _P1.z;
+                positions[6] = _P2.x; positions[7] = _P2.y; positions[8] = _P2.z;
+                positions[9] = _P3.x; positions[10] = _P3.y; positions[11] = _P3.z;
+                lineMesh.geometry.attributes.position.needsUpdate = true;
+            }
+        }
+
+        function updateHexapod() {
+            if (!modelRoot || legs.length === 0) return;
+
+            // Atualizar Elevação Adaptativa pela Altura Atual do Corpo
+            let currentElevation = params.coxaElevation;
+            if (params.adaptiveElevation) {
+                currentElevation = calculateAdaptiveElevation(params.bodyPosY);
+                params.coxaElevation = currentElevation;
+            }
+
+            // Translação do Corpo
+            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
+
+            // Rotação do Corpo (Pitch, Roll, Yaw)
+            const pitchRad = THREE.MathUtils.degToRad(params.bodyPitch);
+            const rollRad = THREE.MathUtils.degToRad(params.bodyRoll);
+            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw);
+            bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
+
+            // Atualizar matriz de mundo do corpo
+            bodyGroup.updateMatrixWorld(true);
+
+            // Resolver IK com a elevação calculada
+            for (let i = 0; i < legs.length; i++) {
+                solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation);
+            }
+
+            // Atualizar Telemetria
+            document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
+            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
+        }
+
+        // --- GUI DE CONTROLES ---
+        let gui;
+        function initGUI() {
+            gui = new GUI({ title: '🕷️ Controles do Hexápode' });
+
+            const fPosture = gui.addFolder('Postura & Curva Adaptativa');
+            fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
+            fPosture.add(params, 'coxaElevation', 5, 50, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+
+            params.adaptiveElevation_controller = fPosture.controllers[0].onChange(v => {
+                fPosture.controllers[1].disable(v);
+            });
+
+            const fBodyPos = gui.addFolder('Translação do Corpo');
+            fBodyPos.add(params, 'bodyPosY', 0.0, 2.5, 0.01).name('Altura (Y)').listen();
+            fBodyPos.add(params, 'bodyPosX', -2.0, 2.0, 0.01).name('Lateral (X)').listen();
+            fBodyPos.add(params, 'bodyPosZ', -2.0, 2.0, 0.01).name('Frente/Trás (Z)').listen();
+
+            const fBodyRot = gui.addFolder('Rotação do Corpo');
+            fBodyRot.add(params, 'bodyPitch', -35, 35, 0.1).name('Pitch (Frente/Trás)').listen();
+            fBodyRot.add(params, 'bodyRoll', -35, 35, 0.1).name('Roll (Lateral)').listen();
+            fBodyRot.add(params, 'bodyYaw', -40, 40, 0.1).name('Yaw (Giro)').listen();
+
+            const fHead = gui.addFolder('👁️ Cabeça & Expressão (BlendShapes)');
+            fHead.add(params, 'irisE', 0.0, 1.0, 0.01).name('Íris Esquerda (IRIS_E)').listen().onChange(updateMorphTargets);
+            fHead.add(params, 'irisD', 0.0, 1.0, 0.01).name('Íris Direita (IRIS_D)').listen().onChange(updateMorphTargets);
+
+            const fDemo = gui.addFolder('Auto Balanço / Rebolado');
+            fDemo.add(params, 'autoSway').name('Ativar Balanço').listen();
+            fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade');
+            fDemo.add(params, 'swayHeightCenter', 0.2, 1.8, 0.05).name('Altura Média');
+            fDemo.add(params, 'swayHeightAmp', 0.0, 0.8, 0.05).name('Amplitude Altura');
+            fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll');
+            fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw');
+            fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
+
+            const fLights = gui.addFolder('💡 Iluminação & Marcadores');
+            fLights.add(params, 'showLightHelpers').name('Mostrar Marcadores').onChange(v => {
+                dirLightHelper.visible = v;
+                rimLightHelper.visible = v;
+                rimLight2Helper.visible = v;
+                dirMarker.visible = v;
+                rimMarker1.visible = v;
+                rimMarker2.visible = v;
+            });
+
+            const fDir = fLights.addFolder('☀️ Luz Direcional (Sol)');
+            fDir.add(dirLight, 'intensity', 0, 10, 0.1).name('Intensidade');
+            fDir.addColor({ color: '#' + dirLight.color.getHexString() }, 'color').name('Cor').onChange(c => dirLight.color.set(c));
+            fDir.add(dirLight.position, 'x', -30, 30, 0.5).name('Pos X').onChange(() => dirLightHelper.update());
+            fDir.add(dirLight.position, 'y', 0, 40, 0.5).name('Pos Y').onChange(() => dirLightHelper.update());
+            fDir.add(dirLight.position, 'z', -30, 30, 0.5).name('Pos Z').onChange(() => dirLightHelper.update());
+
+            const fRim1 = fLights.addFolder('🔵 Rim Light 1');
+            fRim1.add(rimLight, 'intensity', 0, 20, 0.2).name('Intensidade');
+            fRim1.addColor({ color: '#' + rimLight.color.getHexString() }, 'color').name('Cor').onChange(c => rimLight.color.set(c));
+            fRim1.add(rimLight.position, 'x', -30, 30, 0.5).name('Pos X');
+            fRim1.add(rimLight.position, 'y', -10, 30, 0.5).name('Pos Y');
+            fRim1.add(rimLight.position, 'z', -30, 30, 0.5).name('Pos Z');
+            fRim1.add(rimLight, 'distance', 0, 200, 1).name('Distância');
+
+            const fRim2 = fLights.addFolder('🔵 Rim Light 2');
+            fRim2.add(rimLight2, 'intensity', 0, 20, 0.2).name('Intensidade');
+            fRim2.addColor({ color: '#' + rimLight2.color.getHexString() }, 'color').name('Cor').onChange(c => rimLight2.color.set(c));
+            fRim2.add(rimLight2.position, 'x', -30, 30, 0.5).name('Pos X');
+            fRim2.add(rimLight2.position, 'y', -10, 30, 0.5).name('Pos Y');
+            fRim2.add(rimLight2.position, 'z', -30, 30, 0.5).name('Pos Z');
+            fRim2.add(rimLight2, 'distance', 0, 200, 1).name('Distância');
+
+            const fAmb = fLights.addFolder('🌫️ Luz Ambiente');
+            fAmb.add(ambientLight, 'intensity', 0, 3, 0.05).name('Intensidade');
+            fAmb.addColor({ color: '#' + ambientLight.color.getHexString() }, 'color').name('Cor').onChange(c => ambientLight.color.set(c));
+
+            const fVis = gui.addFolder('Exibição & Auxiliares');
+            fVis.add(params, 'ikEnabled').name('IK Habilitado');
+            fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
+                skeletonLinesGroup.visible = v;
+            });
+            fVis.add(params, 'showFootTargets').name('Mostrar Âncoras Patas').onChange(v => {
+                footTargetGroup.visible = v;
+            });
+            fVis.add(gridHelper, 'visible').name('Mostrar Grade');
+
+            gui.add(params, 'resetPose').name('↺ Resetar Postura');
+
+            fPosture.open();
+            fBodyPos.open();
+            fBodyRot.open();
+            fHead.open();
+            fDemo.open();
+            fLights.open();
+        }
+
+        // --- LOOP PRINCIPAL ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (dirLightHelper && dirLightHelper.visible) {
+                dirLightHelper.update();
+            }
+
+            const elapsedTime = clock.getElapsedTime();
+
+            if (params.autoSway && modelRoot) {
+                const t = elapsedTime * params.swaySpeed;
+
+                // Ondulações com os parâmetros calibrados
+                params.bodyPitch = Math.sin(t * 1.1) * params.swayPitchRoll;
+                params.bodyRoll = Math.cos(t * 0.9) * params.swayPitchRoll;
+                params.bodyYaw = Math.sin(t * 0.7) * params.swayYaw;
+
+                // Altura oscilando em torno da Altura Média (0.6m) com amplitude (0.3m) -> varia de 0.3m a 0.9m
+                params.bodyPosY = THREE.MathUtils.clamp(
+                    params.swayHeightCenter + Math.sin(t * 1.8) * params.swayHeightAmp,
+                    0.02,
+                    2.5
+                );
+                params.bodyPosX = Math.cos(t * 0.8) * params.swayShift;
+                params.bodyPosZ = Math.sin(t * 0.6) * params.swayShift;
+            }
+
+            updateHexapod();
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
