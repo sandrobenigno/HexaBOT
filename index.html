@@ -212,24 +212,30 @@
             new THREE.SphereGeometry(0.5, 16, 16),
             new THREE.MeshBasicMaterial({ color: 0xffd700, wireframe: true })
         );
+        dirMarker.visible = false;
         dirLight.add(dirMarker);
         const dirLightHelper = new THREE.DirectionalLightHelper(dirLight, 3.0, 0xffd700);
+        dirLightHelper.visible = false;
         scene.add(dirLightHelper);
 
         const rimMarker1 = new THREE.Mesh(
             new THREE.SphereGeometry(0.35, 16, 16),
             new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
         );
+        rimMarker1.visible = false;
         rimLight.add(rimMarker1);
         const rimLightHelper = new THREE.PointLightHelper(rimLight, 0.8, 0x58a6ff);
+        rimLightHelper.visible = false;
         scene.add(rimLightHelper);
 
         const rimMarker2 = new THREE.Mesh(
             new THREE.SphereGeometry(0.35, 16, 16),
             new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
         );
+        rimMarker2.visible = false;
         rimLight2.add(rimMarker2);
         const rimLight2Helper = new THREE.PointLightHelper(rimLight2, 0.8, 0x58a6ff);
+        rimLight2Helper.visible = false;
         scene.add(rimLight2Helper);
 
         const floor = new THREE.Mesh(
@@ -279,7 +285,7 @@
             // Visualização
             showFootTargets: true,
             showSkeletonLines: true,
-            showLightHelpers: true,
+            showLightHelpers: false,
             ikEnabled: true,
             resetPose: () => resetPose()
         };
@@ -740,7 +746,6 @@
             fBodyRot.open();
             fHead.open();
             fDemo.open();
-            fLights.open();
         }
 
         // --- LOOP PRINCIPAL ---
