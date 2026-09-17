@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexapod ThreeJS - IK Adaptativo & Auto-Balanço Calibrado</title>
+    <title>HexaBOT - IK Adaptativo & Auto-Balanço Calibrado</title>
     <style>
         * {
             box-sizing: border-box;
@@ -138,13 +138,13 @@
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <p style="color: #e6edf3; font-weight: 500;">Carregando Hexápode com Parâmetros Calibrados...</p>
+        <p style="color: #e6edf3; font-weight: 500;">Carregando HexaBOT com Parâmetros Calibrados...</p>
     </div>
 
     <div id="ui-overlay">
         <div class="panel">
-            <span class="posture-badge">🕷️ Auto-Balanço Calibrado</span>
-            <h1>Hexápode IK</h1>
+            <span class="posture-badge">🤖 Auto-Balanço Calibrado</span>
+            <h1>🤖 HexaBOT IK</h1>
             <p>Velocidade 2.0, Altura Média 0.6m (±0.3m), Yaw 25°, Pitch/Roll 5°, Deslocamento 0.25m com curva adaptativa.</p>
             <div class="telemetry">
                 <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Resolvendo...</span></div>
@@ -618,7 +618,7 @@
             }
         }
 
-        function updateHexapod() {
+        function updateHexaBOT() {
             if (!modelRoot || legs.length === 0) return;
 
             // Atualizar Elevação Adaptativa pela Altura Atual do Corpo
@@ -653,7 +653,7 @@
         // --- GUI DE CONTROLES ---
         let gui;
         function initGUI() {
-            gui = new GUI({ title: '🕷️ Controles do Hexápode' });
+            gui = new GUI({ title: '🤖 Controles do HexaBOT' });
 
             const fPosture = gui.addFolder('Postura & Curva Adaptativa');
             fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
@@ -709,7 +709,7 @@
             fRim1.add(rimLight.position, 'x', -30, 30, 0.5).name('Pos X');
             fRim1.add(rimLight.position, 'y', -10, 30, 0.5).name('Pos Y');
             fRim1.add(rimLight.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim1.add(rimLight, 'distance', 0, 200, 1).name('Distância');
+            fRim1.add(rimLight.distance, 0, 200, 1).name('Distância');
 
             const fRim2 = fLights.addFolder('🔵 Rim Light 2');
             fRim2.add(rimLight2, 'intensity', 0, 20, 0.2).name('Intensidade');
@@ -717,7 +717,7 @@
             fRim2.add(rimLight2.position, 'x', -30, 30, 0.5).name('Pos X');
             fRim2.add(rimLight2.position, 'y', -10, 30, 0.5).name('Pos Y');
             fRim2.add(rimLight2.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim2.add(rimLight2, 'distance', 0, 200, 1).name('Distância');
+            fRim2.add(rimLight2.distance, 0, 200, 1).name('Distância');
 
             const fAmb = fLights.addFolder('🌫️ Luz Ambiente');
             fAmb.add(ambientLight, 'intensity', 0, 3, 0.05).name('Intensidade');
@@ -773,7 +773,7 @@
                 params.bodyPosZ = Math.sin(t * 0.6) * params.swayShift;
             }
 
-            updateHexapod();
+            updateHexaBOT();
 
             controls.update();
             renderer.render(scene, camera);
