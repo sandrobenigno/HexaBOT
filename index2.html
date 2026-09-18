@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HexaBOT - Scanner Universal & Rigging Inteligente IK</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background-color: #0b0f17;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* --- OVERLAY DO TÍTULO E TELEMETRIA --- */
+        #ui-overlay {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .panel {
+            background: rgba(13, 17, 23, 0.94);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 16px 20px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+            max-width: 380px;
+        }
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        p.subtitle {
+            font-size: 0.82rem;
+            color: #8b949e;
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+        .badge-lab {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .telemetry {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.74rem;
+            line-height: 1.55;
+            color: #7ee787;
+        }
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .telemetry-row span:first-child {
+            color: #8b949e;
+        }
+
+        /* --- BOTÃO DE IMPORTAR DENTRO DO PAINEL PRINCIPAL --- */
+        .btn-panel-importer {
+            width: 100%;
+            margin-top: 10px;
+            background: linear-gradient(135deg, #1f6feb, #8957e5);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(137, 87, 229, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        .btn-panel-importer:hover {
+            background: linear-gradient(135deg, #388bfd, #a371f7);
+            transform: translateY(-1px);
+        }
+
+        /* --- MODAL DO IMPORTADOR UNIVERSAL --- */
+        #importer-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(13, 17, 23, 0.96);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.2);
+            z-index: 50;
+            display: none;
+        }
+        #importer-modal.active {
+            display: block;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+        .modal-header h2 {
+            font-size: 1.15rem;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-close {
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            font-size: 1.3rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .btn-close:hover {
+            color: #f85149;
+        }
+
+        /* --- DROPZONE UNIVERSAL --- */
+        .dropzone {
+            background: rgba(22, 27, 34, 0.8);
+            border: 2px dashed rgba(56, 189, 248, 0.35);
+            border-radius: 14px;
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #58a6ff;
+            background: rgba(31, 111, 235, 0.12);
+            transform: scale(1.01);
+        }
+        .dropzone input[type="file"] {
+            display: none;
+        }
+        .dropzone .icon {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+        }
+        .dropzone .title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 4px;
+        }
+        .dropzone .hint {
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        .scan-info {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 0.76rem;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        .scan-info-title {
+            color: #58a6ff;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-quickload {
+            width: 100%;
+            background: linear-gradient(135deg, #1f6feb, #238636);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 18px rgba(31, 111, 235, 0.35);
+        }
+        .btn-quickload:hover {
+            background: linear-gradient(135deg, #388bfd, #2ea043);
+            box-shadow: 0 6px 22px rgba(31, 111, 235, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* --- CONTROLES LIL-GUI CUSTOMIZADOS --- */
+        .lil-gui {
+            --background-color: rgba(13, 17, 23, 0.94);
+            --text-color: #e6edf3;
+            --title-background-color: rgba(22, 27, 34, 0.98);
+            --widget-color: rgba(33, 38, 45, 0.9);
+            --hover-color: #30363d;
+            --focus-color: #1f6feb;
+            --number-color: #79c0ff;
+            --string-color: #7ee787;
+            font-family: inherit;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            top: 16px !important;
+            right: 16px !important;
+            max-height: calc(100vh - 32px) !important;
+            overflow-y: auto !important;
+        }
+        .lil-gui::-webkit-scrollbar {
+            width: 5px;
+        }
+        .lil-gui::-webkit-scrollbar-track {
+            background: rgba(13, 17, 23, 0.5);
+            border-radius: 3px;
+        }
+        .lil-gui::-webkit-scrollbar-thumb {
+            background: rgba(88, 166, 255, 0.4);
+            border-radius: 3px;
+        }
+        .lil-gui::-webkit-scrollbar-thumb:hover {
+            background: rgba(88, 166, 255, 0.7);
+        }
+        .lil-gui .title {
+            font-weight: 700;
+            color: #58a6ff;
+        }
+
+        /* --- RESPONSIVIDADE MOBILE --- */
+        @media (max-width: 768px) {
+            #ui-overlay {
+                top: 10px;
+                left: 10px;
+                right: 10px;
+            }
+            .panel {
+                max-width: 100%;
+                padding: 12px 14px;
+            }
+            h1 {
+                font-size: 2.0rem;
+            }
+            p.subtitle {
+                font-size: 0.8rem;
+            }
+            #btn-open-importer {
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                font-size: 0.9rem;
+            }
+            .lil-gui {
+                top: auto !important;
+                bottom: 80px !important;
+                right: 10px !important;
+                max-width: calc(100vw - 20px) !important;
+            }
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <div class="panel">
+            <span class="badge-lab">🔍 Detector Universal de Rigging</span>
+            <h1>🕷️ HexaBOT Scanner</h1>
+            <p class="subtitle">Varredura inteligente de hierarquia via raízes <strong>D0 e E0</strong>. Solver IK Ortonormal de Giro Zero, preservação total de materiais PBR e nós acessórios.</p>
+            
+            <button class="btn-panel-importer" id="btn-open-importer">📦 Importar Novo Modelo (.glb)</button>
+
+            <div class="telemetry" id="telemetry-box" style="display: none;">
+                <div class="telemetry-row"><span>Criatura / Arquivo:</span> <strong id="tel-name" style="color: #38bdf8;">--</strong></div>
+                <div class="telemetry-row"><span>Pernas Rigged:</span> <strong id="tel-legs">0</strong></div>
+                <div class="telemetry-row"><span>Links IK Nativo:</span> <strong id="tel-dims">-- / -- / -- m</strong></div>
+                <div class="telemetry-row"><span>Alcance Total:</span> <strong id="tel-reach">-- m</strong></div>
+                <div class="telemetry-row"><span>Nó do Corpo:</span> <strong id="tel-body" style="color: #d2a8ff;">--</strong></div>
+                <div class="telemetry-row"><span>Altura Chassi (Y):</span> <strong id="tel-height">1.10 m</strong></div>
+                <div class="telemetry-row"><span>Elevação Coxa (γ):</span> <strong id="tel-coxa">20.0° (Auto)</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal do Importador Universal -->
+    <div id="importer-modal">
+        <div class="modal-header">
+            <h2>🔍 Importador Inteligente de Criaturas</h2>
+            <button class="btn-close" id="btn-close-importer">&times;</button>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #8b949e; margin-bottom: 14px; line-height: 1.45;">
+            Arraste ou selecione qualquer arquivo <strong>.glb</strong> ou <strong>.gltf</strong>. O sistema identifica o corpo, varre todos os sockets <strong>D0 e E0</strong>, mede as juntas nativas e aplica o controle IK instantaneamente.
+        </p>
+
+        <div class="dropzone" id="dropzone">
+            <input type="file" id="file-input" accept=".glb,.gltf">
+            <div class="icon">🕷️</div>
+            <div class="title">Arraste seu modelo 3D aqui</div>
+            <div class="hint">ou clique para selecionar um arquivo .glb / .gltf</div>
+        </div>
+
+        <div class="scan-info">
+            <div class="scan-info-title">⚡ Diagnóstico da Varredura</div>
+            <div id="scan-status">Pronto para escanear novo modelo.</div>
+            <div id="scan-details" style="color: #8b949e; margin-top: 4px;"></div>
+        </div>
+
+        <button class="btn-quickload" id="btn-quickload-default">🚀 Carregar Modelo Padrão (aranha.glb)</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
+
+        // --- SETUP DA CENA THREE.JS ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0f17);
+        scene.fog = new THREE.FogExp2(0x0b0f17, 0.035);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 5, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0.8, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 25;
+
+        // --- ILUMINAÇÃO DE ESTÚDIO ---
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1a233a, 1.2);
+        hemiLight.position.set(0, 20, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        dirLight.position.set(8, 15, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 35;
+        dirLight.shadow.camera.left = -8;
+        dirLight.shadow.camera.right = 8;
+        dirLight.shadow.camera.top = 8;
+        dirLight.shadow.camera.bottom = -8;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.8);
+        fillLight.position.set(-10, 8, -8);
+        scene.add(fillLight);
+
+        // --- PISO E GRADE TÉCNICA ---
+        const floorGeo = new THREE.PlaneGeometry(60, 60);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            roughness: 0.85,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(40, 40, 0x38bdf8, 0x1e293b);
+        gridHelper.position.y = 0.002;
+        scene.add(gridHelper);
+
+        // --- HIERARQUIA PRINCIPAL DO ROBÔ ---
+        const robotGroup = new THREE.Group();
+        scene.add(robotGroup);
+
+        const bodyGroup = new THREE.Group();
+        bodyGroup.position.set(0, 1.1, 0);
+        robotGroup.add(bodyGroup);
+
+        const footTargetGroup = new THREE.Group();
+        scene.add(footTargetGroup);
+
+        const skeletonLinesGroup = new THREE.Group();
+        scene.add(skeletonLinesGroup);
+
+        const xrayGizmosGroup = new THREE.Group();
+        xrayGizmosGroup.visible = false;
+        scene.add(xrayGizmosGroup);
+
+        // --- PARÂMETROS GLOBAIS E ESTADO ---
+        const params = {
+            bodyPosY: 1.10,
+            bodyPosX: 0.0,
+            bodyPosZ: 0.0,
+            bodyPitch: 0.0,
+            bodyRoll: 0.0,
+            bodyYaw: 0.0,
+            coxaElevation: 20.0,
+            adaptiveElevation: true,
+            stanceSpread: 1.0,
+            autoSway: false,
+            swaySpeed: 1.2,
+            swayHeightCenter: 1.10,
+            swayHeightAmp: 0.45,
+            swayPitchRoll: 12.0,
+            swayYaw: 15.0,
+            swayShift: 0.35,
+            xrayMode: false,
+            showTelemetry: false,
+            showFootTargets: true,
+            showSkeletonLines: true,
+            ikEnabled: true,
+            resetPose: () => resetPose()
+        };
+
+        const telemetryBox = document.getElementById('telemetry-box');
+        function toggleTelemetry(val) {
+            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
+            if (telemetryBox) {
+                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
+            }
+        }
+
+        // --- GIZMOS E HELPERS XRAY ---
+        const xrayBoundingBoxes = [];
+
+        function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
+            const group = new THREE.Group();
+            group.userData.isXrayHelper = true;
+
+            const geoX = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-size, 0, 0), new THREE.Vector3(size, 0, 0)]);
+            const matX = new THREE.LineBasicMaterial({ color: 0xff3b30, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineX = new THREE.Line(geoX, matX);
+            lineX.userData.isXrayHelper = true;
+            group.add(lineX);
+
+            const geoY = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -size, 0), new THREE.Vector3(0, size, 0)]);
+            const matY = new THREE.LineBasicMaterial({ color: 0x34c759, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineY = new THREE.Line(geoY, matY);
+            lineY.userData.isXrayHelper = true;
+            group.add(lineY);
+
+            const geoZ = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -size), new THREE.Vector3(0, 0, size)]);
+            const matZ = new THREE.LineBasicMaterial({ color: 0x007aff, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineZ = new THREE.Line(geoZ, matZ);
+            lineZ.userData.isXrayHelper = true;
+            group.add(lineZ);
+
+            const jointGeo = new THREE.SphereGeometry(sphereRadius, 16, 16);
+            const jointMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, depthTest: false, transparent: true, opacity: 0.95 });
+            const jointSphere = new THREE.Mesh(jointGeo, jointMat);
+            jointSphere.userData.isXrayHelper = true;
+            group.add(jointSphere);
+
+            group.renderOrder = 999;
+            return group;
+        }
+
+        function createMeshBoundingBox(mesh) {
+            if (!mesh.geometry) return null;
+            mesh.geometry.computeBoundingBox();
+            const bbox = mesh.geometry.boundingBox;
+            if (!bbox) return null;
+
+            const size = new THREE.Vector3();
+            const center = new THREE.Vector3();
+            bbox.getSize(size);
+            bbox.getCenter(center);
+            if (size.x <= 0.0001 && size.y <= 0.0001 && size.z <= 0.0001) return null;
+
+            const bboxGroup = new THREE.Group();
+            bboxGroup.userData.isXrayHelper = true;
+
+            const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+
+            const edgeLines = new THREE.LineSegments(
+                edgesGeo,
+                new THREE.LineBasicMaterial({ color: 0x00d2ff, linewidth: 1, transparent: true, opacity: 0.35 })
+            );
+            edgeLines.userData.isXrayHelper = true;
+
+            const faceMesh = new THREE.Mesh(
+                boxGeo,
+                new THREE.MeshBasicMaterial({ color: 0x002244, transparent: true, opacity: 0.08, depthWrite: false })
+            );
+            faceMesh.userData.isXrayHelper = true;
+
+            bboxGroup.add(edgeLines);
+            bboxGroup.add(faceMesh);
+            bboxGroup.position.copy(center);
+
+            return bboxGroup;
+        }
+
+        function setXRayMode(enable) {
+            params.xrayMode = enable;
+            if (robotGroup) {
+                robotGroup.traverse((child) => {
+                    if (child.isMesh && !child.userData.isXrayHelper) {
+                        if (child.material) {
+                            const mats = Array.isArray(child.material) ? child.material : [child.material];
+                            mats.forEach(m => m.visible = !enable);
+                        }
+                    }
+                });
+            }
+            xrayBoundingBoxes.forEach(b => b.visible = enable);
+            xrayGizmosGroup.visible = enable;
+            skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
+            footTargetGroup.visible = enable ? true : params.showFootTargets;
+        }
+
+        // --- ESTRUTURA DE PERNAS E DETECÇÃO INTELIGENTE ---
+        const legs = [];
+        const footTargets = [];
+        const targetMeshes = [];
+        const legLines = [];
+        const legJointGizmos = [];
+        let bodyGizmo = null;
+        let bodySpineMesh = null;
+        let loadedCreatureName = 'aranha.glb';
+
+        const _tempVec1 = new THREE.Vector3();
+        const _tempVec2 = new THREE.Vector3();
+        const _tempVec3 = new THREE.Vector3();
+        const _tempVecBc = new THREE.Vector3();
+
+        const gltfLoader = new GLTFLoader();
+
+        // --- DETECTOR HIERÁRQUICO INTELIGENTE E AUTO-RIGGING ---
+        function scanAndRigCreature(gltfScene, creatureName = 'Modelo 3D') {
+            loadedCreatureName = creatureName;
+
+            // 1. Limpeza de Estado Anterior
+            while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
+            while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
+            while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
+            while (xrayGizmosGroup.children.length > 0) xrayGizmosGroup.remove(xrayGizmosGroup.children[0]);
+            xrayBoundingBoxes.length = 0;
+            legs.length = 0;
+            footTargets.length = 0;
+            targetMeshes.length = 0;
+            legLines.length = 0;
+            legJointGizmos.length = 0;
+
+            // 2. Adicionar o Modelo à Cena
+            bodyGroup.add(gltfScene);
+
+            // 3. Descobrir todos os Sockets de Pernas (D0 e E0)
+            const socketRegex = /^(D0|E0)[\_\-\(\s\d]|^Socket[\_\-\d]|^Hip[\_\-\d]|^LegSocket[\_\-\d]/i;
+            const detectedSockets = [];
+
+            gltfScene.traverse((child) => {
+                if (child.name && socketRegex.test(child.name)) {
+                    detectedSockets.push(child);
+                }
+            });
+
+            if (detectedSockets.length === 0) {
+                document.getElementById('scan-status').innerHTML = '❌ <strong style="color: #f85149;">Nenhum socket D0/E0 encontrado!</strong> Certifique-se de que os nós das pernas começam com D0 ou E0.';
+                return;
+            }
+
+            // Ordenar sockets simetricamente: Direita (D) primeiro, depois Esquerda (E), ordenados por posição
+            detectedSockets.sort((a, b) => {
+                const isRightA = a.name.startsWith('D') || a.position.x < 0;
+                const isRightB = b.name.startsWith('D') || b.position.x < 0;
+                if (isRightA !== isRightB) return isRightA ? -1 : 1;
+                return (b.position.y - a.position.y) || (b.position.z - a.position.z);
+            });
+
+            // 4. Identificar o Nó do Corpo (Pai dos Sockets)
+            const bodyNode = detectedSockets[0].parent || gltfScene;
+            const bodyNodeName = bodyNode.name || 'Corpo Principal';
+
+            // 5. Medir Comprimentos das Juntas Nativo a Partir da Hierarquia
+            let sumL1 = 0, sumL2 = 0, sumL3 = 0;
+            let validLegCount = 0;
+
+            detectedSockets.forEach((baseSocket, index) => {
+                const isRight = baseSocket.name.startsWith('D') || baseSocket.position.x <= 0;
+                const sideChar = isRight ? 'D' : 'E';
+
+                // Escala de mundo do socket
+                const sVec = new THREE.Vector3();
+                baseSocket.getWorldScale(sVec);
+                const socketWorldScale = sVec.x || 1.0;
+
+                // Nível 1: Coxa (J1)
+                const j1Node = baseSocket.children[0];
+                if (!j1Node) return;
+
+                // Nível 2: Fêmur (J2)
+                const j2Node = j1Node.children[0];
+                if (!j2Node) return;
+
+                // Nível 3: Tíbia (J3)
+                const j3Node = j2Node.children[0];
+                if (!j3Node) return;
+
+                // Comprimentos medidos a partir do offset local nativo
+                const l1Native = j2Node.position.length() * socketWorldScale;
+                const l2Native = j3Node.position.length() * socketWorldScale;
+
+                // Para L3, medir a extensão real do osso da tíbia até a ponta da pata (+X)
+                let maxX = 0;
+                j3Node.traverse(c => {
+                    if (c.isMesh && c.geometry) {
+                        c.geometry.computeBoundingBox();
+                        if (c.geometry.boundingBox) {
+                            maxX = Math.max(maxX, c.geometry.boundingBox.max.x);
+                        }
+                    }
+                });
+                let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : 3.206;
+                if (l3Native > 10.0) l3Native *= 0.01;
+                if (l3Native < 0.5) l3Native = 3.206;
+
+                sumL1 += l1Native;
+                sumL2 += l2Native;
+                sumL3 += l3Native;
+                validLegCount++;
+
+                const legObj = {
+                    id: `Leg_${index}_${baseSocket.name}`,
+                    side: sideChar,
+                    baseNode: baseSocket,
+                    j1Node,
+                    j2Node,
+                    j3Node,
+                    L1: l1Native,
+                    L2: l2Native,
+                    L3: l3Native,
+                    index
+                };
+                legs.push(legObj);
+
+                // Target Esférico ($P_3$)
+                const targetSphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.14, 16, 16),
+                    new THREE.MeshStandardMaterial({
+                        color: isRight ? 0xff4757 : 0x2ed573,
+                        emissive: isRight ? 0x661111 : 0x115522,
+                        roughness: 0.3
+                    })
+                );
+                targetSphere.castShadow = true;
+                footTargetGroup.add(targetSphere);
+                targetMeshes.push(targetSphere);
+
+                // Linha de Esqueleto IK
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()
+                ]);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: isRight ? 0xff6b81 : 0x7bed9f,
+                    linewidth: 3
+                });
+                const lineMesh = new THREE.Line(lineGeo, lineMat);
+                skeletonLinesGroup.add(lineMesh);
+                legLines.push(lineMesh);
+
+                // Gizmos XRay em cada junta
+                const gizmos = [
+                    createCrossGizmo(0.35, 0.11),
+                    createCrossGizmo(0.35, 0.11),
+                    createCrossGizmo(0.35, 0.11),
+                    createCrossGizmo(0.35, 0.11)
+                ];
+                gizmos.forEach(g => xrayGizmosGroup.add(g));
+                legJointGizmos[index] = gizmos;
+            });
+
+            const avgL1 = validLegCount > 0 ? (sumL1 / validLegCount) : 2.36;
+            const avgL2 = validLegCount > 0 ? (sumL2 / validLegCount) : 2.16;
+            const avgL3 = validLegCount > 0 ? (sumL3 / validLegCount) : 2.80;
+
+            // 6. Gizmo Central
+            bodyGizmo = createCrossGizmo(0.55, 0.18);
+            xrayGizmosGroup.add(bodyGizmo);
+
+            // 7. Materiais e Bounding Boxes XRay
+            robotGroup.traverse((child) => {
+                if (child.isMesh && !child.userData.isXrayHelper) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    const bbox = createMeshBoundingBox(child);
+                    if (bbox) {
+                        bbox.visible = false;
+                        child.add(bbox);
+                        xrayBoundingBoxes.push(bbox);
+                    }
+                }
+            });
+
+            // 8. Espinha Central / Teia Esquelética
+            if (legs.length > 0) {
+                const totalSegments = legs.length + legs.length;
+                const spinePosArray = new Float32Array(totalSegments * 2 * 3);
+                const spineGeo = new THREE.BufferGeometry();
+                spineGeo.setAttribute('position', new THREE.BufferAttribute(spinePosArray, 3));
+                const spineMat = new THREE.LineBasicMaterial({
+                    color: 0x00d2ff,
+                    linewidth: 3,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                bodySpineMesh = new THREE.LineSegments(spineGeo, spineMat);
+                bodySpineMesh.userData.isXrayHelper = true;
+                skeletonLinesGroup.add(bodySpineMesh);
+            }
+
+            calculateProceduralFootTargets();
+
+            // Atualização de Diagnóstico e Telemetria
+            document.getElementById('scan-status').innerHTML = `✅ <strong style="color: #7ee787;">Rigging Realizado com Sucesso!</strong> (${legs.length} pernas conectadas)`;
+            document.getElementById('scan-details').innerHTML = `Corpo: <strong>${bodyNodeName}</strong> | Juntas: <strong>L1 = ${avgL1.toFixed(2)}m</strong>, <strong>L2 = ${avgL2.toFixed(2)}m</strong>, <strong>L3 = ${avgL3.toFixed(2)}m</strong>`;
+            
+            document.getElementById('tel-name').innerText = loadedCreatureName;
+            document.getElementById('tel-legs').innerText = legs.length;
+            document.getElementById('tel-body').innerText = bodyNodeName;
+            document.getElementById('tel-dims').innerText = `${avgL1.toFixed(2)} / ${avgL2.toFixed(2)} / ${avgL3.toFixed(2)} m`;
+            document.getElementById('tel-reach').innerText = `${(avgL1 + avgL2 + avgL3).toFixed(2)} m`;
+
+            document.getElementById('importer-modal').classList.remove('active');
+            initGUI();
+        }
+
+        // --- CÁLCULO PROCEDURAL DE ÂNCORAS RADIAIS ($P_3$) NO CHÃO ---
+        function calculateProceduralFootTargets() {
+            footTargets.length = 0;
+            bodyGroup.getWorldPosition(_tempVecBc);
+
+            legs.forEach((leg, index) => {
+                leg.baseNode.getWorldPosition(_tempVec1);
+
+                const stanceReach = (leg.L1 * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (leg.L2 + leg.L3)) * params.stanceSpread;
+
+                const dirH = new THREE.Vector2(_tempVec1.x - _tempVecBc.x, _tempVec1.z - _tempVecBc.z);
+                if (dirH.length() < 0.01) {
+                    const angle = (index / legs.length) * Math.PI * 2;
+                    dirH.set(Math.sin(angle), Math.cos(angle));
+                } else {
+                    dirH.normalize();
+                }
+
+                const baseDist = new THREE.Vector2(_tempVec1.x - _tempVecBc.x, _tempVec1.z - _tempVecBc.z).length();
+                const totalRadialDist = baseDist + stanceReach;
+
+                const targetWorldPos = new THREE.Vector3(
+                    _tempVecBc.x + dirH.x * totalRadialDist,
+                    0.0,
+                    _tempVecBc.z + dirH.y * totalRadialDist
+                );
+
+                footTargets.push(targetWorldPos);
+
+                if (targetMeshes[index]) {
+                    targetMeshes[index].position.copy(targetWorldPos);
+                }
+            });
+        }
+
+        // --- CURVA ADAPTATIVA DE ELEVAÇÃO DA COXA ---
+        // Y = 2.5m -> 5°   (corpo ALTO -> coxa baixa/horizontal)
+        // Y = 1.3m -> 35°  (corpo MÉDIO -> postura neutra)
+        // Y = 0.0m -> 45°  (corpo BAIXO / agachado -> coxa ALTA / levantada)
+        function calculateAdaptiveElevation(yHeight) {
+            const y = THREE.MathUtils.clamp(yHeight, 0.0, 2.5);
+            if (y >= 1.3) {
+                const t = (y - 1.3) / (2.5 - 1.3);
+                const s = t * t * (3 - 2 * t);
+                return 35.0 - s * (35.0 - 5.0);
+            } else {
+                const t = (1.3 - y) / 1.3;
+                const s = t * t * (3 - 2 * t);
+                return 35.0 + s * (45.0 - 35.0);
+            }
+        }
+
+        // --- SOLVER IK ORTONORMAL COM ZERO-BANKING ---
+        const _P0 = new THREE.Vector3();
+        const _P1 = new THREE.Vector3();
+        const _P2 = new THREE.Vector3();
+        const _P3 = new THREE.Vector3();
+        const _dirH = new THREE.Vector3();
+        const _up = new THREE.Vector3(0, 1, 0);
+        const _vTarget = new THREE.Vector3();
+        const _vTUnit = new THREE.Vector3();
+        const _hingeAxis = new THREE.Vector3();
+        const _perpUp = new THREE.Vector3();
+        const _femurDir = new THREE.Vector3();
+        const _tibiaDir = new THREE.Vector3();
+        const _coxaDir = new THREE.Vector3();
+
+        const _X1 = new THREE.Vector3();
+        const _Y1 = new THREE.Vector3();
+        const _Z1 = new THREE.Vector3();
+        const _matWorld1 = new THREE.Matrix4();
+        const _qWorld1 = new THREE.Quaternion();
+
+        const _X2 = new THREE.Vector3();
+        const _Y2 = new THREE.Vector3();
+        const _Z2 = new THREE.Vector3();
+        const _matWorld2 = new THREE.Matrix4();
+        const _qWorld2 = new THREE.Quaternion();
+
+        const _X3 = new THREE.Vector3();
+        const _Y3 = new THREE.Vector3();
+        const _Z3 = new THREE.Vector3();
+        const _matWorld3 = new THREE.Matrix4();
+        const _qWorld3 = new THREE.Quaternion();
+
+        const _qWorldBase = new THREE.Quaternion();
+        const _qInvBase = new THREE.Quaternion();
+        const _qInv1 = new THREE.Quaternion();
+        const _qInv2 = new THREE.Quaternion();
+
+        function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
+            const { baseNode, j1Node, j2Node, j3Node, L1, L2, L3, index } = leg;
+
+            baseNode.getWorldPosition(_P0);
+
+            _dirH.subVectors(worldTarget, _P0);
+            _dirH.y = 0;
+            const horizDist = _dirH.length();
+            if (horizDist > 0.001) _dirH.divideScalar(horizDist);
+
+            const gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            _P1.copy(_P0)
+               .addScaledVector(_dirH, L1 * Math.cos(gamma))
+               .addScaledVector(_up, L1 * Math.sin(gamma));
+
+            _vTarget.subVectors(worldTarget, _P1);
+            const dist = _vTarget.length();
+
+            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2 - L3) * 1.02, (L2 + L3) * 0.98);
+            const cosAlpha = THREE.MathUtils.clamp((L2 * L2 + dClamped * dClamped - L3 * L3) / (2 * L2 * dClamped), -1, 1);
+            const alpha = Math.acos(cosAlpha);
+
+            _vTUnit.copy(_vTarget).divideScalar(dist);
+            _hingeAxis.crossVectors(_dirH, _up).normalize();
+
+            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
+            if (_perpUp.y < 0) _perpUp.negate();
+
+            _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
+                     .addScaledVector(_perpUp, Math.sin(alpha))
+                     .normalize();
+
+            _P2.copy(_P1).addScaledVector(_femurDir, L2);
+            _tibiaDir.subVectors(worldTarget, _P2).normalize();
+            _P3.copy(_P2).addScaledVector(_tibiaDir, L3);
+            _coxaDir.subVectors(_P1, _P0).normalize();
+
+            // Link 1 (Coxa)
+            _X1.copy(_coxaDir);
+            _Y1.copy(_hingeAxis);
+            _Z1.crossVectors(_X1, _Y1).normalize();
+            _matWorld1.makeBasis(_X1, _Y1, _Z1);
+            _qWorld1.setFromRotationMatrix(_matWorld1);
+
+            baseNode.getWorldQuaternion(_qWorldBase);
+            _qInvBase.copy(_qWorldBase).invert();
+            j1Node.quaternion.multiplyQuaternions(_qInvBase, _qWorld1);
+            j1Node.updateMatrixWorld(true);
+
+            // Link 2 (Fêmur)
+            _X2.copy(_femurDir);
+            _Y2.copy(_hingeAxis);
+            _Z2.crossVectors(_X2, _Y2).normalize();
+            _matWorld2.makeBasis(_X2, _Y2, _Z2);
+            _qWorld2.setFromRotationMatrix(_matWorld2);
+
+            _qInv1.copy(_qWorld1).invert();
+            j2Node.quaternion.multiplyQuaternions(_qInv1, _qWorld2);
+            j2Node.updateMatrixWorld(true);
+
+            // Link 3 (Tíbia)
+            _X3.copy(_tibiaDir);
+            _Y3.copy(_hingeAxis);
+            _Z3.crossVectors(_X3, _Y3).normalize();
+            _matWorld3.makeBasis(_X3, _Y3, _Z3);
+            _qWorld3.setFromRotationMatrix(_matWorld3);
+
+            _qInv2.copy(_qWorld2).invert();
+            j3Node.quaternion.multiplyQuaternions(_qInv2, _qWorld3);
+            j3Node.updateMatrixWorld(true);
+
+            // Atualizar Linhas Esqueleto IK
+            if (lineMesh && skeletonLinesGroup.visible) {
+                const pos = lineMesh.geometry.attributes.position.array;
+                pos[0] = _P0.x; pos[1] = _P0.y; pos[2] = _P0.z;
+                pos[3] = _P1.x; pos[4] = _P1.y; pos[5] = _P1.z;
+                pos[6] = _P2.x; pos[7] = _P2.y; pos[8] = _P2.z;
+                pos[9] = _P3.x; pos[10] = _P3.y; pos[11] = _P3.z;
+                lineMesh.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Atualizar Gizmos XRay
+            if (legJointGizmos[index] && xrayGizmosGroup.visible) {
+                const gz = legJointGizmos[index];
+                gz[0].position.copy(_P0); gz[0].quaternion.copy(_qWorldBase);
+                gz[1].position.copy(_P1); gz[1].quaternion.copy(_qWorld1);
+                gz[2].position.copy(_P2); gz[2].quaternion.copy(_qWorld2);
+                gz[3].position.copy(_P3); gz[3].quaternion.copy(_qWorld3);
+            }
+        }
+
+        function resetPose() {
+            params.bodyPosY = 1.10;
+            params.bodyPosX = 0.0;
+            params.bodyPosZ = 0.0;
+            params.bodyPitch = 0.0;
+            params.bodyRoll = 0.0;
+            params.bodyYaw = 0.0;
+            params.coxaElevation = 20.0;
+            params.adaptiveElevation = true;
+            params.stanceSpread = 1.0;
+            params.autoSway = false;
+            calculateProceduralFootTargets();
+        }
+
+        // --- LOOP DE ATUALIZAÇÃO ---
+        function updateHexaBOT() {
+            if (legs.length === 0) return;
+
+            let currentElevation = params.coxaElevation;
+            if (params.adaptiveElevation) {
+                currentElevation = calculateAdaptiveElevation(params.bodyPosY);
+                params.coxaElevation = currentElevation;
+            }
+
+            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
+
+            const pitchRad = THREE.MathUtils.degToRad(params.bodyPitch);
+            const rollRad = THREE.MathUtils.degToRad(params.bodyRoll);
+            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw);
+            bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
+            bodyGroup.updateMatrixWorld(true);
+
+            for (let i = 0; i < legs.length; i++) {
+                if (footTargets[i]) {
+                    solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation);
+                }
+            }
+
+            bodyGroup.getWorldPosition(_tempVecBc);
+            if (bodyGizmo) {
+                bodyGizmo.position.copy(_tempVecBc);
+                bodyGizmo.quaternion.copy(bodyGroup.quaternion);
+            }
+
+            if (bodySpineMesh && skeletonLinesGroup.visible && legs.length > 0) {
+                const pos = bodySpineMesh.geometry.attributes.position.array;
+                let ptr = 0;
+                
+                for (let i = 0; i < legs.length; i++) {
+                    legs[i].baseNode.getWorldPosition(_tempVec1);
+                    pos[ptr++] = _tempVecBc.x; pos[ptr++] = _tempVecBc.y; pos[ptr++] = _tempVecBc.z;
+                    pos[ptr++] = _tempVec1.x;   pos[ptr++] = _tempVec1.y;   pos[ptr++] = _tempVec1.z;
+                }
+
+                for (let i = 0; i < legs.length; i++) {
+                    const nextIdx = (i + 1) % legs.length;
+                    legs[i].baseNode.getWorldPosition(_tempVec1);
+                    legs[nextIdx].baseNode.getWorldPosition(_tempVec2);
+
+                    pos[ptr++] = _tempVec1.x; pos[ptr++] = _tempVec1.y; pos[ptr++] = _tempVec1.z;
+                    pos[ptr++] = _tempVec2.x; pos[ptr++] = _tempVec2.y; pos[ptr++] = _tempVec2.z;
+                }
+
+                bodySpineMesh.geometry.attributes.position.needsUpdate = true;
+            }
+
+            document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
+            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
+        }
+
+        // --- GUI DE CONTROLES LIL-GUI ---
+        let gui;
+        function initGUI() {
+            if (gui) gui.destroy();
+            gui = new GUI({ title: '🤖 Controles do HexaBOT' });
+
+            const fLab = gui.addFolder('📦 Importador');
+            fLab.add({ openLab: () => document.getElementById('importer-modal').classList.add('active') }, 'openLab').name('Carregar Outro Modelo');
+            fLab.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').onChange(calculateProceduralFootTargets);
+
+            const fPosture = gui.addFolder('Postura & Curva Adaptativa');
+            fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
+            fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+
+            fPosture.controllers[0].onChange(v => {
+                fPosture.controllers[1].disable(v);
+            });
+
+            const fBodyPos = gui.addFolder('Translação do Corpo');
+            fBodyPos.add(params, 'bodyPosY', 0.0, 2.5, 0.01).name('Altura (Y)').listen();
+            fBodyPos.add(params, 'bodyPosX', -2.0, 2.0, 0.01).name('Lateral (X)').listen();
+            fBodyPos.add(params, 'bodyPosZ', -2.0, 2.0, 0.01).name('Frente/Trás (Z)').listen();
+
+            const fBodyRot = gui.addFolder('Rotação do Corpo');
+            fBodyRot.add(params, 'bodyPitch', -35, 35, 0.1).name('Pitch (Frente/Trás)').listen();
+            fBodyRot.add(params, 'bodyRoll', -35, 35, 0.1).name('Roll (Lateral)').listen();
+            fBodyRot.add(params, 'bodyYaw', -40, 40, 0.1).name('Yaw (Giro)').listen();
+
+            const fDemo = gui.addFolder('Auto Balanço / Rebolado');
+            fDemo.add(params, 'autoSway').name('Ativar Balanço').listen();
+            fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade');
+            fDemo.add(params, 'swayHeightCenter', 0.2, 1.8, 0.05).name('Altura Média');
+            fDemo.add(params, 'swayHeightAmp', 0.0, 0.8, 0.05).name('Amplitude Altura');
+            fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll');
+            fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw');
+            fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
+
+            const fVis = gui.addFolder('Exibição & Auxiliares');
+            fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
+            fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
+            fVis.add(params, 'ikEnabled').name('IK Habilitado');
+            fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
+                if (!params.xrayMode) skeletonLinesGroup.visible = v;
+            });
+            fVis.add(params, 'showFootTargets').name('Mostrar Âncoras Patas').onChange(v => {
+                if (!params.xrayMode) footTargetGroup.visible = v;
+            });
+            fVis.add(gridHelper, 'visible').name('Mostrar Grade');
+            fVis.close();
+
+            gui.add(params, 'resetPose').name('↺ Resetar Postura');
+
+            fLab.open();
+            fPosture.open();
+            fBodyPos.open();
+            fBodyRot.open();
+            fDemo.close();
+        }
+
+        // --- HANDLER DE ARQUIVO E DROPZONE ---
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+
+        function loadModelFile(file) {
+            if (!file) return;
+            const statusBox = document.getElementById('scan-status');
+            statusBox.innerHTML = `⏳ Analisando e escaneando <strong>${file.name}</strong>...`;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const arrayBuffer = e.target.result;
+                gltfLoader.parse(arrayBuffer, '', (gltf) => {
+                    scanAndRigCreature(gltf.scene, file.name);
+                }, (err) => {
+                    statusBox.innerHTML = `❌ Erro ao analisar GLTF: ${err.message}`;
+                    console.error(err);
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        fileInput.addEventListener('change', (e) => loadModelFile(e.target.files[0]));
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                loadModelFile(e.dataTransfer.files[0]);
+            }
+        });
+        dropzone.addEventListener('click', (e) => {
+            if (e.target !== fileInput) fileInput.click();
+        });
+
+        document.getElementById('btn-open-importer').addEventListener('click', () => {
+            document.getElementById('importer-modal').classList.add('active');
+        });
+
+        document.getElementById('btn-close-importer').addEventListener('click', () => {
+            document.getElementById('importer-modal').classList.remove('active');
+        });
+
+        // --- CARREGAMENTO DO MODELO PADRÃO ARANHA.GLB ---
+        function loadDefaultModel() {
+            const statusBox = document.getElementById('scan-status');
+            statusBox.innerHTML = '⏳ Carregando <code>./glb/aranha.glb</code>...';
+
+            gltfLoader.load('./glb/aranha.glb', (gltf) => {
+                scanAndRigCreature(gltf.scene, 'aranha.glb (Padrão)');
+            }, undefined, (err) => {
+                statusBox.innerHTML = `❌ Falha ao carregar ./glb/aranha.glb: ${err.message}`;
+                console.error(err);
+            });
+        }
+
+        document.getElementById('btn-quickload-default').addEventListener('click', loadDefaultModel);
+
+        // --- ATALHOS DE TECLADO ---
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'x' || e.key === 'X') {
+                setXRayMode(!params.xrayMode);
+            } else if (e.key === 'i' || e.key === 'I') {
+                toggleTelemetry();
+            } else if (e.key === 'r' || e.key === 'R') {
+                resetPose();
+            }
+        });
+
+        // --- ANIMAÇÃO E RENDER LOOP ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            if (params.autoSway) {
+                const t = elapsedTime * params.swaySpeed;
+                params.bodyPosY = params.swayHeightCenter + Math.sin(t * 1.5) * params.swayHeightAmp;
+                params.bodyPitch = Math.sin(t) * params.swayPitchRoll;
+                params.bodyRoll = Math.cos(t * 0.8) * params.swayPitchRoll;
+                params.bodyYaw = Math.sin(t * 0.6) * params.swayYaw;
+                params.bodyPosX = Math.sin(t * 0.7) * params.swayShift;
+                params.bodyPosZ = Math.cos(t * 0.5) * params.swayShift;
+            }
+
+            if (params.ikEnabled) {
+                updateHexaBOT();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        initGUI();
+        animate();
+
+        // Carregar automaticamente na inicialização
+        loadDefaultModel();
+    </script>
+</body>
+</html>

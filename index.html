@@ -588,7 +588,7 @@
 
         // --- CARREGAMENTO DO GLB ---
         const loader = new GLTFLoader();
-        loader.load('./glb/aranha.glb', (gltf) => {
+        loader.load('./glb/aranha_material.glb', (gltf) => {
             modelRoot = gltf.scene;
 
             modelRoot.traverse((child) => {
@@ -633,13 +633,13 @@
 
 			// Dica: Teste mudar a carapaça
 			if (Default) {
-				Default.color.set('#bbbbbb'); // Deixa o casco rosa/magenta
-				Default.metalness = 0.8;
+				Default.color.set('#aaaa00'); // Deixa o casco rosa/magenta
+				Default.metalness = 0.6;
 				Default.roughness = 0.37;
 			}
 			
 			if(Tubo) {
-				Tubo.color.set('#ddbbaa');
+				Tubo.color.set('#bbbbbb');
 				Tubo.metalness = 0.9;
 			}
 
