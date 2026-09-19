@@ -38,7 +38,6 @@ O projeto é dividido em dois ambientes complementares:
   $$\gamma_{\text{fallback}} = \theta_{\text{target}} + \arccos(\text{clamp}(K, -1, 1))$$
   $$\gamma_{\text{efetivo}} = \min(\gamma_{\text{nominal}}, \gamma_{\text{fallback}})$$
 * **Garantia Biomecânica**: A ponta da tíbia nunca se descola do solo e a cinemática não quebra em posturas extremas.
-* Documentação matemática detalhada disponível em [`tmp/knowledge_ik_fallback.md`](tmp/knowledge_ik_fallback.md).
 
 ### 🩺 3. Telemetria & Diagnóstico Visual de Tensão
 * **Linhas de Esqueleto Espessas**: Renderizadas com `Line2` e `LineSegments2` (largura de 5.0px com anti-aliasing e suporte Shader nativo).
@@ -82,8 +81,6 @@ O projeto é dividido em dois ambientes complementares:
 │   ├── aranha.glb               # Modelo 3D base da Aranha HexaBOT
 │   ├── aranha_material.glb      # Variação de materiais e texturas
 │   └── aranha_material_2.glb    # Modelo em alta resolução com blendshapes
-├── tmp/
-│   └── knowledge_ik_fallback.md # Dedução matemática formal do Auto-Reach Fallback
 ├── index.html                   # Aplicação principal (HexaBOT calibrado)
 ├── index2.html                  # Motor universal de Auto-Rig e IK para qualquer GLTF/GLB
 └── README.md                    # Documentação do projeto
