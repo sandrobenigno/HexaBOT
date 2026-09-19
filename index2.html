@@ -372,6 +372,11 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
         import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 
         // --- SETUP DA CENA THREE.JS ---
@@ -402,6 +407,7 @@
             bodyYaw: 0.0,
             coxaElevation: 20.0,
             adaptiveElevation: true,
+            autoReachFallback: true,
             stanceSpread: 1.0,
             autoSway: false,
             swaySpeed: 1.2,
@@ -412,8 +418,8 @@
             swayShift: 0.35,
             xrayMode: false,
             showTelemetry: false,
-            showFootTargets: true,
-            showSkeletonLines: true,
+            showFootTargets: false,
+            showSkeletonLines: false,
             envIntensity: 1.2,
             envRotation: 0,
             ikEnabled: true,
@@ -514,9 +520,11 @@
         robotGroup.add(bodyGroup);
 
         const footTargetGroup = new THREE.Group();
+        footTargetGroup.visible = false;
         scene.add(footTargetGroup);
 
         const skeletonLinesGroup = new THREE.Group();
+        skeletonLinesGroup.visible = false;
         scene.add(skeletonLinesGroup);
 
         const xrayGizmosGroup = new THREE.Group();
@@ -524,8 +532,6 @@
         scene.add(xrayGizmosGroup);
 
         // --- GIZMOS E HELPERS XRAY ---
-        const xrayBoundingBoxes = [];
-
         function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
             const group = new THREE.Group();
             group.userData.isXrayHelper = true;
@@ -558,43 +564,6 @@
             return group;
         }
 
-        function createMeshBoundingBox(mesh) {
-            if (!mesh.geometry) return null;
-            mesh.geometry.computeBoundingBox();
-            const bbox = mesh.geometry.boundingBox;
-            if (!bbox) return null;
-
-            const size = new THREE.Vector3();
-            const center = new THREE.Vector3();
-            bbox.getSize(size);
-            bbox.getCenter(center);
-            if (size.x <= 0.0001 && size.y <= 0.0001 && size.z <= 0.0001) return null;
-
-            const bboxGroup = new THREE.Group();
-            bboxGroup.userData.isXrayHelper = true;
-
-            const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
-            const edgesGeo = new THREE.EdgesGeometry(boxGeo);
-
-            const edgeLines = new THREE.LineSegments(
-                edgesGeo,
-                new THREE.LineBasicMaterial({ color: 0x00d2ff, linewidth: 1, transparent: true, opacity: 0.35 })
-            );
-            edgeLines.userData.isXrayHelper = true;
-
-            const faceMesh = new THREE.Mesh(
-                boxGeo,
-                new THREE.MeshBasicMaterial({ color: 0x002244, transparent: true, opacity: 0.08, depthWrite: false })
-            );
-            faceMesh.userData.isXrayHelper = true;
-
-            bboxGroup.add(edgeLines);
-            bboxGroup.add(faceMesh);
-            bboxGroup.position.copy(center);
-
-            return bboxGroup;
-        }
-
         function setXRayMode(enable) {
             params.xrayMode = enable;
             if (robotGroup) {
@@ -607,7 +576,6 @@
                     }
                 });
             }
-            xrayBoundingBoxes.forEach(b => b.visible = enable);
             xrayGizmosGroup.visible = enable;
             skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
             footTargetGroup.visible = enable ? true : params.showFootTargets;
@@ -639,7 +607,6 @@
             while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
             while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
             while (xrayGizmosGroup.children.length > 0) xrayGizmosGroup.remove(xrayGizmosGroup.children[0]);
-            xrayBoundingBoxes.length = 0;
             legs.length = 0;
             footTargets.length = 0;
             targetMeshes.length = 0;
@@ -742,8 +709,8 @@
                 const targetSphere = new THREE.Mesh(
                     new THREE.SphereGeometry(0.14, 16, 16),
                     new THREE.MeshStandardMaterial({
-                        color: isRight ? 0xff4757 : 0x2ed573,
-                        emissive: isRight ? 0x661111 : 0x115522,
+                        color: isRight ? 0x00d2ff : 0x2ed573,
+                        emissive: isRight ? 0x003366 : 0x115522,
                         roughness: 0.3
                     })
                 );
@@ -752,14 +719,17 @@
                 targetMeshes.push(targetSphere);
 
                 // Linha de Esqueleto IK
-                const lineGeo = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()
-                ]);
-                const lineMat = new THREE.LineBasicMaterial({
-                    color: isRight ? 0xff6b81 : 0x7bed9f,
-                    linewidth: 3
+                const lineGeo = new LineGeometry();
+                lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                const lineMat = new LineMaterial({
+                    color: isRight ? 0x38bdf8 : 0x7bed9f,
+                    linewidth: 5.0,
+                    transparent: true,
+                    opacity: 0.95,
+                    depthTest: false
                 });
-                const lineMesh = new THREE.Line(lineGeo, lineMat);
+                lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                const lineMesh = new Line2(lineGeo, lineMat);
                 skeletonLinesGroup.add(lineMesh);
                 legLines.push(lineMesh);
 
@@ -782,17 +752,11 @@
             bodyGizmo = createCrossGizmo(0.55, 0.18);
             xrayGizmosGroup.add(bodyGizmo);
 
-            // 7. Materiais e Bounding Boxes XRay
+            // 7. Materiais e Sombras
             robotGroup.traverse((child) => {
                 if (child.isMesh && !child.userData.isXrayHelper) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    const bbox = createMeshBoundingBox(child);
-                    if (bbox) {
-                        bbox.visible = false;
-                        child.add(bbox);
-                        xrayBoundingBoxes.push(bbox);
-                    }
                 }
             });
 
@@ -800,15 +764,17 @@
             if (legs.length > 0) {
                 const totalSegments = legs.length + legs.length;
                 const spinePosArray = new Float32Array(totalSegments * 2 * 3);
-                const spineGeo = new THREE.BufferGeometry();
-                spineGeo.setAttribute('position', new THREE.BufferAttribute(spinePosArray, 3));
-                const spineMat = new THREE.LineBasicMaterial({
+                const spineGeo = new LineSegmentsGeometry();
+                spineGeo.setPositions(spinePosArray);
+                const spineMat = new LineMaterial({
                     color: 0x00d2ff,
-                    linewidth: 3,
+                    linewidth: 3.5,
                     transparent: true,
-                    opacity: 0.95
+                    opacity: 0.95,
+                    depthTest: false
                 });
-                bodySpineMesh = new THREE.LineSegments(spineGeo, spineMat);
+                spineMat.resolution.set(window.innerWidth, window.innerHeight);
+                bodySpineMesh = new LineSegments2(spineGeo, spineMat);
                 bodySpineMesh.userData.isXrayHelper = true;
                 skeletonLinesGroup.add(bodySpineMesh);
             }
@@ -930,7 +896,37 @@
             const horizDist = _dirH.length();
             if (horizDist > 0.001) _dirH.divideScalar(horizDist);
 
-            const gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa e Auto-Reach Fallback
+            let gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            let isFallbackActive = false;
+
+            if (params.autoReachFallback) {
+                const h = _P0.y - worldTarget.y;
+                const D_total = Math.sqrt(horizDist * horizDist + h * h);
+                const theta_target = Math.atan2(-h, horizDist);
+                const D_max = (L2 + L3) * 0.98;
+
+                // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
+                const p1x_nom = L1 * Math.cos(gamma);
+                const p1y_nom = L1 * Math.sin(gamma);
+                const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
+
+                if (dist1_sq > D_max * D_max && D_total > 0.001) {
+                    const K = (D_total * D_total + L1 * L1 - D_max * D_max) / (2 * L1 * D_total);
+                    if (K <= 1.0) {
+                        const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
+                        const gammaLimit = theta_target + deltaTheta;
+                        if (gammaLimit < gamma) {
+                            gamma = gammaLimit;
+                            isFallbackActive = true;
+                        }
+                    } else {
+                        gamma = theta_target;
+                        isFallbackActive = true;
+                    }
+                }
+            }
+
             _P1.copy(_P0)
                .addScaledVector(_dirH, L1 * Math.cos(gamma))
                .addScaledVector(_up, L1 * Math.sin(gamma));
@@ -956,6 +952,32 @@
             _tibiaDir.subVectors(worldTarget, _P2).normalize();
             _P3.copy(_P2).addScaledVector(_tibiaDir, L3);
             _coxaDir.subVectors(_P1, _P0).normalize();
+
+            // Feedback Visual de Tensão e Fallback
+            const tensionRatio = dist / (L2 + L3);
+
+            if (lineMesh) {
+                if (isFallbackActive) {
+                    lineMesh.material.color.setHex(0xff0038); // Vermelho Intenso: Atuação Adaptativa / Fallback Ativo
+                } else if (tensionRatio > 0.85) {
+                    lineMesh.material.color.setHex(0xffd32a); // Amarelo: Sob Tensão
+                } else {
+                    lineMesh.material.color.setHex(leg.side === 'D' ? 0x38bdf8 : 0x7bed9f); // Ciano (D) / Verde (E)
+                }
+            }
+
+            if (targetMeshes[index]) {
+                if (isFallbackActive) {
+                    targetMeshes[index].material.color.setHex(0xff0038);
+                    targetMeshes[index].material.emissive.setHex(0x880011);
+                } else if (tensionRatio > 0.85) {
+                    targetMeshes[index].material.color.setHex(0xffd32a);
+                    targetMeshes[index].material.emissive.setHex(0x554400);
+                } else {
+                    targetMeshes[index].material.color.setHex(leg.side === 'D' ? 0x00d2ff : 0x2ed573);
+                    targetMeshes[index].material.emissive.setHex(leg.side === 'D' ? 0x003366 : 0x115522);
+                }
+            }
 
             // Link 1 (Coxa)
             _X1.copy(_coxaDir);
@@ -992,13 +1014,13 @@
             j3Node.updateMatrixWorld(true);
 
             // Atualizar Linhas Esqueleto IK
-            if (lineMesh && skeletonLinesGroup.visible) {
-                const pos = lineMesh.geometry.attributes.position.array;
-                pos[0] = _P0.x; pos[1] = _P0.y; pos[2] = _P0.z;
-                pos[3] = _P1.x; pos[4] = _P1.y; pos[5] = _P1.z;
-                pos[6] = _P2.x; pos[7] = _P2.y; pos[8] = _P2.z;
-                pos[9] = _P3.x; pos[10] = _P3.y; pos[11] = _P3.z;
-                lineMesh.geometry.attributes.position.needsUpdate = true;
+            if (lineMesh && (skeletonLinesGroup.visible || params.xrayMode)) {
+                lineMesh.geometry.setPositions([
+                    _P0.x, _P0.y, _P0.z,
+                    _P1.x, _P1.y, _P1.z,
+                    _P2.x, _P2.y, _P2.z,
+                    _P3.x, _P3.y, _P3.z
+                ]);
             }
 
             // Atualizar Gizmos XRay
@@ -1009,6 +1031,8 @@
                 gz[2].position.copy(_P2); gz[2].quaternion.copy(_qWorld2);
                 gz[3].position.copy(_P3); gz[3].quaternion.copy(_qWorld3);
             }
+
+            return isFallbackActive;
         }
 
         function resetPose() {
@@ -1020,9 +1044,11 @@
             params.bodyYaw = 0.0;
             params.coxaElevation = 20.0;
             params.adaptiveElevation = true;
+            params.autoReachFallback = true;
             params.stanceSpread = 1.0;
             params.autoSway = false;
             calculateProceduralFootTargets();
+            if (gui) gui.controllers.forEach(c => c.updateDisplay());
         }
 
         // --- LOOP DE ATUALIZAÇÃO ---
@@ -1043,9 +1069,12 @@
             bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
             bodyGroup.updateMatrixWorld(true);
 
+            let fallbackCount = 0;
             for (let i = 0; i < legs.length; i++) {
                 if (footTargets[i]) {
-                    solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation);
+                    if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
+                        fallbackCount++;
+                    }
                 }
             }
 
@@ -1056,13 +1085,10 @@
             }
 
             if (bodySpineMesh && skeletonLinesGroup.visible && legs.length > 0) {
-                const pos = bodySpineMesh.geometry.attributes.position.array;
-                let ptr = 0;
-                
+                const pos = [];
                 for (let i = 0; i < legs.length; i++) {
                     legs[i].baseNode.getWorldPosition(_tempVec1);
-                    pos[ptr++] = _tempVecBc.x; pos[ptr++] = _tempVecBc.y; pos[ptr++] = _tempVecBc.z;
-                    pos[ptr++] = _tempVec1.x;   pos[ptr++] = _tempVec1.y;   pos[ptr++] = _tempVec1.z;
+                    pos.push(_tempVecBc.x, _tempVecBc.y, _tempVecBc.z, _tempVec1.x, _tempVec1.y, _tempVec1.z);
                 }
 
                 for (let i = 0; i < legs.length; i++) {
@@ -1070,15 +1096,14 @@
                     legs[i].baseNode.getWorldPosition(_tempVec1);
                     legs[nextIdx].baseNode.getWorldPosition(_tempVec2);
 
-                    pos[ptr++] = _tempVec1.x; pos[ptr++] = _tempVec1.y; pos[ptr++] = _tempVec1.z;
-                    pos[ptr++] = _tempVec2.x; pos[ptr++] = _tempVec2.y; pos[ptr++] = _tempVec2.z;
+                    pos.push(_tempVec1.x, _tempVec1.y, _tempVec1.z, _tempVec2.x, _tempVec2.y, _tempVec2.z);
                 }
 
-                bodySpineMesh.geometry.attributes.position.needsUpdate = true;
+                bodySpineMesh.geometry.setPositions(pos);
             }
 
             document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
-            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
+            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}${fallbackCount > 0 ? ` [${fallbackCount} em Fallback]` : ''}`;
         }
 
         // --- GUI DE CONTROLES LIL-GUI ---
@@ -1089,14 +1114,15 @@
 
             const fLab = gui.addFolder('📦 Importador');
             fLab.add({ openLab: () => document.getElementById('importer-modal').classList.add('active') }, 'openLab').name('Carregar Outro Modelo');
-            fLab.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').onChange(calculateProceduralFootTargets);
+            fLab.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').listen().onChange(calculateProceduralFootTargets);
 
             const fPosture = gui.addFolder('Postura & Curva Adaptativa');
-            fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
-            fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+            const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
+            const cElevation = fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+            fPosture.add(params, 'autoReachFallback').name('🛡️ Relaxamento Alcance (Auto)').listen();
 
-            fPosture.controllers[0].onChange(v => {
-                fPosture.controllers[1].disable(v);
+            cAdapt.onChange(v => {
+                cElevation.disable(v);
             });
 
             const fBodyPos = gui.addFolder('Translação do Corpo');
@@ -1250,6 +1276,8 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            legLines.forEach(l => l.material.resolution.set(window.innerWidth, window.innerHeight));
+            if (bodySpineMesh) bodySpineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
         });
 
         initGUI();

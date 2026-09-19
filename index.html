@@ -269,6 +269,11 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
         import GUI from 'lil-gui';
 
         // --- CENA & RENDERER ---
@@ -299,6 +304,7 @@
             bodyYaw: 0,
             // Elevação Adaptativa da Coxa
             adaptiveElevation: true,
+            autoReachFallback: true,
             coxaElevation: 40.6, // Graus
             stanceSpread: 1.0,
             // Balanço Automático Calibrado
@@ -315,8 +321,8 @@
             // Visualização
             xrayMode: false,
             showTelemetry: false,
-            showFootTargets: true,
-            showSkeletonLines: true,
+            showFootTargets: false,
+            showSkeletonLines: false,
             envIntensity: 1.2,
             envRotation: 0,
             showLightHelpers: false,
@@ -436,9 +442,11 @@
         scene.add(bodyGroup);
 
         const footTargetGroup = new THREE.Group();
+        footTargetGroup.visible = false;
         scene.add(footTargetGroup);
 
         const skeletonLinesGroup = new THREE.Group();
+        skeletonLinesGroup.visible = false;
         scene.add(skeletonLinesGroup);
 
         const xrayGizmosGroup = new THREE.Group();
@@ -446,8 +454,6 @@
         scene.add(xrayGizmosGroup);
 
         // --- XRAY MODE ASSETS & HELPERS ---
-        const xrayBoundingBoxes = [];
-
         function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
             const group = new THREE.Group();
             group.userData.isXrayHelper = true;
@@ -490,45 +496,6 @@
             return group;
         }
 
-        function createMeshBoundingBox(mesh) {
-            if (!mesh.geometry) return null;
-            mesh.geometry.computeBoundingBox();
-            const bbox = mesh.geometry.boundingBox;
-            if (!bbox) return null;
-
-            const size = new THREE.Vector3();
-            const center = new THREE.Vector3();
-            bbox.getSize(size);
-            bbox.getCenter(center);
-
-            if (size.x <= 0.0001 && size.y <= 0.0001 && size.z <= 0.0001) return null;
-
-            const bboxGroup = new THREE.Group();
-            bboxGroup.userData.isXrayHelper = true;
-
-            const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
-            const edgesGeo = new THREE.EdgesGeometry(boxGeo);
-
-            // Bounding box com visual cibernético/holográfico calibrado
-            const edgeLines = new THREE.LineSegments(
-                edgesGeo,
-                new THREE.LineBasicMaterial({ color: 0x00d2ff, linewidth: 1, transparent: true, opacity: 0.35 })
-            );
-            edgeLines.userData.isXrayHelper = true;
-
-            const faceMesh = new THREE.Mesh(
-                boxGeo,
-                new THREE.MeshBasicMaterial({ color: 0x002244, transparent: true, opacity: 0.08, depthWrite: false })
-            );
-            faceMesh.userData.isXrayHelper = true;
-
-            bboxGroup.add(edgeLines);
-            bboxGroup.add(faceMesh);
-            bboxGroup.position.copy(center);
-
-            return bboxGroup;
-        }
-
         function setXRayMode(enable) {
             params.xrayMode = enable;
 
@@ -543,7 +510,6 @@
                 });
             }
 
-            xrayBoundingBoxes.forEach(b => b.visible = enable);
             xrayGizmosGroup.visible = enable;
 
             skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
@@ -590,6 +556,7 @@
             params.bodyRoll = 0;
             params.bodyYaw = 0;
             params.stanceSpread = 1.0;
+            params.autoReachFallback = true;
             params.irisE = 0.0;
             params.irisD = 0.0;
             updateMorphTargets();
@@ -708,8 +675,8 @@
                     const targetSphere = new THREE.Mesh(
                         new THREE.SphereGeometry(0.14, 16, 16),
                         new THREE.MeshStandardMaterial({
-                            color: legSides[index] === 'D' ? 0xff4757 : 0x2ed573,
-                            emissive: legSides[index] === 'D' ? 0x661111 : 0x115522,
+                            color: legSides[index] === 'D' ? 0x00d2ff : 0x2ed573,
+                            emissive: legSides[index] === 'D' ? 0x003366 : 0x115522,
                             roughness: 0.3
                         })
                     );
@@ -717,14 +684,17 @@
                     footTargetGroup.add(targetSphere);
                     targetMeshes.push(targetSphere);
 
-                    const lineGeo = new THREE.BufferGeometry().setFromPoints([
-                        new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()
-                    ]);
-                    const lineMat = new THREE.LineBasicMaterial({
-                        color: legSides[index] === 'D' ? 0xff6b81 : 0x7bed9f,
-                        linewidth: 3
+                    const lineGeo = new LineGeometry();
+                    lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                    const lineMat = new LineMaterial({
+                        color: legSides[index] === 'D' ? 0x38bdf8 : 0x7bed9f,
+                        linewidth: 5.0,
+                        transparent: true,
+                        opacity: 0.95,
+                        depthTest: false
                     });
-                    const lineMesh = new THREE.Line(lineGeo, lineMat);
+                    lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                    const lineMesh = new Line2(lineGeo, lineMat);
                     skeletonLinesGroup.add(lineMesh);
                     legLines.push(lineMesh);
                 }
@@ -734,29 +704,19 @@
 
             // --- LINHAS DE ESQUELETO DO CORPO CENTRAL / ESPINHA DORSAL (ARANHA) ---
             const spinePosArray = new Float32Array(26 * 3);
-            const spineGeo = new THREE.BufferGeometry();
-            spineGeo.setAttribute('position', new THREE.BufferAttribute(spinePosArray, 3));
-            const spineMat = new THREE.LineBasicMaterial({
+            const spineGeo = new LineSegmentsGeometry();
+            spineGeo.setPositions(spinePosArray);
+            const spineMat = new LineMaterial({
                 color: 0x00d2ff,
-                linewidth: 3,
+                linewidth: 3.5,
                 transparent: true,
-                opacity: 0.95
+                opacity: 0.95,
+                depthTest: false
             });
-            bodySpineMesh = new THREE.LineSegments(spineGeo, spineMat);
+            spineMat.resolution.set(window.innerWidth, window.innerHeight);
+            bodySpineMesh = new LineSegments2(spineGeo, spineMat);
             bodySpineMesh.userData.isXrayHelper = true;
             skeletonLinesGroup.add(bodySpineMesh);
-
-            // --- CRIAR BOUNDING BOXES (XRAY MODE) ---
-            modelRoot.traverse((child) => {
-                if (child.isMesh && !child.userData.isXrayHelper) {
-                    const bbox = createMeshBoundingBox(child);
-                    if (bbox) {
-                        bbox.visible = false;
-                        child.add(bbox);
-                        xrayBoundingBoxes.push(bbox);
-                    }
-                }
-            });
 
             // --- CRIAR GIZMOS EM CRUZ (X, Y, Z + JUNTA) NOS PIVOTS ---
             bodyGizmo = createCrossGizmo(0.55, 0.18);
@@ -863,8 +823,37 @@
             const horizDist = _dirH.length();
             if (horizDist > 0.001) _dirH.divideScalar(horizDist);
 
-            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa
-            const gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa e Auto-Reach Fallback
+            let gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            let isFallbackActive = false;
+
+            if (params.autoReachFallback) {
+                const h = _P0.y - worldTarget.y;
+                const D_total = Math.sqrt(horizDist * horizDist + h * h);
+                const theta_target = Math.atan2(-h, horizDist);
+                const D_max = (L2_M + L3_M) * 0.98;
+
+                // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
+                const p1x_nom = L1_M * Math.cos(gamma);
+                const p1y_nom = L1_M * Math.sin(gamma);
+                const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
+
+                if (dist1_sq > D_max * D_max && D_total > 0.001) {
+                    const K = (D_total * D_total + L1_M * L1_M - D_max * D_max) / (2 * L1_M * D_total);
+                    if (K <= 1.0) {
+                        const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
+                        const gammaLimit = theta_target + deltaTheta;
+                        if (gammaLimit < gamma) {
+                            gamma = gammaLimit;
+                            isFallbackActive = true;
+                        }
+                    } else {
+                        gamma = theta_target;
+                        isFallbackActive = true;
+                    }
+                }
+            }
+
             _P1.copy(_P0)
                .addScaledVector(_dirH, L1_M * Math.cos(gamma))
                .addScaledVector(_up, L1_M * Math.sin(gamma));
@@ -900,6 +889,33 @@
 
             // Direção da Coxa (P0 -> P1)
             _coxaDir.subVectors(_P1, _P0).normalize();
+
+            // Feedback Visual de Tensão e Fallback
+            const tensionRatio = dist / (L2_M + L3_M);
+            const index = leg.index;
+
+            if (lineMesh) {
+                if (isFallbackActive) {
+                    lineMesh.material.color.setHex(0xff0038); // Vermelho Intenso: Atuação Adaptativa / Fallback Ativo
+                } else if (tensionRatio > 0.85) {
+                    lineMesh.material.color.setHex(0xffd32a); // Amarelo: Sob Tensão
+                } else {
+                    lineMesh.material.color.setHex(leg.side === 'D' ? 0x38bdf8 : 0x7bed9f); // Ciano (D) / Verde (E)
+                }
+            }
+
+            if (targetMeshes[index]) {
+                if (isFallbackActive) {
+                    targetMeshes[index].material.color.setHex(0xff0038);
+                    targetMeshes[index].material.emissive.setHex(0x880011);
+                } else if (tensionRatio > 0.85) {
+                    targetMeshes[index].material.color.setHex(0xffd32a);
+                    targetMeshes[index].material.emissive.setHex(0x554400);
+                } else {
+                    targetMeshes[index].material.color.setHex(leg.side === 'D' ? 0x00d2ff : 0x2ed573);
+                    targetMeshes[index].material.emissive.setHex(leg.side === 'D' ? 0x003366 : 0x115522);
+                }
+            }
 
             if (params.ikEnabled) {
                 // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK)
@@ -940,12 +956,12 @@
 
             // Atualizar Linha do Esqueleto IK
             if (lineMesh && (params.showSkeletonLines || params.xrayMode)) {
-                const positions = lineMesh.geometry.attributes.position.array;
-                positions[0] = _P0.x; positions[1] = _P0.y; positions[2] = _P0.z;
-                positions[3] = _P1.x; positions[4] = _P1.y; positions[5] = _P1.z;
-                positions[6] = _P2.x; positions[7] = _P2.y; positions[8] = _P2.z;
-                positions[9] = _P3.x; positions[10] = _P3.y; positions[11] = _P3.z;
-                lineMesh.geometry.attributes.position.needsUpdate = true;
+                lineMesh.geometry.setPositions([
+                    _P0.x, _P0.y, _P0.z,
+                    _P1.x, _P1.y, _P1.z,
+                    _P2.x, _P2.y, _P2.z,
+                    _P3.x, _P3.y, _P3.z
+                ]);
             }
 
             // Atualizar Gizmos e Juntas XRay da Perna (4 juntas: P0, P1, P2, P3)
@@ -963,6 +979,8 @@
                 g3.position.copy(_P3);
                 g3.quaternion.copy(_qWorld3);
             }
+
+            return isFallbackActive;
         }
 
         function updateHexaBOT() {
@@ -988,8 +1006,11 @@
             bodyGroup.updateMatrixWorld(true);
 
             // Resolver IK com a elevação calculada
+            let fallbackCount = 0;
             for (let i = 0; i < legs.length; i++) {
-                solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation);
+                if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
+                    fallbackCount++;
+                }
             }
 
             // Atualizar Gizmo do Corpo e da Cabeça
@@ -1006,7 +1027,7 @@
 
             // Atualizar Linhas da Espinha Central da Aranha (Conexão do Corpo com as 6 Bases)
             if (bodySpineMesh && skeletonLinesGroup.visible && legs.length === 6) {
-                const pos = bodySpineMesh.geometry.attributes.position.array;
+                const pos = [];
                 bodyGroup.getWorldPosition(_tempVecBc);
 
                 const pFR = legs[0].baseNode.getWorldPosition(_tempVec1);
@@ -1016,44 +1037,40 @@
                 const pML = legs[4].baseNode.getWorldPosition(_tempVec5);
                 const pBL = legs[5].baseNode.getWorldPosition(_tempVec6);
 
-                let ptr = 0;
                 const bases = [pFR, pMR, pBR, pFL, pML, pBL];
                 // 6 Raios: Centro do Corpo -> Bases das Pernas
                 for (let i = 0; i < 6; i++) {
-                    pos[ptr++] = _tempVecBc.x; pos[ptr++] = _tempVecBc.y; pos[ptr++] = _tempVecBc.z;
-                    pos[ptr++] = bases[i].x;   pos[ptr++] = bases[i].y;   pos[ptr++] = bases[i].z;
+                    pos.push(_tempVecBc.x, _tempVecBc.y, _tempVecBc.z, bases[i].x, bases[i].y, bases[i].z);
                 }
 
                 // 3 Transversais: FR<->FL, MR<->ML, BR<->BL
-                pos[ptr++] = pFR.x; pos[ptr++] = pFR.y; pos[ptr++] = pFR.z;
-                pos[ptr++] = pFL.x; pos[ptr++] = pFL.y; pos[ptr++] = pFL.z;
-
-                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
-                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
-
-                pos[ptr++] = pBR.x; pos[ptr++] = pBR.y; pos[ptr++] = pBR.z;
-                pos[ptr++] = pBL.x; pos[ptr++] = pBL.y; pos[ptr++] = pBL.z;
+                pos.push(pFR.x, pFR.y, pFR.z, pFL.x, pFL.y, pFL.z);
+                pos.push(pMR.x, pMR.y, pMR.z, pML.x, pML.y, pML.z);
+                pos.push(pBR.x, pBR.y, pBR.z, pBL.x, pBL.y, pBL.z);
 
                 // 2 Longitudinais Direita: FR<->MR, MR<->BR
-                pos[ptr++] = pFR.x; pos[ptr++] = pFR.y; pos[ptr++] = pFR.z;
-                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
-
-                pos[ptr++] = pMR.x; pos[ptr++] = pMR.y; pos[ptr++] = pMR.z;
-                pos[ptr++] = pBR.x; pos[ptr++] = pBR.y; pos[ptr++] = pBR.z;
+                pos.push(pFR.x, pFR.y, pFR.z, pMR.x, pMR.y, pMR.z);
+                pos.push(pMR.x, pMR.y, pMR.z, pBR.x, pBR.y, pBR.z);
 
                 // 2 Longitudinais Esquerda: FL<->ML, ML<->BL
-                pos[ptr++] = pFL.x; pos[ptr++] = pFL.y; pos[ptr++] = pFL.z;
-                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
+                pos.push(pFL.x, pFL.y, pFL.z, pML.x, pML.y, pML.z);
+                pos.push(pML.x, pML.y, pML.z, pBL.x, pBL.y, pBL.z);
 
-                pos[ptr++] = pML.x; pos[ptr++] = pML.y; pos[ptr++] = pML.z;
-                pos[ptr++] = pBL.x; pos[ptr++] = pBL.y; pos[ptr++] = pBL.z;
-
-                bodySpineMesh.geometry.attributes.position.needsUpdate = true;
+                bodySpineMesh.geometry.setPositions(pos);
             }
 
             // Atualizar Telemetria
             document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
             document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
+            
+            const telFl = document.getElementById('tel-fl');
+            if (telFl) {
+                if (fallbackCount > 0) {
+                    telFl.innerHTML = `<strong style="color: #ff9f43;">${fallbackCount} pata${fallbackCount > 1 ? 's' : ''} em Fallback</strong>`;
+                } else {
+                    telFl.innerHTML = `<span style="color: #7ee787;">100% Contato</span>`;
+                }
+            }
         }
 
         // --- GUI DE CONTROLES ---
@@ -1065,6 +1082,7 @@
             fPosture.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').listen().onChange(updateFootTargets);
             const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
             const cElevation = fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+            fPosture.add(params, 'autoReachFallback').name('🛡️ Relaxamento Alcance (Auto)').listen();
 
             cAdapt.onChange(v => {
                 cElevation.disable(v);
@@ -1217,6 +1235,8 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            legLines.forEach(l => l.material.resolution.set(window.innerWidth, window.innerHeight));
+            if (bodySpineMesh) bodySpineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
