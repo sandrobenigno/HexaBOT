@@ -371,6 +371,7 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
         import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 
         // --- SETUP DA CENA THREE.JS ---
@@ -388,8 +389,74 @@
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.1;
+        renderer.toneMappingExposure = 1.15;
         container.appendChild(renderer.domElement);
+
+        // --- PARÂMETROS GLOBAIS E ESTADO ---
+        const params = {
+            bodyPosY: 1.10,
+            bodyPosX: 0.0,
+            bodyPosZ: 0.0,
+            bodyPitch: 0.0,
+            bodyRoll: 0.0,
+            bodyYaw: 0.0,
+            coxaElevation: 20.0,
+            adaptiveElevation: true,
+            stanceSpread: 1.0,
+            autoSway: false,
+            swaySpeed: 1.2,
+            swayHeightCenter: 1.10,
+            swayHeightAmp: 0.45,
+            swayPitchRoll: 12.0,
+            swayYaw: 15.0,
+            swayShift: 0.35,
+            xrayMode: false,
+            showTelemetry: false,
+            showFootTargets: true,
+            showSkeletonLines: true,
+            envIntensity: 1.2,
+            envRotation: 0,
+            ikEnabled: true,
+            resetPose: () => resetPose()
+        };
+
+        const telemetryBox = document.getElementById('telemetry-box');
+        function toggleTelemetry(val) {
+            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
+            if (telemetryBox) {
+                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
+            }
+        }
+
+        // --- GLOBAL WORLD / ENVIRONMENT MAP PROCEDURAL (REFLEXOS METÁLICOS SEM FUNDO 360) ---
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        const roomEnvironment = new RoomEnvironment();
+
+        function updateEnvironment() {
+            const rotDeg = params.envRotation;
+            const intensity = params.envIntensity;
+
+            const rad = THREE.MathUtils.degToRad(rotDeg);
+            roomEnvironment.rotation.set(0, rad, 0);
+            roomEnvironment.updateMatrixWorld(true);
+
+            if (scene.environment) scene.environment.dispose();
+            const envTexture = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
+            scene.environment = envTexture;
+
+            scene.traverse((child) => {
+                if (child.isMesh && child.material && !child.userData.isXrayHelper) {
+                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                    mats.forEach(m => {
+                        if ('envMapIntensity' in m) {
+                            m.envMapIntensity = intensity;
+                        }
+                    });
+                }
+            });
+        }
+        updateEnvironment();
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -455,40 +522,6 @@
         const xrayGizmosGroup = new THREE.Group();
         xrayGizmosGroup.visible = false;
         scene.add(xrayGizmosGroup);
-
-        // --- PARÂMETROS GLOBAIS E ESTADO ---
-        const params = {
-            bodyPosY: 1.10,
-            bodyPosX: 0.0,
-            bodyPosZ: 0.0,
-            bodyPitch: 0.0,
-            bodyRoll: 0.0,
-            bodyYaw: 0.0,
-            coxaElevation: 20.0,
-            adaptiveElevation: true,
-            stanceSpread: 1.0,
-            autoSway: false,
-            swaySpeed: 1.2,
-            swayHeightCenter: 1.10,
-            swayHeightAmp: 0.45,
-            swayPitchRoll: 12.0,
-            swayYaw: 15.0,
-            swayShift: 0.35,
-            xrayMode: false,
-            showTelemetry: false,
-            showFootTargets: true,
-            showSkeletonLines: true,
-            ikEnabled: true,
-            resetPose: () => resetPose()
-        };
-
-        const telemetryBox = document.getElementById('telemetry-box');
-        function toggleTelemetry(val) {
-            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
-            if (telemetryBox) {
-                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
-            }
-        }
 
         // --- GIZMOS E HELPERS XRAY ---
         const xrayBoundingBoxes = [];
@@ -793,6 +826,7 @@
             document.getElementById('tel-reach').innerText = `${(avgL1 + avgL2 + avgL3).toFixed(2)} m`;
 
             document.getElementById('importer-modal').classList.remove('active');
+            updateEnvironment();
             initGUI();
         }
 
@@ -1083,6 +1117,13 @@
             fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll');
             fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw');
             fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
+
+            const fLights = gui.addFolder('💡 Iluminação & Reflexos');
+            const fEnv = fLights.addFolder('🌐 Reflexos Globais (IBL Room)');
+            fEnv.add(params, 'envIntensity', 0.0, 4.0, 0.05).name('Intensidade Reflexo').listen().onChange(updateEnvironment);
+            fEnv.add(params, 'envRotation', 0, 360, 1).name('Giro do Reflexo (°)').listen().onChange(updateEnvironment);
+            fEnv.open();
+            fLights.close();
 
             const fVis = gui.addFolder('Exibição & Auxiliares');
             fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);

@@ -268,6 +268,7 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
         import GUI from 'lil-gui';
 
         // --- CENA & RENDERER ---
@@ -287,6 +288,79 @@
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.15;
         container.appendChild(renderer.domElement);
+
+        // --- PARÂMETROS PADRÃO CALIBRADOS ---
+        const params = {
+            bodyPosX: 0,
+            bodyPosY: 0.6,
+            bodyPosZ: 0,
+            bodyPitch: 0,
+            bodyRoll: 0,
+            bodyYaw: 0,
+            // Elevação Adaptativa da Coxa
+            adaptiveElevation: true,
+            coxaElevation: 40.6, // Graus
+            stanceSpread: 1.0,
+            // Balanço Automático Calibrado
+            autoSway: true,
+            swaySpeed: 2.0,
+            swayHeightCenter: 0.6,
+            swayHeightAmp: 0.3,
+            swayPitchRoll: 5.0,
+            swayYaw: 25.0,
+            swayShift: 0.25,
+            // BlendShapes / Expressão
+            irisE: 0.0,
+            irisD: 0.0,
+            // Visualização
+            xrayMode: false,
+            showTelemetry: false,
+            showFootTargets: true,
+            showSkeletonLines: true,
+            envIntensity: 1.2,
+            envRotation: 0,
+            showLightHelpers: false,
+            ikEnabled: true,
+            resetPose: () => resetPose()
+        };
+
+        const telemetryBox = document.getElementById('telemetry-box');
+        function toggleTelemetry(val) {
+            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
+            if (telemetryBox) {
+                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
+            }
+        }
+
+        // --- GLOBAL WORLD / ENVIRONMENT MAP PROCEDURAL (REFLEXOS METÁLICOS SEM FUNDO 360) ---
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        const roomEnvironment = new RoomEnvironment();
+
+        function updateEnvironment() {
+            const rotDeg = params.envRotation;
+            const intensity = params.envIntensity;
+
+            const rad = THREE.MathUtils.degToRad(rotDeg);
+            roomEnvironment.rotation.set(0, rad, 0);
+            roomEnvironment.updateMatrixWorld(true);
+
+            if (scene.environment) scene.environment.dispose();
+            const envTexture = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
+            scene.environment = envTexture;
+
+            scene.traverse((child) => {
+                if (child.isMesh && child.material && !child.userData.isXrayHelper) {
+                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                    mats.forEach(m => {
+                        if ('envMapIntensity' in m) {
+                            m.envMapIntensity = intensity;
+                        }
+                    });
+                }
+            });
+        }
+        updateEnvironment();
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -370,46 +444,6 @@
         const xrayGizmosGroup = new THREE.Group();
         xrayGizmosGroup.visible = false;
         scene.add(xrayGizmosGroup);
-
-        // --- PARÂMETROS PADRÃO CALIBRADOS ---
-        const params = {
-            bodyPosX: 0,
-            bodyPosY: 0.6,
-            bodyPosZ: 0,
-            bodyPitch: 0,
-            bodyRoll: 0,
-            bodyYaw: 0,
-            // Elevação Adaptativa da Coxa
-            adaptiveElevation: true,
-            coxaElevation: 40.6, // Graus
-            // Balanço Automático Calibrado
-            autoSway: true,
-            swaySpeed: 2.0,
-            swayHeightCenter: 0.6,
-            swayHeightAmp: 0.3,
-            swayPitchRoll: 5.0,
-            swayYaw: 25.0,
-            swayShift: 0.25,
-            // BlendShapes / Expressão
-            irisE: 0.0,
-            irisD: 0.0,
-            // Visualização
-            xrayMode: false,
-            showTelemetry: false,
-            showFootTargets: true,
-            showSkeletonLines: true,
-            showLightHelpers: false,
-            ikEnabled: true,
-            resetPose: () => resetPose()
-        };
-
-        const telemetryBox = document.getElementById('telemetry-box');
-        function toggleTelemetry(val) {
-            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
-            if (telemetryBox) {
-                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
-            }
-        }
 
         // --- XRAY MODE ASSETS & HELPERS ---
         const xrayBoundingBoxes = [];
@@ -555,9 +589,11 @@
             params.bodyPitch = 0;
             params.bodyRoll = 0;
             params.bodyYaw = 0;
+            params.stanceSpread = 1.0;
             params.irisE = 0.0;
             params.irisD = 0.0;
             updateMorphTargets();
+            updateFootTargets();
             params.coxaElevation = calculateAdaptiveElevation(0.6);
             if (gui) gui.controllers.forEach(c => c.updateDisplay());
         }
@@ -588,17 +624,13 @@
 
         // --- CARREGAMENTO DO GLB ---
         const loader = new GLTFLoader();
-        loader.load('./glb/aranha_material.glb', (gltf) => {
+        loader.load('./glb/aranha_material_2.glb', (gltf) => {
             modelRoot = gltf.scene;
 
             modelRoot.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    if (child.material) {
-                        child.material.roughness = 0.35;
-                        child.material.metalness = 0.65;
-                    }
                     if (child.morphTargetInfluences && child.morphTargetDictionary) {
                         morphMeshes.push(child);
                     }
@@ -606,7 +638,7 @@
             });
 
             bodyGroup.add(modelRoot);
-
+/*
 			//Teste de Material
 			// 1. Criamos a variável
 			let Luz;
@@ -643,7 +675,7 @@
 				Tubo.metalness = 0.9;
 			}
 
-
+*/
 
             const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
             const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
@@ -698,7 +730,7 @@
                 }
             });
 
-            initFootTargets();
+            updateFootTargets();
 
             // --- LINHAS DE ESQUELETO DO CORPO CENTRAL / ESPINHA DORSAL (ARANHA) ---
             const spinePosArray = new Float32Array(26 * 3);
@@ -752,24 +784,30 @@
             setTimeout(() => loadingElem.style.display = 'none', 500);
 
             document.getElementById('ik-status').innerText = `Ativo (${legs.length}/6 Pernas)`;
+            updateEnvironment();
             initGUI();
             updateMorphTargets();
         });
 
-        function initFootTargets() {
-            const defaultPositions = [
-                new THREE.Vector3(-5.8, 0.0,  3.2), // FR
-                new THREE.Vector3(-6.4, 0.0, -0.4), // MR
-                new THREE.Vector3(-5.2, 0.0, -4.0), // BR
-                new THREE.Vector3( 5.8, 0.0,  3.2), // FL
-                new THREE.Vector3( 6.4, 0.0, -0.4), // ML
-                new THREE.Vector3( 5.2, 0.0, -4.0)  // BL
-            ];
+        const defaultFootPositions = [
+            new THREE.Vector3(-5.8, 0.0,  3.2), // FR
+            new THREE.Vector3(-6.4, 0.0, -0.4), // MR
+            new THREE.Vector3(-5.2, 0.0, -4.0), // BR
+            new THREE.Vector3( 5.8, 0.0,  3.2), // FL
+            new THREE.Vector3( 6.4, 0.0, -0.4), // ML
+            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL
+        ];
 
+        function updateFootTargets() {
             footTargets.length = 0;
-            defaultPositions.forEach((pos, i) => {
-                footTargets.push(pos.clone());
-                if (targetMeshes[i]) targetMeshes[i].position.copy(pos);
+            defaultFootPositions.forEach((pos, i) => {
+                const targetPos = new THREE.Vector3(
+                    pos.x * params.stanceSpread,
+                    pos.y,
+                    pos.z * params.stanceSpread
+                );
+                footTargets.push(targetPos);
+                if (targetMeshes[i]) targetMeshes[i].position.copy(targetPos);
             });
         }
 
@@ -1024,11 +1062,12 @@
             gui = new GUI({ title: '🤖 Controles do HexaBOT' });
 
             const fPosture = gui.addFolder('Postura & Curva Adaptativa');
-            fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
-            fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+            fPosture.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').listen().onChange(updateFootTargets);
+            const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
+            const cElevation = fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
 
-            params.adaptiveElevation_controller = fPosture.controllers[0].onChange(v => {
-                fPosture.controllers[1].disable(v);
+            cAdapt.onChange(v => {
+                cElevation.disable(v);
             });
 
             const fBodyPos = gui.addFolder('Translação do Corpo');
@@ -1055,6 +1094,12 @@
             fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
 
             const fLights = gui.addFolder('💡 Iluminação & Marcadores');
+            
+            const fEnv = fLights.addFolder('🌐 Reflexos Globais (IBL Room)');
+            fEnv.add(params, 'envIntensity', 0.0, 4.0, 0.05).name('Intensidade Reflexo').listen().onChange(updateEnvironment);
+            fEnv.add(params, 'envRotation', 0, 360, 1).name('Giro do Reflexo (°)').listen().onChange(updateEnvironment);
+            fEnv.open();
+
             fLights.add(params, 'showLightHelpers').name('Mostrar Marcadores').onChange(v => {
                 dirLightHelper.visible = v;
                 rimLightHelper.visible = v;
