@@ -1162,8 +1162,13 @@
 
         function resetPose() {
             params.autoSway = false;
+            let sumL = 0;
+            legs.forEach(l => { sumL += (l.L1 + l.L2 + l.L3); });
+            const avgReach = legs.length > 0 ? (sumL / legs.length) : 7.5;
+            const recH = +(Math.max(0.8, Math.min(3.5, avgReach * 0.18))).toFixed(2);
+
             const defaultH = (activeManifest && activeManifest.calibration && activeManifest.calibration.defaultHeight !== undefined)
-                ? activeManifest.calibration.defaultHeight : 1.10;
+                ? activeManifest.calibration.defaultHeight : recH;
             const defaultSpread = (activeManifest && activeManifest.calibration && activeManifest.calibration.stanceSpread !== undefined)
                 ? activeManifest.calibration.stanceSpread : 1.0;
             const defaultCoxa = (activeManifest && activeManifest.calibration && activeManifest.calibration.coxaElevation !== undefined)

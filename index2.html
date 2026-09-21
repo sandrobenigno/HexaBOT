@@ -802,8 +802,6 @@
                 skeletonLinesGroup.add(bodySpineMesh);
             }
 
-            calculateProceduralFootTargets();
-
             // Atualização de Diagnóstico e Telemetria
             const elScanStatus = document.getElementById('scan-status');
             if (elScanStatus) elScanStatus.innerHTML = `✅ <strong style="color: #7ee787;">Rigging Realizado com Sucesso!</strong> (${legs.length} pernas conectadas)`;
@@ -831,9 +829,19 @@
             params.bodyPosY = recommendedHeight;
             params.swayHeightCenter = recommendedHeight;
 
+            // Posicionar o chassi na altura ideal antes de calcular âncoras e IK
+            bodyGroup.position.set(0.0, recommendedHeight, 0.0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
+            calculateProceduralFootTargets();
+            updateHexaBOT();
+            setXRayMode(params.xrayMode);
+
             document.getElementById('importer-modal').classList.remove('active');
             updateEnvironment();
             initGUI();
+            updateAllGuiDisplays();
         }
 
         const _qInvBody = new THREE.Quaternion();
@@ -1216,7 +1224,11 @@
 
         function resetPose() {
             params.autoSway = false;
-            params.bodyPosY = 1.10;
+            const totalReach = (currentAvgL1 + currentAvgL2 + currentAvgL3) || 7.5;
+            const recommendedHeight = +(Math.max(0.8, Math.min(3.5, totalReach * 0.18))).toFixed(2);
+
+            params.bodyPosY = recommendedHeight;
+            params.swayHeightCenter = recommendedHeight;
             params.bodyPosX = 0.0;
             params.bodyPosZ = 0.0;
             params.bodyPitch = 0.0;
@@ -1228,7 +1240,7 @@
             params.stanceSpread = 1.0;
             
             // ATUALIZAR TRANSFORMAÇÃO DO CORPO ANTES DO CÁLCULO PROCEDURAL DAS PATAS
-            bodyGroup.position.set(0.0, 1.10, 0.0);
+            bodyGroup.position.set(0.0, recommendedHeight, 0.0);
             bodyGroup.rotation.set(0, 0, 0);
             bodyGroup.updateMatrixWorld(true);
 
