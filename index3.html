@@ -454,6 +454,15 @@
             }
         }
 
+        let uiVisible = true;
+        function toggleUIVisibility(val) {
+            uiVisible = (val !== undefined) ? val : !uiVisible;
+            const overlay = document.getElementById('ui-overlay');
+            if (overlay) overlay.style.display = uiVisible ? '' : 'none';
+            const lilGuis = document.querySelectorAll('.lil-gui');
+            lilGuis.forEach(g => g.style.display = uiVisible ? '' : 'none');
+        }
+
         function setXRayMode(enable) {
             params.xrayMode = enable;
             if (robotGroup) {
@@ -1106,6 +1115,8 @@
             get footTargets() { return footTargets; },
             get params() { return params; },
             get activeManifest() { return activeManifest; },
+            get uiVisible() { return uiVisible; },
+            toggleUIVisibility,
             gltfLoader,
             buildRobotRuntime,
             loadBotFromURL,
@@ -1336,6 +1347,7 @@
             const fVis = gui.addFolder('Exibição & Auxiliares');
             fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
             fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
+            fVis.add({ toggleUI: () => toggleUIVisibility() }, 'toggleUI').name('🖥️ Ocultar Painéis (Tecla P)');
             fVis.add(params, 'ikEnabled').name('IK Habilitado');
             fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
                 if (!params.xrayMode) skeletonLinesGroup.visible = v;
@@ -1378,8 +1390,10 @@
 
             let fallbackCount = 0;
             for (let i = 0; i < legs.length; i++) {
-                if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
-                    fallbackCount++;
+                if (footTargets[i]) {
+                    if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
+                        fallbackCount++;
+                    }
                 }
             }
 
@@ -1434,6 +1448,8 @@
                 resetPose();
             } else if (e.key === 'a' || e.key === 'A') {
                 toggleAutoSway();
+            } else if (e.key === 'p' || e.key === 'P') {
+                toggleUIVisibility();
             }
         });
 
