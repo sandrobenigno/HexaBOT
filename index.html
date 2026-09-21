@@ -229,6 +229,149 @@
                 font-size: 0.78rem !important;
             }
         }
+
+        /* --- MODAL DE AJUDA / SHORTCUTS (TECLA H) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(3, 7, 18, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-card {
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 18px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 32px rgba(56, 189, 248, 0.15);
+            width: 440px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-overlay.active .modal-card {
+            transform: scale(1);
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px 14px;
+            background: rgba(0, 0, 0, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .modal-close-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #94a3b8;
+            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .modal-close-btn:hover {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            border-color: #ef4444;
+        }
+        .modal-body {
+            padding: 16px 20px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .shortcut-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .shortcut-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 12px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            transition: background 0.15s ease;
+        }
+        .shortcut-row:hover {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: rgba(56, 189, 248, 0.2);
+        }
+        .shortcut-keys {
+            min-width: 44px;
+            display: flex;
+            justify-content: center;
+        }
+        kbd {
+            display: inline-block;
+            background: #0f172a;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            border-bottom: 2px solid #38bdf8;
+            color: #38bdf8;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        .shortcut-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .shortcut-info strong {
+            font-size: 0.84rem;
+            color: #f1f5f9;
+        }
+        .shortcut-info span {
+            font-size: 0.72rem;
+            color: #94a3b8;
+        }
+        .modal-footer-tip {
+            margin-top: 4px;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 0.72rem;
+            color: #64748b;
+            line-height: 1.4;
+            border-left: 3px solid #38bdf8;
+        }
     </style>
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">
@@ -251,19 +394,88 @@
         <div class="panel">
             <h1>🤖 HexaBOT IK</h1>
 			<span class="posture-badge">IK Solver By Sandro Benigno (EvilPlaymobil)</span>
+            <p class="subtitle" style="font-size: 0.78rem; color: #8b949e; margin: 4px 0 6px;">Simulação biomecânica com Cinemática Inversa 3-DoF e curva adaptativa.</p>
             <div id="telemetry-box" style="display: none; margin-top: 6px;">
-                <p>Velocidade 2.0, Altura Média 0.6m (±0.3m), Yaw 25°, Pitch/Roll 5°, Deslocamento 0.25m com curva adaptativa.</p>
                 <div class="telemetry">
-                    <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Resolvendo...</span></div>
+                    <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Nominal (3-DoF)</span></div>
                     <div class="telemetry-row"><span>Altura do Corpo (Y):</span> <span id="tel-height">0.60 m</span></div>
                     <div class="telemetry-row"><span>Elevação da Coxa:</span> <span id="tel-coxa">40.6° (Auto)</span></div>
-                    <div class="telemetry-row"><span>Perna FL / FR:</span> <span id="tel-fl">Ativo</span></div>
+                    <div class="telemetry-row"><span>Estado das Patas:</span> <span id="tel-fl"><span style="color: #7ee787;">100% Contato</span></span></div>
                 </div>
             </div>
         </div>
     </div>
 
     <div id="canvas-container"></div>
+
+    <!-- MODAL DE ATALHOS / HELP (TECLA H) -->
+    <div id="help-modal-overlay" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span style="font-size: 1.25rem;">⌨️</span>
+                    <span>Atalhos de Teclado & Controles</span>
+                </div>
+                <button class="modal-close-btn" id="btn-close-help" title="Fechar (Esc)">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-list">
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>H</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Ajuda & Atalhos</strong>
+                            <span>Abre ou fecha este painel central de comandos</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>P</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Clean View</strong>
+                            <span>Oculta ou exibe todos os painéis e interfaces da tela</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>R</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Resetar Postura</strong>
+                            <span>Restaura altura, rotações, abertura e Shape Keys ao padrão</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>A</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Auto-Balanço (Rebolado)</strong>
+                            <span>Liga / desliga a simulação contínua de oscilação e marcha</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>X</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Modo Raio-X (X-Ray)</strong>
+                            <span>Exibe os eixos de juntas, âncoras IK e esqueleto interno</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>I</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Telemetria / Info</strong>
+                            <span>Exibe / oculta o HUD com métricas em tempo real e status IK</span>
+                        </div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>Esc</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Fechar Janela</strong>
+                            <span>Fecha a tela de ajuda atual</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer-tip">
+                    <span>💡 <strong>Dica de Navegação:</strong> Botão esquerdo do mouse gira a câmera, botão direito faz pan, scroll dá zoom.</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -1093,6 +1305,11 @@
             }
 
             // Atualizar Telemetria
+            const ikStatus = document.getElementById('ik-status');
+            if (ikStatus) {
+                ikStatus.innerText = params.ikEnabled ? 'Ativo (3-DoF)' : 'Pausado';
+                ikStatus.style.color = params.ikEnabled ? '#58a6ff' : '#8b949e';
+            }
             document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
             document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
             
@@ -1194,6 +1411,7 @@
             fLights.close();
 
             const fVis = gui.addFolder('Exibição & Auxiliares');
+            fVis.add({ openHelp: () => toggleHelpModal(true) }, 'openHelp').name('⌨️ Guia de Atalhos (Tecla H)');
             fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
             fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
             fVis.add({ toggleUI: () => toggleUIVisibility() }, 'toggleUI').name('🖥️ Ocultar Painéis (Tecla P)');
@@ -1216,10 +1434,38 @@
             fDemo.open();
         }
 
+        // --- JANELA MODAL DE ATALHOS / AJUDA (TECLA H) ---
+        function toggleHelpModal(show) {
+            const modal = document.getElementById('help-modal-overlay');
+            if (!modal) return;
+            const isCurrentlyActive = modal.classList.contains('active');
+            const shouldShow = (show !== undefined) ? show : !isCurrentlyActive;
+            if (shouldShow) {
+                modal.classList.add('active');
+            } else {
+                modal.classList.remove('active');
+            }
+        }
+
+        const btnCloseHelp = document.getElementById('btn-close-help');
+        if (btnCloseHelp) {
+            btnCloseHelp.addEventListener('click', () => toggleHelpModal(false));
+        }
+        const helpOverlay = document.getElementById('help-modal-overlay');
+        if (helpOverlay) {
+            helpOverlay.addEventListener('click', (e) => {
+                if (e.target === helpOverlay) toggleHelpModal(false);
+            });
+        }
+
         // --- ATALHOS DE TECLADO ---
         window.addEventListener('keydown', (e) => {
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
-            if (e.key === 'i' || e.key === 'I') {
+            if (e.key === 'h' || e.key === 'H') {
+                toggleHelpModal();
+            } else if (e.key === 'Escape') {
+                toggleHelpModal(false);
+            } else if (e.key === 'i' || e.key === 'I') {
                 toggleTelemetry();
             } else if (e.key === 'x' || e.key === 'X') {
                 setXRayMode(!params.xrayMode);
