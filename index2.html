@@ -237,42 +237,405 @@
             transform: translateY(-1px);
         }
 
-        /* --- CONTROLES LIL-GUI CUSTOMIZADOS --- */
-        .lil-gui {
-            --background-color: rgba(13, 17, 23, 0.94);
-            --text-color: #e6edf3;
-            --title-background-color: rgba(22, 27, 34, 0.98);
-            --widget-color: rgba(33, 38, 45, 0.9);
-            --hover-color: #30363d;
-            --focus-color: #1f6feb;
-            --number-color: #79c0ff;
-            --string-color: #7ee787;
-            font-family: inherit;
-            border-radius: 12px;
+        /* --- PAINEL LATERAL FROST COM ABAS (DIREITA) --- */
+        #right-sidebar {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            bottom: 16px;
+            width: 410px;
+            max-width: calc(100vw - 32px);
+            background: rgba(13, 17, 23, 0.72);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-            top: 16px !important;
-            right: 16px !important;
-            max-height: calc(100vh - 32px) !important;
-            overflow-y: auto !important;
+            border-radius: 16px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 20;
+            pointer-events: auto;
+            transition: opacity 0.25s ease, transform 0.25s ease;
         }
-        .lil-gui::-webkit-scrollbar {
+
+        .sidebar-header {
+            padding: 12px 14px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.25);
+            flex-shrink: 0;
+        }
+        .sidebar-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 4px;
+        }
+        .sidebar-tab {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: #8b949e;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 8px 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .sidebar-tab:hover {
+            color: #e6edf3;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .sidebar-tab.active {
+            background: rgba(56, 189, 248, 0.18);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 2px 10px rgba(56, 189, 248, 0.2);
+        }
+        .tab-badge {
+            background: rgba(56, 189, 248, 0.25);
+            color: #7dd3fc;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .tab-pane {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+        }
+        .tab-pane.active {
+            display: flex;
+        }
+        .tab-pane::-webkit-scrollbar {
             width: 5px;
         }
-        .lil-gui::-webkit-scrollbar-track {
+        .tab-pane::-webkit-scrollbar-track {
             background: rgba(13, 17, 23, 0.5);
-            border-radius: 3px;
         }
-        .lil-gui::-webkit-scrollbar-thumb {
+        .tab-pane::-webkit-scrollbar-thumb {
             background: rgba(88, 166, 255, 0.4);
             border-radius: 3px;
         }
-        .lil-gui::-webkit-scrollbar-thumb:hover {
-            background: rgba(88, 166, 255, 0.7);
+
+        /* --- CONTAINER DO LIL-GUI DENTRO DO FROST SIDEBAR --- */
+        #tab-content-controls .lil-gui.root {
+            position: static !important;
+            width: 100% !important;
+            max-height: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
-        .lil-gui .title {
+        #tab-content-controls .lil-gui {
+            --background-color: transparent;
+            --title-background-color: rgba(22, 27, 34, 0.85);
+            --widget-color: rgba(33, 38, 45, 0.7);
+            --hover-color: rgba(48, 54, 61, 0.9);
+            --text-color: #e6edf3;
+            --number-color: #79c0ff;
+            --string-color: #7ee787;
+            font-family: inherit;
+        }
+
+        /* --- SOUND CONSOLE / SHAPE KEYS RACK --- */
+        .shapekeys-container {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .shapekeys-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 8px 10px;
+        }
+        .shapekeys-search {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 0.76rem;
+            padding: 6px 10px;
+            outline: none;
+        }
+        .shapekeys-search:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+        }
+        .btn-reset-all-sk {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+        .btn-reset-all-sk:hover {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fff;
+        }
+
+        .mesh-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 10px;
+            background: linear-gradient(90deg, rgba(56, 189, 248, 0.15), transparent);
+            border-left: 3px solid #38bdf8;
+            border-radius: 4px;
+            font-size: 0.75rem;
             font-weight: 700;
-            color: #58a6ff;
+            color: #e2e8f0;
+            margin-top: 6px;
+            margin-bottom: 2px;
+        }
+        .mesh-group-path {
+            font-size: 0.68rem;
+            color: #8b949e;
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 55%;
+            text-align: right;
+        }
+
+        /* --- FADER DE MESA DE SOM --- */
+        .sound-fader-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 12px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            transition: border-color 0.2s ease, transform 0.15s ease;
+        }
+        .sound-fader-card:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+        .fader-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fader-title-area {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .fader-name {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #f8fafc;
+            letter-spacing: 0.3px;
+        }
+        .fader-idx-tag {
+            font-size: 0.68rem;
+            color: #64748b;
+            font-family: monospace;
+        }
+        .fader-multi-badge {
+            background: rgba(56, 189, 248, 0.18);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            font-size: 0.66rem;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 6px;
+            cursor: help;
+        }
+        .fader-mesh-tag {
+            font-size: 0.68rem;
+            color: #64748b;
+            font-family: monospace;
+            max-width: 130px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .fader-readout-area {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .fader-value-pill {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: #38bdf8;
+            font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+            font-size: 0.74rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            min-width: 48px;
+            text-align: right;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+        }
+        .fader-reset-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #94a3b8;
+            border-radius: 6px;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .fader-reset-btn:hover {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border-color: #38bdf8;
+        }
+
+        /* Console Fader Track & Knob */
+        .fader-rack {
+            position: relative;
+            padding: 4px 0 2px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .fader-ticks {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.62rem;
+            color: #64748b;
+            font-family: monospace;
+            padding: 0 6px;
+            user-select: none;
+        }
+        .fader-track-groove {
+            position: relative;
+            height: 14px;
+            background: #080c14;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 7px;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            overflow: visible;
+        }
+        .fader-track-center-line {
+            position: absolute;
+            top: 50%;
+            left: 8px;
+            right: 8px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+        .fader-fill-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, rgba(56, 189, 248, 0.3), rgba(56, 189, 248, 0.85));
+            border-radius: 6px;
+            pointer-events: none;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+            transition: width 0.05s linear;
+        }
+        .fader-slider-input {
+            position: absolute;
+            top: -6px;
+            left: 0;
+            width: 100%;
+            height: 26px;
+            opacity: 0;
+            cursor: grab;
+            margin: 0;
+            z-index: 10;
+        }
+        .fader-slider-input:active {
+            cursor: grabbing;
+        }
+        .fader-knob-graphic {
+            position: absolute;
+            top: 50%;
+            width: 32px;
+            height: 24px;
+            margin-left: -16px;
+            transform: translateY(-50%);
+            background: linear-gradient(180deg, #475569 0%, #1e293b 50%, #0f172a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: left 0.05s linear;
+            z-index: 5;
+        }
+        .knob-center-notch {
+            width: 3px;
+            height: 16px;
+            background: #38bdf8;
+            border-radius: 1.5px;
+            box-shadow: 0 0 8px #38bdf8;
+        }
+        .knob-side-ribs {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            top: 3px;
+            bottom: 3px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            opacity: 0.35;
+        }
+        .knob-side-ribs span {
+            width: 1px;
+            height: 100%;
+            background: #fff;
+        }
+
+        .shapekeys-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
         }
 
         /* --- RESPONSIVIDADE MOBILE --- */
@@ -287,23 +650,19 @@
                 padding: 12px 14px;
             }
             h1 {
-                font-size: 2.0rem;
+                font-size: 1.2rem;
             }
             p.subtitle {
                 font-size: 0.8rem;
             }
-            #btn-open-importer {
+            #right-sidebar {
                 top: auto;
-                bottom: 20px;
-                right: 20px;
-                padding: 12px 20px;
-                font-size: 0.9rem;
-            }
-            .lil-gui {
-                top: auto !important;
-                bottom: 80px !important;
-                right: 10px !important;
-                max-width: calc(100vw - 20px) !important;
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+                width: auto;
+                max-width: none;
+                height: 55vh;
             }
         }
     </style>
@@ -338,6 +697,29 @@
                 <div class="telemetry-row"><span>Nó do Corpo:</span> <strong id="tel-body" style="color: #d2a8ff;">--</strong></div>
                 <div class="telemetry-row"><span>Altura Chassi (Y):</span> <strong id="tel-height">1.10 m</strong></div>
                 <div class="telemetry-row"><span>Elevação Coxa (γ):</span> <strong id="tel-coxa">20.0° (Auto)</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel Lateral Frost com Abas -->
+    <div id="right-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" id="tab-btn-controls" data-tab="tab-content-controls">
+                    <span class="tab-icon">🦾</span>
+                    <span class="tab-label">Cinemática & IK</span>
+                </button>
+                <button class="sidebar-tab" id="tab-btn-shapekeys" data-tab="tab-content-shapekeys">
+                    <span class="tab-icon">🎭</span>
+                    <span class="tab-label">Shape Keys</span>
+                    <span class="tab-badge" id="shapekeys-count-badge">0</span>
+                </button>
+            </div>
+        </div>
+        <div class="sidebar-body">
+            <div class="tab-pane active" id="tab-content-controls"></div>
+            <div class="tab-pane" id="tab-content-shapekeys">
+                <!-- Populado dinamicamente com faders de mesa de som -->
             </div>
         </div>
     </div>
@@ -445,6 +827,8 @@
             uiVisible = (val !== undefined) ? val : !uiVisible;
             const overlay = document.getElementById('ui-overlay');
             if (overlay) overlay.style.display = uiVisible ? '' : 'none';
+            const rightSidebar = document.getElementById('right-sidebar');
+            if (rightSidebar) rightSidebar.style.display = uiVisible ? '' : 'none';
             const importerModal = document.getElementById('importer-modal');
             if (importerModal && !uiVisible) importerModal.classList.remove('active');
             const lilGuis = document.querySelectorAll('.lil-gui');
@@ -611,6 +995,7 @@
         let currentBodyNodeName = 'Corpo Principal';
         let currentAvgL1 = 2.36, currentAvgL2 = 2.16, currentAvgL3 = 2.80;
         const detectedBlendshapes = [];
+        window.detectedBlendshapes = detectedBlendshapes;
 
         const _tempVec1 = new THREE.Vector3();
         const _tempVec2 = new THREE.Vector3();
@@ -618,6 +1003,234 @@
         const _tempVecBc = new THREE.Vector3();
 
         const gltfLoader = new GLTFLoader();
+
+        // --- FUNÇÕES DE CAMINHO HIERÁRQUICO E SHAPE KEYS SCANNER ---
+        function calculateNodePath(node, rootScene) {
+            if (!node) return '';
+            const names = [];
+            let curr = node;
+            while (curr && curr !== rootScene && curr !== rootScene.parent) {
+                if (curr.name) names.unshift(curr.name);
+                curr = curr.parent;
+            }
+            return names.length > 0 ? names.join(' / ') : (node.name || 'Root');
+        }
+
+        function scanMorphTargets(rootScene) {
+            if (!rootScene) return [];
+            const channelsMap = new Map();
+
+            rootScene.traverse((child) => {
+                if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
+                    const meshName = child.name || 'Malha Sem Nome';
+                    const meshPath = calculateNodePath(child, rootScene);
+
+                    Object.keys(child.morphTargetDictionary).forEach((targetName) => {
+                        const targetIndex = child.morphTargetDictionary[targetName];
+                        const currentVal = child.morphTargetInfluences[targetIndex] || 0.0;
+
+                        if (!channelsMap.has(targetName)) {
+                            channelsMap.set(targetName, {
+                                id: `sk_${targetName}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                                name: targetName,
+                                value: currentVal,
+                                defaultValue: parseFloat(currentVal.toFixed(4)),
+                                min: 0.0,
+                                max: 1.0,
+                                targets: []
+                            });
+                        }
+
+                        const channel = channelsMap.get(targetName);
+                        channel.targets.push({
+                            meshRef: child,
+                            targetIndex: targetIndex,
+                            meshName: meshName,
+                            meshPath: meshPath
+                        });
+                    });
+                }
+            });
+
+            return Array.from(channelsMap.values());
+        }
+
+        // --- SISTEMA DE ABAS DO SIDEBAR ---
+        function setupSidebarTabs() {
+            const tabButtons = document.querySelectorAll('.sidebar-tab');
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetTabId = btn.getAttribute('data-tab');
+                    tabButtons.forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+                    btn.classList.add('active');
+                    const targetPane = document.getElementById(targetTabId);
+                    if (targetPane) targetPane.classList.add('active');
+                });
+            });
+        }
+
+        // --- RENDERIZADOR DE FADERS DE MESA DE SOM (SHAPE KEYS CONSOLE UNIFICADO) ---
+        function renderShapeKeysConsole(morphList) {
+            const container = document.getElementById('tab-content-shapekeys');
+            const badge = document.getElementById('shapekeys-count-badge');
+            if (badge) badge.innerText = morphList.length;
+            if (!container) return;
+
+            if (morphList.length === 0) {
+                container.innerHTML = `
+                    <div class="shapekeys-empty">
+                        <div style="font-size: 2.2rem; margin-bottom: 10px;">🎭</div>
+                        <div style="font-weight: 700; color: #e2e8f0; font-size: 0.95rem;">Nenhuma Shape Key Detectada</div>
+                        <div style="font-size: 0.76rem; color: #8b949e; margin-top: 6px; line-height: 1.45;">
+                            Este modelo 3D não possui morph targets ou blendshapes na sua hierarquia.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="shapekeys-container">
+                    <div class="shapekeys-toolbar">
+                        <input type="text" class="shapekeys-search" id="sk-search-input" placeholder="🔍 Filtrar Shape Keys...">
+                        <button class="btn-reset-all-sk" id="btn-reset-all-sk">↺ Zerar Todas</button>
+                    </div>
+                    <div id="shapekeys-faders-list" style="display: flex; flex-direction: column; gap: 12px;">
+            `;
+
+            morphList.forEach(item => {
+                const pct = Math.round(item.value * 100);
+                const targetCount = item.targets.length;
+                const meshListNames = item.targets.map(t => t.meshName).join(', ');
+                const meshCountTag = targetCount > 1 
+                    ? `<span class="fader-multi-badge" title="Malhas sincronizadas: ${meshListNames}">🔗 ${targetCount} malhas</span>` 
+                    : `<span class="fader-mesh-tag" title="${item.targets[0]?.meshPath || ''}">📦 ${item.targets[0]?.meshName || ''}</span>`;
+
+                html += `
+                    <div class="sound-fader-card" id="card-${item.id}" data-item-id="${item.id}" data-item-name="${item.name.toLowerCase()} ${meshListNames.toLowerCase()}">
+                        <div class="fader-top-row">
+                            <div class="fader-title-area">
+                                <span class="fader-name">${item.name}</span>
+                                ${meshCountTag}
+                            </div>
+                            <div class="fader-readout-area">
+                                <span class="fader-value-pill" id="pill-${item.id}">${item.value.toFixed(2)}</span>
+                                <button class="fader-reset-btn" data-reset-id="${item.id}" title="Zerar (0.0)">↺</button>
+                            </div>
+                        </div>
+                        <div class="fader-rack">
+                            <div class="fader-ticks">
+                                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+                            </div>
+                            <div class="fader-track-groove" id="track-${item.id}">
+                                <div class="fader-track-center-line"></div>
+                                <div class="fader-fill-bar" id="fill-${item.id}" style="width: ${pct}%;"></div>
+                                <div class="fader-knob-graphic" id="knob-${item.id}" style="left: ${pct}%;">
+                                    <div class="knob-side-ribs"><span></span><span></span></div>
+                                    <div class="knob-center-notch"></div>
+                                </div>
+                                <input type="range" class="fader-slider-input" id="range-${item.id}" 
+                                    data-fader-id="${item.id}" min="0" max="1" step="0.005" value="${item.value}">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            container.innerHTML = html;
+
+            // Vincular Eventos de Interação aos Faders
+            morphList.forEach(item => {
+                const input = document.getElementById(`range-${item.id}`);
+                const pill = document.getElementById(`pill-${item.id}`);
+                const fill = document.getElementById(`fill-${item.id}`);
+                const knob = document.getElementById(`knob-${item.id}`);
+                const resetBtn = document.querySelector(`[data-reset-id="${item.id}"]`);
+                const track = document.getElementById(`track-${item.id}`);
+
+                function applyValue(val, updateInput = true) {
+                    val = THREE.MathUtils.clamp(parseFloat(val) || 0, 0, 1);
+                    item.value = val;
+                    // Atualizar todas as malhas vinculadas simultaneamente
+                    item.targets.forEach(t => {
+                        if (t.meshRef && t.meshRef.morphTargetInfluences) {
+                            t.meshRef.morphTargetInfluences[t.targetIndex] = val;
+                        }
+                    });
+                    const percent = (val * 100).toFixed(1);
+                    if (pill) pill.innerText = val.toFixed(2);
+                    if (fill) fill.style.width = `${percent}%`;
+                    if (knob) knob.style.left = `${percent}%`;
+                    if (updateInput && input && parseFloat(input.value) !== val) {
+                        input.value = val;
+                    }
+                }
+
+                if (input) {
+                    input.addEventListener('input', (e) => applyValue(e.target.value, false));
+                }
+
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        applyValue(0.0, true);
+                    });
+                }
+
+                if (track) {
+                    track.addEventListener('dblclick', (e) => {
+                        e.preventDefault();
+                        applyValue(0.0, true);
+                    });
+
+                    track.addEventListener('wheel', (e) => {
+                        e.preventDefault();
+                        const delta = e.deltaY < 0 ? 0.02 : -0.02;
+                        applyValue(item.value + delta, true);
+                    }, { passive: false });
+                }
+            });
+
+            // Botão Zerar Todas
+            const btnResetAll = document.getElementById('btn-reset-all-sk');
+            if (btnResetAll) {
+                btnResetAll.addEventListener('click', () => {
+                    morphList.forEach(item => {
+                        item.value = 0.0;
+                        item.targets.forEach(t => {
+                            if (t.meshRef && t.meshRef.morphTargetInfluences) {
+                                t.meshRef.morphTargetInfluences[t.targetIndex] = 0.0;
+                            }
+                        });
+                        const pill = document.getElementById(`pill-${item.id}`);
+                        const fill = document.getElementById(`fill-${item.id}`);
+                        const knob = document.getElementById(`knob-${item.id}`);
+                        const input = document.getElementById(`range-${item.id}`);
+                        if (pill) pill.innerText = '0.00';
+                        if (fill) fill.style.width = '0%';
+                        if (knob) knob.style.left = '0%';
+                        if (input) input.value = '0';
+                    });
+                });
+            }
+
+            // Barra de Busca
+            const searchInput = document.getElementById('sk-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const q = e.target.value.toLowerCase().trim();
+                    const cards = container.querySelectorAll('.sound-fader-card');
+                    cards.forEach(card => {
+                        const name = card.getAttribute('data-item-name') || '';
+                        const visible = q === '' || name.includes(q);
+                        card.style.display = visible ? 'flex' : 'none';
+                    });
+                });
+            }
+        }
 
         // --- DETECTOR HIERÁRQUICO INTELIGENTE E AUTO-RIGGING ---
         function scanAndRigCreature(gltfScene, creatureName = 'Modelo 3D') {
@@ -636,14 +1249,12 @@
             legJointGizmos.length = 0;
             detectedBlendshapes.length = 0;
 
-            // Detectar BlendShapes / Morph Targets no modelo
-            gltfScene.traverse((child) => {
-                if (child.isMesh && child.morphTargetDictionary) {
-                    Object.keys(child.morphTargetDictionary).forEach(k => {
-                        if (!detectedBlendshapes.includes(k)) detectedBlendshapes.push(k);
-                    });
-                }
-            });
+            // Varrer todos os Morph Targets com caminhos hierárquicos completos
+            const scannedMorphs = scanMorphTargets(gltfScene);
+            scannedMorphs.forEach(m => detectedBlendshapes.push(m));
+
+            // Renderizar console de mesa de som
+            renderShapeKeysConsole(detectedBlendshapes);
 
             // 2. Adicionar o Modelo à Cena e Sincronizar Matrizes
             bodyGroup.add(gltfScene);
@@ -989,7 +1600,18 @@
                         envRotation: parseInt(params.envRotation, 10)
                     }
                 },
-                blendshapes: detectedBlendshapes
+                blendshapes: detectedBlendshapes.map(b => ({
+                    name: b.name,
+                    defaultValue: parseFloat((b.defaultValue ?? 0).toFixed(4)),
+                    value: parseFloat((b.value ?? 0).toFixed(4)),
+                    min: b.min !== undefined ? b.min : 0.0,
+                    max: b.max !== undefined ? b.max : 1.0,
+                    targets: (b.targets || []).map(t => ({
+                        meshName: t.meshName,
+                        meshPath: t.meshPath,
+                        targetIndex: t.targetIndex
+                    }))
+                }))
             };
         }
 
@@ -1360,7 +1982,11 @@
         let gui;
         function initGUI() {
             if (gui) gui.destroy();
-            gui = new GUI({ title: '🤖 Controles do HexaBOT' });
+            const containerEl = document.getElementById('tab-content-controls');
+            gui = new GUI({ 
+                title: '🤖 Controles do HexaBOT',
+                container: containerEl || undefined
+            });
 
             const fLab = gui.addFolder('📦 Importador');
             fLab.add({ openLab: () => document.getElementById('importer-modal').classList.add('active') }, 'openLab').name('Carregar Outro Modelo');
@@ -1594,6 +2220,7 @@
             exportBotJSON
         };
 
+        setupSidebarTabs();
         initGUI();
         animate();
 
