@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HexaBOT - IK Adaptativo & Auto-Balanço Calibrado</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕷️</text></svg>">
     <style>
         * {
             box-sizing: border-box;
@@ -153,7 +154,7 @@
                 max-width: 100%;
             }
             h1 {
-                font-size: 2.0rem;
+                font-size: 1.15rem;
                 justify-content: center;
                 margin-bottom: 4px;
             }
@@ -623,7 +624,7 @@
 
         // --- CARREGAMENTO DO GLB ---
         const loader = new GLTFLoader();
-        loader.load('./glb/aranha_material_2.glb', (gltf) => {
+        loader.load('./glb/aranha.glb', (gltf) => {
             modelRoot = gltf.scene;
 
             modelRoot.traverse((child) => {
