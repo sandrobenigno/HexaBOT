@@ -725,7 +725,7 @@
             j3Node.updateMatrixWorld(true);
 
             // Atualizar Linhas Esqueleto IK
-            if (lineMesh && (skeletonLinesGroup.visible || params.xrayMode)) {
+            if (lineMesh) {
                 lineMesh.geometry.setPositions([
                     _P0.x, _P0.y, _P0.z,
                     _P1.x, _P1.y, _P1.z,
@@ -735,7 +735,7 @@
             }
 
             // Atualizar Gizmos XRay
-            if (legJointGizmos[index] && xrayGizmosGroup.visible) {
+            if (legJointGizmos[index]) {
                 const gz = legJointGizmos[index];
                 gz[0].position.copy(_P0); gz[0].quaternion.copy(_qWorldBase);
                 gz[1].position.copy(_P1); gz[1].quaternion.copy(_qWorld1);
@@ -744,6 +744,18 @@
             }
 
             return isFallbackActive;
+        }
+
+        function findNextJointNode(parent) {
+            if (!parent || !parent.children || parent.children.length === 0) return null;
+            // 1. Procurar nós filhos que não são mesh e não são helpers X-Ray (ex: grupos de juntas)
+            const nonMesh = parent.children.find(c => !c.isMesh && c.name && !c.userData?.isXrayHelper);
+            if (nonMesh) return nonMesh;
+            // 2. Procurar nó que possui subfilhos
+            const withChildren = parent.children.find(c => c.children && c.children.length > 0 && !c.userData?.isXrayHelper);
+            if (withChildren) return withChildren;
+            // 3. Fallback para primeiro filho válido não-helper
+            return parent.children.find(c => !c.userData?.isXrayHelper) || parent.children[0] || null;
         }
 
         // --- SETUP PRINCIPAL DO ROBÔ (A PARTIR DE MANIFESTO OU AUTO-CALIBRAÇÃO) ---
@@ -794,9 +806,9 @@
                     }
 
                     if (baseNode) {
-                        const j1Node = gltfScene.getObjectByName(legDef.j1Name) || (baseNode.children[0]);
-                        const j2Node = gltfScene.getObjectByName(legDef.j2Name) || (j1Node ? j1Node.children[0] : null);
-                        const j3Node = gltfScene.getObjectByName(legDef.j3Name) || (j2Node ? j2Node.children[0] : null);
+                        const j1Node = gltfScene.getObjectByName(legDef.j1Name) || findNextJointNode(baseNode);
+                        const j2Node = gltfScene.getObjectByName(legDef.j2Name) || findNextJointNode(j1Node);
+                        const j3Node = gltfScene.getObjectByName(legDef.j3Name) || findNextJointNode(j2Node);
 
                         const isRight = legDef.side === 'D';
 
@@ -898,9 +910,9 @@
                     baseSocket.getWorldScale(sVec);
                     const socketWorldScale = sVec.x || 1.0;
 
-                    const j1Node = baseSocket.children[0];
-                    const j2Node = j1Node ? j1Node.children[0] : null;
-                    const j3Node = j2Node ? j2Node.children[0] : null;
+                    const j1Node = findNextJointNode(baseSocket);
+                    const j2Node = findNextJointNode(j1Node);
+                    const j3Node = findNextJointNode(j2Node);
 
                     if (!j1Node || !j2Node || !j3Node) return;
 
@@ -910,12 +922,12 @@
                     j3Node.traverse(c => {
                         if (c.isMesh && c.geometry) {
                             c.geometry.computeBoundingBox();
-                            if (c.geometry.boundingBox) maxX = Math.max(maxX, c.geometry.boundingBox.max.x);
+                            if (c.geometry.boundingBox) maxX = Math.max(maxX, c.geometry.boundingBox.max.x, Math.abs(c.geometry.boundingBox.min.x));
                         }
                     });
-                    let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : 3.206;
-                    if (l3Native > 10.0) l3Native *= 0.01;
-                    if (l3Native < 0.5) l3Native = 3.206;
+                    let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : (l2Native * 1.54);
+                    if (l3Native > 15.0) l3Native *= 0.01;
+                    if (l3Native < 0.2) l3Native = l2Native * 1.54;
 
                     sumL1 += l1Native; sumL2 += l2Native; sumL3 += l3Native;
 
@@ -973,6 +985,7 @@
 
             // Gizmo Central e Espinha Dorsal
             bodyGizmo = createCrossGizmo(0.55, 0.18);
+
             xrayGizmosGroup.add(bodyGizmo);
 
             if (legs.length > 0) {
@@ -997,12 +1010,19 @@
             const avgL2 = legs.length > 0 ? (sumL2 / legs.length) : 2.16;
             const avgL3 = legs.length > 0 ? (sumL3 / legs.length) : 2.80;
 
+            const totalReach = avgL1 + avgL2 + avgL3;
             if (!manifest) {
-                const totalReach = avgL1 + avgL2 + avgL3;
                 const recommendedHeight = +(Math.max(0.8, Math.min(3.5, totalReach * 0.18))).toFixed(2);
                 params.bodyPosY = recommendedHeight;
                 params.swayHeightCenter = recommendedHeight;
             }
+
+            // Ajustar enquadramento de câmera adaptativo para o tamanho do modelo
+            const cameraDist = Math.max(10, totalReach * 1.35);
+            const cameraHeight = Math.max(4.5, totalReach * 0.55);
+            camera.position.set(0, cameraHeight, cameraDist);
+            controls.target.set(0, params.bodyPosY * 0.6, 0);
+            controls.update();
 
             // Posicionar o corpo na postura e altura calibradas
             bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
@@ -1048,6 +1068,17 @@
                 document.getElementById('loading-text').innerHTML = `❌ Erro: ${err.message}`;
             });
         }
+        window.loadBotFromURL = loadBotFromURL;
+        window.__DEBUG__ = {
+            get scene() { return scene; },
+            get bodyGroup() { return bodyGroup; },
+            get legs() { return legs; },
+            get footTargets() { return footTargets; },
+            get params() { return params; },
+            buildRobotRuntime,
+            loadBotFromURL
+        };
+
 
         function loadBotFromFile(file) {
             if (!file) return;
@@ -1311,7 +1342,7 @@
             }
 
             // Atualizar Espinha Dorsal Central
-            if (bodySpineMesh && (skeletonLinesGroup.visible || params.xrayMode) && legs.length > 0) {
+            if (bodySpineMesh && legs.length > 0) {
                 const posArray = [];
                 for (let i = 0; i < legs.length; i++) {
                     legs[i].baseNode.getWorldPosition(_tempVec1);

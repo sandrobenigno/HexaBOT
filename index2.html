@@ -609,6 +609,15 @@
         const gltfLoader = new GLTFLoader();
 
         // --- DETECTOR HIERÁRQUICO INTELIGENTE E AUTO-RIGGING ---
+        window.__DEBUG__ = {
+            get scene() { return scene; },
+            get bodyGroup() { return bodyGroup; },
+            get legs() { return legs; },
+            get footTargets() { return footTargets; },
+            get params() { return params; },
+            scanAndRigCreature
+        };
+
         function scanAndRigCreature(gltfScene, creatureName = 'Modelo 3D') {
             loadedCreatureName = creatureName;
             currentModelScene = gltfScene;
@@ -670,6 +679,18 @@
             let sumL1 = 0, sumL2 = 0, sumL3 = 0;
             let validLegCount = 0;
 
+            function findNextJointNode(parent) {
+                if (!parent || !parent.children || parent.children.length === 0) return null;
+                // 1. Procurar nós filhos que não são mesh e não são helpers X-Ray (ex: grupos de juntas)
+                const nonMesh = parent.children.find(c => !c.isMesh && c.name && !c.userData?.isXrayHelper);
+                if (nonMesh) return nonMesh;
+                // 2. Procurar nó que possui subfilhos
+                const withChildren = parent.children.find(c => c.children && c.children.length > 0 && !c.userData?.isXrayHelper);
+                if (withChildren) return withChildren;
+                // 3. Fallback para primeiro filho válido não-helper
+                return parent.children.find(c => !c.userData?.isXrayHelper) || parent.children[0] || null;
+            }
+
             detectedSockets.forEach((baseSocket, index) => {
                 const isRight = baseSocket.name.startsWith('D') || baseSocket.position.x <= 0;
                 const sideChar = isRight ? 'D' : 'E';
@@ -680,15 +701,15 @@
                 const socketWorldScale = sVec.x || 1.0;
 
                 // Nível 1: Coxa (J1)
-                const j1Node = baseSocket.children[0];
+                const j1Node = findNextJointNode(baseSocket);
                 if (!j1Node) return;
 
                 // Nível 2: Fêmur (J2)
-                const j2Node = j1Node.children[0];
+                const j2Node = findNextJointNode(j1Node);
                 if (!j2Node) return;
 
                 // Nível 3: Tíbia (J3)
-                const j3Node = j2Node.children[0];
+                const j3Node = findNextJointNode(j2Node);
                 if (!j3Node) return;
 
                 // Comprimentos medidos a partir do offset local nativo
@@ -701,13 +722,13 @@
                     if (c.isMesh && c.geometry) {
                         c.geometry.computeBoundingBox();
                         if (c.geometry.boundingBox) {
-                            maxX = Math.max(maxX, c.geometry.boundingBox.max.x);
+                            maxX = Math.max(maxX, c.geometry.boundingBox.max.x, Math.abs(c.geometry.boundingBox.min.x));
                         }
                     }
                 });
-                let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : 3.206;
-                if (l3Native > 10.0) l3Native *= 0.01;
-                if (l3Native < 0.5) l3Native = 3.206;
+                let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : (l2Native * 1.54);
+                if (l3Native > 15.0) l3Native *= 0.01;
+                if (l3Native < 0.2) l3Native = l2Native * 1.54;
 
                 sumL1 += l1Native;
                 sumL2 += l2Native;
@@ -766,6 +787,7 @@
                 gizmos.forEach(g => xrayGizmosGroup.add(g));
                 legJointGizmos[index] = gizmos;
             });
+
 
             const avgL1 = validLegCount > 0 ? (sumL1 / validLegCount) : 2.36;
             const avgL2 = validLegCount > 0 ? (sumL2 / validLegCount) : 2.16;
@@ -833,6 +855,13 @@
             bodyGroup.position.set(0.0, recommendedHeight, 0.0);
             bodyGroup.rotation.set(0, 0, 0);
             bodyGroup.updateMatrixWorld(true);
+
+            // Ajustar enquadramento de câmera adaptativo para o tamanho do modelo
+            const cameraDist = Math.max(10, totalReach * 1.35);
+            const cameraHeight = Math.max(4.5, totalReach * 0.55);
+            camera.position.set(0, cameraHeight, cameraDist);
+            controls.target.set(0, recommendedHeight * 0.6, 0);
+            controls.update();
 
             calculateProceduralFootTargets();
             updateHexaBOT();
@@ -1183,7 +1212,7 @@
             j3Node.updateMatrixWorld(true);
 
             // Atualizar Linhas Esqueleto IK
-            if (lineMesh && (skeletonLinesGroup.visible || params.xrayMode)) {
+            if (lineMesh) {
                 lineMesh.geometry.setPositions([
                     _P0.x, _P0.y, _P0.z,
                     _P1.x, _P1.y, _P1.z,
@@ -1193,7 +1222,7 @@
             }
 
             // Atualizar Gizmos XRay
-            if (legJointGizmos[index] && xrayGizmosGroup.visible) {
+            if (legJointGizmos[index]) {
                 const gz = legJointGizmos[index];
                 gz[0].position.copy(_P0); gz[0].quaternion.copy(_qWorldBase);
                 gz[1].position.copy(_P1); gz[1].quaternion.copy(_qWorld1);
@@ -1282,7 +1311,7 @@
                 bodyGizmo.quaternion.copy(bodyGroup.quaternion);
             }
 
-            if (bodySpineMesh && skeletonLinesGroup.visible && legs.length > 0) {
+            if (bodySpineMesh && legs.length > 0) {
                 const pos = [];
                 for (let i = 0; i < legs.length; i++) {
                     legs[i].baseNode.getWorldPosition(_tempVec1);
@@ -1299,6 +1328,7 @@
 
                 bodySpineMesh.geometry.setPositions(pos);
             }
+
 
             document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
             document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}${fallbackCount > 0 ? ` [${fallbackCount} em Fallback]` : ''}`;
