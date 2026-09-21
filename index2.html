@@ -609,15 +609,6 @@
         const gltfLoader = new GLTFLoader();
 
         // --- DETECTOR HIERÁRQUICO INTELIGENTE E AUTO-RIGGING ---
-        window.__DEBUG__ = {
-            get scene() { return scene; },
-            get bodyGroup() { return bodyGroup; },
-            get legs() { return legs; },
-            get footTargets() { return footTargets; },
-            get params() { return params; },
-            scanAndRigCreature
-        };
-
         function scanAndRigCreature(gltfScene, creatureName = 'Modelo 3D') {
             loadedCreatureName = creatureName;
             currentModelScene = gltfScene;
@@ -963,6 +954,12 @@
                     coxaElevation: parseFloat(params.coxaElevation.toFixed(2)),
                     adaptiveElevation: params.adaptiveElevation,
                     autoReachFallback: params.autoReachFallback,
+                    bodyPosX: parseFloat(params.bodyPosX.toFixed(4)),
+                    bodyPosZ: parseFloat(params.bodyPosZ.toFixed(4)),
+                    bodyPitch: parseFloat(params.bodyPitch.toFixed(2)),
+                    bodyRoll: parseFloat(params.bodyRoll.toFixed(2)),
+                    bodyYaw: parseFloat(params.bodyYaw.toFixed(2)),
+                    autoSway: !!params.autoSway,
                     elevationCurve: {
                         yMin: 0.0, degAtMin: 45.0,
                         yMid: 1.3, degAtMid: 35.0,
@@ -975,6 +972,10 @@
                         pitchRoll: parseFloat(params.swayPitchRoll.toFixed(2)),
                         yaw: parseFloat(params.swayYaw.toFixed(2)),
                         shift: parseFloat(params.swayShift.toFixed(4))
+                    },
+                    envSettings: {
+                        envIntensity: parseFloat(params.envIntensity.toFixed(2)),
+                        envRotation: parseInt(params.envRotation, 10)
                     }
                 },
                 blendshapes: detectedBlendshapes
@@ -1010,7 +1011,16 @@
             }
 
             const manifest = getBotManifest();
+            
+            // Gravar o manifesto em userData da cena e nós filhos para garantir que o GLTFExporter serialize em nodes.extras
+            currentModelScene.userData = currentModelScene.userData || {};
             currentModelScene.userData.botManifest = manifest;
+            if (currentModelScene.children) {
+                currentModelScene.children.forEach(c => {
+                    c.userData = c.userData || {};
+                    c.userData.botManifest = manifest;
+                });
+            }
 
             const exporter = new GLTFExporter();
             const cleanName = (loadedCreatureName || 'bot').replace(/\.[^/.]+$/, "").replace(/[\s\(\)]+/g, '_').toLowerCase();
@@ -1028,6 +1038,7 @@
                 { binary: true }
             );
         }
+
 
         // --- CURVA ADAPTATIVA DE ELEVAÇÃO DA COXA ---
         // Y = 2.5m -> 5°   (corpo ALTO -> coxa baixa/horizontal)
@@ -1552,6 +1563,20 @@
             legLines.forEach(l => l.material.resolution.set(window.innerWidth, window.innerHeight));
             if (bodySpineMesh) bodySpineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
         });
+
+        window.__DEBUG__ = {
+            get scene() { return scene; },
+            get bodyGroup() { return bodyGroup; },
+            get currentModelScene() { return currentModelScene; },
+            get legs() { return legs; },
+            get footTargets() { return footTargets; },
+            get params() { return params; },
+            GLTFExporter,
+            GLTFLoader,
+            getBotManifest,
+            exportBotGLB,
+            exportBotJSON
+        };
 
         initGUI();
         animate();

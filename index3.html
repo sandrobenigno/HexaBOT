@@ -875,6 +875,12 @@
                     if (manifest.calibration.coxaElevation !== undefined) params.coxaElevation = manifest.calibration.coxaElevation;
                     if (manifest.calibration.adaptiveElevation !== undefined) params.adaptiveElevation = manifest.calibration.adaptiveElevation;
                     if (manifest.calibration.autoReachFallback !== undefined) params.autoReachFallback = manifest.calibration.autoReachFallback;
+                    if (manifest.calibration.bodyPosX !== undefined) params.bodyPosX = manifest.calibration.bodyPosX;
+                    if (manifest.calibration.bodyPosZ !== undefined) params.bodyPosZ = manifest.calibration.bodyPosZ;
+                    if (manifest.calibration.bodyPitch !== undefined) params.bodyPitch = manifest.calibration.bodyPitch;
+                    if (manifest.calibration.bodyRoll !== undefined) params.bodyRoll = manifest.calibration.bodyRoll;
+                    if (manifest.calibration.bodyYaw !== undefined) params.bodyYaw = manifest.calibration.bodyYaw;
+                    if (manifest.calibration.autoSway !== undefined) params.autoSway = manifest.calibration.autoSway;
                     if (manifest.calibration.swayDefaults) {
                         params.swaySpeed = manifest.calibration.swayDefaults.speed ?? params.swaySpeed;
                         params.swayHeightCenter = manifest.calibration.swayDefaults.heightCenter ?? params.bodyPosY;
@@ -883,6 +889,10 @@
                         params.swayYaw = manifest.calibration.swayDefaults.yaw ?? params.swayYaw;
                         params.swayShift = manifest.calibration.swayDefaults.shift ?? params.swayShift;
                     }
+                    if (manifest.calibration.envSettings) {
+                        if (manifest.calibration.envSettings.envIntensity !== undefined) params.envIntensity = manifest.calibration.envSettings.envIntensity;
+                        if (manifest.calibration.envSettings.envRotation !== undefined) params.envRotation = manifest.calibration.envSettings.envRotation;
+                    }
                 }
             } else {
                 // Fallback: Auto-Calibração Dinâmica
@@ -890,6 +900,7 @@
                 document.getElementById('status-badge').innerText = '🟡 Auto-Calibração Ativa';
                 document.getElementById('tel-source').innerText = 'Auto-Calibração Dinâmica';
                 document.getElementById('tel-source').style.color = '#fbbf24';
+
 
                 const socketRegex = /^(D0|E0)[\_\-\(\s\d]|^Socket[\_\-\d]|^Hip[\_\-\d]|^LegSocket[\_\-\d]/i;
                 const detectedSockets = [];
@@ -1053,6 +1064,25 @@
         // --- CARREGADOR UNIVERSAL DE BOT / MODELO ---
         const gltfLoader = new GLTFLoader();
 
+        function extractBotManifest(gltf, forcedManifest = null) {
+            if (forcedManifest) return forcedManifest;
+            if (!gltf) return null;
+            if (gltf.userData?.botManifest) return gltf.userData.botManifest;
+            if (gltf.scene?.userData?.botManifest) return gltf.scene.userData.botManifest;
+            if (gltf.parser?.json?.extras?.botManifest) return gltf.parser.json.extras.botManifest;
+            if (gltf.parser?.json?.scenes?.[0]?.extras?.botManifest) return gltf.parser.json.scenes[0].extras.botManifest;
+
+            let found = null;
+            if (gltf.scene) {
+                gltf.scene.traverse(c => {
+                    if (!found && c.userData && c.userData.botManifest) {
+                        found = c.userData.botManifest;
+                    }
+                });
+            }
+            return found;
+        }
+
         function loadBotFromURL(url, forcedManifest = null) {
             const loadingElem = document.getElementById('loading');
             loadingElem.style.display = 'flex';
@@ -1060,8 +1090,7 @@
             document.getElementById('loading-text').innerText = `Carregando ${url.split('/').pop()}...`;
 
             gltfLoader.load(url, (gltf) => {
-                // Verificar se o próprio GLB traz o manifesto embutido no userData
-                const embeddedManifest = gltf.scene.userData.botManifest || forcedManifest;
+                const embeddedManifest = extractBotManifest(gltf, forcedManifest);
                 buildRobotRuntime(gltf.scene, embeddedManifest, url.split('/').pop());
             }, undefined, (err) => {
                 console.error('Erro ao carregar modelo:', err);
@@ -1069,14 +1098,18 @@
             });
         }
         window.loadBotFromURL = loadBotFromURL;
+        window.extractBotManifest = extractBotManifest;
         window.__DEBUG__ = {
             get scene() { return scene; },
             get bodyGroup() { return bodyGroup; },
             get legs() { return legs; },
             get footTargets() { return footTargets; },
             get params() { return params; },
+            get activeManifest() { return activeManifest; },
+            gltfLoader,
             buildRobotRuntime,
-            loadBotFromURL
+            loadBotFromURL,
+            extractBotManifest
         };
 
 
@@ -1107,7 +1140,7 @@
                 reader.onload = (e) => {
                     const arrayBuffer = e.target.result;
                     gltfLoader.parse(arrayBuffer, '', (gltf) => {
-                        const embeddedManifest = gltf.scene.userData.botManifest || null;
+                        const embeddedManifest = extractBotManifest(gltf, null);
                         buildRobotRuntime(gltf.scene, embeddedManifest, file.name);
                     }, (err) => {
                         console.error(err);
@@ -1192,7 +1225,6 @@
         }
 
         function resetPose() {
-            params.autoSway = false;
             let sumL = 0;
             legs.forEach(l => { sumL += (l.L1 + l.L2 + l.L3); });
             const avgReach = legs.length > 0 ? (sumL / legs.length) : 7.5;
@@ -1208,19 +1240,32 @@
                 ? activeManifest.calibration.adaptiveElevation : true;
             const defaultFallback = (activeManifest && activeManifest.calibration && activeManifest.calibration.autoReachFallback !== undefined)
                 ? activeManifest.calibration.autoReachFallback : true;
+            const defaultAutoSway = (activeManifest && activeManifest.calibration && activeManifest.calibration.autoSway !== undefined)
+                ? activeManifest.calibration.autoSway : false;
 
+            params.autoSway = defaultAutoSway;
             params.bodyPosY = defaultH;
-            params.bodyPosX = 0.0;
-            params.bodyPosZ = 0.0;
-            params.bodyPitch = 0.0;
-            params.bodyRoll = 0.0;
-            params.bodyYaw = 0.0;
+            params.bodyPosX = (activeManifest && activeManifest.calibration && activeManifest.calibration.bodyPosX !== undefined) ? activeManifest.calibration.bodyPosX : 0.0;
+            params.bodyPosZ = (activeManifest && activeManifest.calibration && activeManifest.calibration.bodyPosZ !== undefined) ? activeManifest.calibration.bodyPosZ : 0.0;
+            params.bodyPitch = (activeManifest && activeManifest.calibration && activeManifest.calibration.bodyPitch !== undefined) ? activeManifest.calibration.bodyPitch : 0.0;
+            params.bodyRoll = (activeManifest && activeManifest.calibration && activeManifest.calibration.bodyRoll !== undefined) ? activeManifest.calibration.bodyRoll : 0.0;
+            params.bodyYaw = (activeManifest && activeManifest.calibration && activeManifest.calibration.bodyYaw !== undefined) ? activeManifest.calibration.bodyYaw : 0.0;
             params.stanceSpread = defaultSpread;
             params.coxaElevation = defaultCoxa;
             params.adaptiveElevation = defaultAdapt;
             params.autoReachFallback = defaultFallback;
             params.irisE = 0.0;
             params.irisD = 0.0;
+
+            if (activeManifest && activeManifest.calibration && activeManifest.calibration.swayDefaults) {
+                const s = activeManifest.calibration.swayDefaults;
+                if (s.speed !== undefined) params.swaySpeed = s.speed;
+                if (s.heightCenter !== undefined) params.swayHeightCenter = s.heightCenter;
+                if (s.heightAmp !== undefined) params.swayHeightAmp = s.heightAmp;
+                if (s.pitchRoll !== undefined) params.swayPitchRoll = s.pitchRoll;
+                if (s.yaw !== undefined) params.swayYaw = s.yaw;
+                if (s.shift !== undefined) params.swayShift = s.shift;
+            }
 
             bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
             bodyGroup.rotation.set(0, 0, 0);
@@ -1306,7 +1351,11 @@
             fPosture.open();
             fBodyPos.open();
             fBodyRot.open();
-            fDemo.close();
+            if (params.autoSway) {
+                fDemo.open();
+            } else {
+                fDemo.close();
+            }
         }
 
         // --- LOOP DE ATUALIZAÇÃO ---
