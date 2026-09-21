@@ -548,7 +548,26 @@
             }
         }
 
+        function updateAllGuiDisplays() {
+            if (!gui) return;
+            if (typeof gui.controllersRecursive === 'function') {
+                gui.controllersRecursive().forEach(c => c.updateDisplay());
+            } else {
+                const updateFolder = (f) => {
+                    f.controllers.forEach(c => c.updateDisplay());
+                    f.folders.forEach(updateFolder);
+                };
+                updateFolder(gui);
+            }
+        }
+
+        function toggleAutoSway(val) {
+            params.autoSway = (val !== undefined) ? val : !params.autoSway;
+            updateAllGuiDisplays();
+        }
+
         function resetPose() {
+            params.autoSway = false;
             params.bodyPosX = 0;
             params.bodyPosY = 0.6;
             params.bodyPosZ = 0;
@@ -559,10 +578,14 @@
             params.autoReachFallback = true;
             params.irisE = 0.0;
             params.irisD = 0.0;
+            bodyGroup.position.set(0, 0.6, 0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
             updateMorphTargets();
             updateFootTargets();
             params.coxaElevation = calculateAdaptiveElevation(0.6);
-            if (gui) gui.controllers.forEach(c => c.updateDisplay());
+            if (typeof updateHexaBOT === 'function') updateHexaBOT();
+            updateAllGuiDisplays();
         }
 
         const L1_M = 2.3608; // Coxa
@@ -1103,7 +1126,7 @@
             fHead.add(params, 'irisD', 0.0, 1.0, 0.01).name('Íris Direita (IRIS_D)').listen().onChange(updateMorphTargets);
 
             const fDemo = gui.addFolder('Auto Balanço / Rebolado');
-            fDemo.add(params, 'autoSway').name('Ativar Balanço').listen();
+            fDemo.add(params, 'autoSway').name('Ativar Balanço (Tecla A)').listen();
             fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade');
             fDemo.add(params, 'swayHeightCenter', 0.2, 1.8, 0.05).name('Altura Média');
             fDemo.add(params, 'swayHeightAmp', 0.0, 0.8, 0.05).name('Amplitude Altura');
@@ -1173,7 +1196,7 @@
             fVis.add(gridHelper, 'visible').name('Mostrar Grade');
             fVis.close();
 
-            gui.add(params, 'resetPose').name('↺ Resetar Postura');
+            gui.add(params, 'resetPose').name('↺ Resetar Postura (Tecla R)');
 
             fPosture.open();
             fBodyPos.open();
@@ -1184,12 +1207,15 @@
 
         // --- ATALHOS DE TECLADO ---
         window.addEventListener('keydown', (e) => {
-            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
             if (e.key === 'i' || e.key === 'I') {
                 toggleTelemetry();
-            }
-            if (e.key === 'x' || e.key === 'X') {
+            } else if (e.key === 'x' || e.key === 'X') {
                 setXRayMode(!params.xrayMode);
+            } else if (e.key === 'r' || e.key === 'R') {
+                resetPose();
+            } else if (e.key === 'a' || e.key === 'A') {
+                toggleAutoSway();
             }
         });
 

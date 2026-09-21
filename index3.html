@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HexaBOT — Production Runtime & Manifest Simulator (index3)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: #0b0f17;
+            color: #f1f5f9;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* --- UI OVERLAY --- */
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            pointer-events: auto;
+            max-width: 360px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(56, 189, 248, 0.35);
+        }
+
+        h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        p.subtitle {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .badge-runtime {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-dynamic {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            background: rgba(30, 41, 59, 0.85);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .btn-action:hover {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+        }
+
+        /* --- TELEMETRIA HUD --- */
+        .telemetry {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.76rem;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            color: #94a3b8;
+        }
+
+        .telemetry-row strong {
+            color: #f1f5f9;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* --- LOADING & NOTIFICAÇÕES --- */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.9);
+            padding: 20px 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* --- DRAG AND DROP OVERLAY --- */
+        #drop-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(2, 6, 23, 0.75);
+            backdrop-filter: blur(8px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 3px dashed #38bdf8;
+            z-index: 200;
+            pointer-events: none;
+        }
+
+        #drop-indicator.active {
+            display: flex;
+        }
+
+        #drop-indicator h2 {
+            font-size: 1.5rem;
+            color: #38bdf8;
+            margin-top: 10px;
+        }
+
+        #drop-indicator p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        /* Customização Lil-GUI */
+        .lil-gui {
+            --background-color: rgba(15, 23, 42, 0.92) !important;
+            --text-color: #e2e8f0 !important;
+            --title-background-color: rgba(30, 41, 59, 0.95) !important;
+            --widget-color: #1e293b !important;
+            --hover-color: #334155 !important;
+            --focus-color: #0284c7 !important;
+            --number-color: #38bdf8 !important;
+            --string-color: #34d399 !important;
+            font-family: inherit !important;
+            border-radius: 10px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text" style="font-weight: 600; font-size: 0.9rem; color: #f8fafc;">Inicializando Runtime do Bot...</div>
+    </div>
+
+    <div id="drop-indicator">
+        <div style="font-size: 3rem;">📦</div>
+        <h2>Solte o Bot ou Modelo 3D aqui</h2>
+        <p>Suporta arquivos <strong>.glb</strong>, <strong>.bot.glb</strong> ou <strong>.bot.json</strong></p>
+    </div>
+
+    <div id="ui-overlay">
+        <div class="panel">
+            <span class="badge badge-runtime" id="status-badge">🟢 Manifesto Calibrado</span>
+            <h1 id="bot-title">🕷️ HexaBOT Runtime</h1>
+            <p class="subtitle" id="bot-desc">Simulador de produção com Cinemática Inversa 3-DoF, Auto-Reach Fallback analítico e calibração biométrica.</p>
+
+            <input type="file" id="file-input-hidden" accept=".glb,.gltf,.json" style="display: none;">
+            <button class="btn-action" id="btn-load-custom">📂 Abrir Outro Bot (.glb / .bot.json)</button>
+
+            <div class="telemetry" id="telemetry-box" style="display: none;">
+                <div class="telemetry-row"><span>Fonte de Dados:</span> <strong id="tel-source" style="color: #34d399;">Manifesto Embutido</strong></div>
+                <div class="telemetry-row"><span>Pernas Ativas:</span> <strong id="tel-legs">6 / 6</strong></div>
+                <div class="telemetry-row"><span>Links IK ($L_1/L_2/L_3$):</span> <strong id="tel-links">-- / -- / -- m</strong></div>
+                <div class="telemetry-row"><span>Alcance Máximo:</span> <strong id="tel-reach">-- m</strong></div>
+                <div class="telemetry-row"><span>Altura Chassi (Y):</span> <strong id="tel-height">1.10 m</strong></div>
+                <div class="telemetry-row"><span>Elevação Coxa ($\gamma$):</span> <strong id="tel-coxa">20.0°</strong></div>
+                <div class="telemetry-row"><span>Estado Fallback:</span> <strong id="tel-fallback" style="color: #38bdf8;">Nominal (0)</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+        import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
+
+        // --- SETUP DA CENA THREE.JS ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0f17);
+        scene.fog = new THREE.FogExp2(0x0b0f17, 0.035);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 5, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.02;
+        controls.minDistance = 2;
+        controls.maxDistance = 35;
+        controls.target.set(0, 1.0, 0);
+
+        // --- AMBIENTE IBL (ROOM ENVIRONMENT) ---
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        const roomEnv = new RoomEnvironment();
+        let currentEnvMap = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+        scene.environment = currentEnvMap;
+
+        // --- ILUMINAÇÃO ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfffaed, 2.8);
+        dirLight.position.set(5, 12, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 30;
+        dirLight.shadow.camera.left = -8;
+        dirLight.shadow.camera.right = 8;
+        dirLight.shadow.camera.top = 8;
+        dirLight.shadow.camera.bottom = -8;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
+
+        const rimLight = new THREE.PointLight(0x00d2ff, 4.0, 25);
+        rimLight.position.set(-8, 3, -6);
+        scene.add(rimLight);
+
+        const rimLight2 = new THREE.PointLight(0xff3366, 2.5, 20);
+        rimLight2.position.set(8, 2, -6);
+        scene.add(rimLight2);
+
+        // --- CHÃO E GRADE ---
+        const floorGeo = new THREE.PlaneGeometry(80, 80);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x070a10,
+            roughness: 0.85,
+            metalness: 0.2
+        });
+        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        const gridHelper = new THREE.GridHelper(40, 40, 0x38bdf8, 0x1e293b);
+        gridHelper.position.y = 0.002;
+        scene.add(gridHelper);
+
+        // --- HIERARQUIA DO ROBÔ E GRUPOS ---
+        const robotGroup = new THREE.Group();
+        scene.add(robotGroup);
+
+        const bodyGroup = new THREE.Group();
+        bodyGroup.position.set(0, 1.10, 0);
+        robotGroup.add(bodyGroup);
+
+        const footTargetGroup = new THREE.Group();
+        footTargetGroup.visible = false;
+        scene.add(footTargetGroup);
+
+        const skeletonLinesGroup = new THREE.Group();
+        skeletonLinesGroup.visible = false;
+        scene.add(skeletonLinesGroup);
+
+        const xrayGizmosGroup = new THREE.Group();
+        xrayGizmosGroup.visible = false;
+        scene.add(xrayGizmosGroup);
+
+        // --- GIZMOS XRAY ---
+        function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
+            const group = new THREE.Group();
+            group.userData.isXrayHelper = true;
+
+            const geoX = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-size, 0, 0), new THREE.Vector3(size, 0, 0)]);
+            const matX = new THREE.LineBasicMaterial({ color: 0xff3b30, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineX = new THREE.Line(geoX, matX);
+            lineX.userData.isXrayHelper = true;
+            group.add(lineX);
+
+            const geoY = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -size, 0), new THREE.Vector3(0, size, 0)]);
+            const matY = new THREE.LineBasicMaterial({ color: 0x34c759, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineY = new THREE.Line(geoY, matY);
+            lineY.userData.isXrayHelper = true;
+            group.add(lineY);
+
+            const geoZ = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -size), new THREE.Vector3(0, 0, size)]);
+            const matZ = new THREE.LineBasicMaterial({ color: 0x007aff, depthTest: false, transparent: true, opacity: 0.85 });
+            const lineZ = new THREE.Line(geoZ, matZ);
+            lineZ.userData.isXrayHelper = true;
+            group.add(lineZ);
+
+            const jointGeo = new THREE.SphereGeometry(sphereRadius, 16, 16);
+            const jointMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, depthTest: false, transparent: true, opacity: 0.95 });
+            const jointSphere = new THREE.Mesh(jointGeo, jointMat);
+            jointSphere.userData.isXrayHelper = true;
+            group.add(jointSphere);
+
+            group.renderOrder = 999;
+            return group;
+        }
+
+        // --- PARÂMETROS E CONTROLES ---
+        const params = {
+            envPreset: 'Studio',
+            bodyPosY: 1.10,
+            bodyPosX: 0.0,
+            bodyPosZ: 0.0,
+            bodyPitch: 0.0,
+            bodyRoll: 0.0,
+            bodyYaw: 0.0,
+            coxaElevation: 20.0,
+            adaptiveElevation: true,
+            autoReachFallback: true,
+            stanceSpread: 1.0,
+            // Auto Balanço
+            autoSway: false,
+            swaySpeed: 1.5,
+            swayHeightCenter: 1.10,
+            swayHeightAmp: 0.45,
+            swayPitchRoll: 12.0,
+            swayYaw: 15.0,
+            swayShift: 0.35,
+            // BlendShapes
+            irisE: 0.0,
+            irisD: 0.0,
+            // Visibilidade
+            xrayMode: false,
+            showTelemetry: false,
+            showFootTargets: false,
+            showSkeletonLines: false,
+            envIntensity: 1.2,
+            envRotation: 0,
+            ikEnabled: true,
+            resetPose: () => resetPose()
+        };
+
+        const telemetryBox = document.getElementById('telemetry-box');
+        function toggleTelemetry(val) {
+            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
+            if (telemetryBox) {
+                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
+            }
+        }
+
+        function setXRayMode(enable) {
+            params.xrayMode = enable;
+            if (robotGroup) {
+                robotGroup.traverse((child) => {
+                    if (child.isMesh && !child.userData.isXrayHelper) {
+                        if (child.material) {
+                            const mats = Array.isArray(child.material) ? child.material : [child.material];
+                            mats.forEach(m => m.visible = !enable);
+                        }
+                    }
+                });
+            }
+            xrayGizmosGroup.visible = enable;
+            skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
+            footTargetGroup.visible = enable ? true : params.showFootTargets;
+        }
+
+        // --- ESTRUTURA DO BOT E CINEMÁTICA ---
+        const legs = [];
+        const footTargets = [];
+        const targetMeshes = [];
+        const legLines = [];
+        const legJointGizmos = [];
+        const morphMeshes = [];
+        let bodyGizmo = null;
+        let bodySpineMesh = null;
+        let activeManifest = null;
+
+        const _tempVec1 = new THREE.Vector3();
+        const _tempVec2 = new THREE.Vector3();
+        const _tempVec3 = new THREE.Vector3();
+        const _tempVecBc = new THREE.Vector3();
+
+        // --- CURVA ADAPTATIVA DE ELEVAÇÃO DA COXA ---
+        function calculateAdaptiveElevation(yHeight) {
+            const curve = (activeManifest && activeManifest.calibration && activeManifest.calibration.elevationCurve)
+                ? activeManifest.calibration.elevationCurve
+                : { yMin: 0.0, degAtMin: 45.0, yMid: 1.3, degAtMid: 35.0, yMax: 2.5, degAtMax: 5.0 };
+
+            const y = THREE.MathUtils.clamp(yHeight, curve.yMin, curve.yMax);
+            if (y >= curve.yMid) {
+                const t = (y - curve.yMid) / (curve.yMax - curve.yMid);
+                const s = t * t * (3 - 2 * t);
+                return curve.degAtMid - s * (curve.degAtMid - curve.degAtMax);
+            } else {
+                const t = (curve.yMid - y) / (curve.yMid - curve.yMin);
+                const s = t * t * (3 - 2 * t);
+                return curve.degAtMid + s * (curve.degAtMin - curve.degAtMid);
+            }
+        }
+
+        const _qInvBody = new THREE.Quaternion();
+
+        // --- CÁLCULO DE ÂNCORAS PROCEDURAIS ---
+        function updateFootTargets() {
+            footTargets.length = 0;
+            bodyGroup.getWorldPosition(_tempVecBc);
+            bodyGroup.getWorldQuaternion(_qInvBody);
+            _qInvBody.invert();
+
+            const baseSpread = (activeManifest && activeManifest.calibration && activeManifest.calibration.stanceSpread)
+                ? activeManifest.calibration.stanceSpread : 1.0;
+
+            legs.forEach((leg, index) => {
+                let targetWorldPos;
+
+                if (leg.calibratedFootTarget && Math.abs(params.stanceSpread - baseSpread) < 0.0001) {
+                    targetWorldPos = leg.calibratedFootTarget.clone();
+                } else if (leg.calibratedFootTarget) {
+                    const ratio = params.stanceSpread / (baseSpread || 1.0);
+                    targetWorldPos = new THREE.Vector3(
+                        leg.calibratedFootTarget.x * ratio,
+                        0.0,
+                        leg.calibratedFootTarget.z * ratio
+                    );
+                } else {
+                    leg.baseNode.getWorldPosition(_tempVec1);
+
+                    const relVec = new THREE.Vector3().subVectors(_tempVec1, _tempVecBc);
+                    relVec.applyQuaternion(_qInvBody);
+
+                    const stanceReach = (leg.L1 * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (leg.L2 + leg.L3)) * params.stanceSpread;
+                    const dirH = new THREE.Vector2(relVec.x, relVec.z);
+                    if (dirH.length() < 0.01) {
+                        const angle = (index / legs.length) * Math.PI * 2;
+                        dirH.set(Math.sin(angle), Math.cos(angle));
+                    } else {
+                        dirH.normalize();
+                    }
+                    const baseDist = new THREE.Vector2(relVec.x, relVec.z).length();
+                    const totalRadialDist = baseDist + stanceReach;
+                    targetWorldPos = new THREE.Vector3(
+                        _tempVecBc.x + dirH.x * totalRadialDist,
+                        0.0,
+                        _tempVecBc.z + dirH.y * totalRadialDist
+                    );
+                }
+
+                footTargets.push(targetWorldPos);
+                if (targetMeshes[index]) {
+                    targetMeshes[index].position.copy(targetWorldPos);
+                }
+            });
+        }
+
+        function updateMorphTargets() {
+            for (const mesh of morphMeshes) {
+                if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) {
+                    if ('IRIS_E' in mesh.morphTargetDictionary) {
+                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_E']] = params.irisE;
+                    }
+                    if ('IRIS_D' in mesh.morphTargetDictionary) {
+                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_D']] = params.irisD;
+                    }
+                }
+            }
+        }
+
+        // --- CINEMÁTICA INVERSA VETORIAL 3-DoF (ZERO-BANK) ---
+        const _P0 = new THREE.Vector3();
+        const _P1 = new THREE.Vector3();
+        const _P2 = new THREE.Vector3();
+        const _P3 = new THREE.Vector3();
+        const _dirH = new THREE.Vector3();
+        const _up = new THREE.Vector3(0, 1, 0);
+        const _vTarget = new THREE.Vector3();
+        const _vTUnit = new THREE.Vector3();
+        const _hingeAxis = new THREE.Vector3();
+        const _perpUp = new THREE.Vector3();
+        const _femurDir = new THREE.Vector3();
+        const _tibiaDir = new THREE.Vector3();
+        const _coxaDir = new THREE.Vector3();
+
+        const _X1 = new THREE.Vector3(), _Y1 = new THREE.Vector3(), _Z1 = new THREE.Vector3();
+        const _X2 = new THREE.Vector3(), _Y2 = new THREE.Vector3(), _Z2 = new THREE.Vector3();
+        const _X3 = new THREE.Vector3(), _Y3 = new THREE.Vector3(), _Z3 = new THREE.Vector3();
+
+        const _matWorld1 = new THREE.Matrix4(), _matWorld2 = new THREE.Matrix4(), _matWorld3 = new THREE.Matrix4();
+        const _qWorld1 = new THREE.Quaternion(), _qWorld2 = new THREE.Quaternion(), _qWorld3 = new THREE.Quaternion();
+        const _qWorldBase = new THREE.Quaternion(), _qInvBase = new THREE.Quaternion();
+        const _qInv1 = new THREE.Quaternion(), _qInv2 = new THREE.Quaternion();
+
+        function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
+            const { baseNode, j1Node, j2Node, j3Node, L1, L2, L3, index } = leg;
+            if (!baseNode || !j1Node || !j2Node || !j3Node) return false;
+
+            baseNode.getWorldPosition(_P0);
+
+            _dirH.subVectors(worldTarget, _P0);
+            _dirH.y = 0;
+            const horizDist = _dirH.length();
+            if (horizDist > 0.001) _dirH.divideScalar(horizDist);
+
+            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa e Auto-Reach Fallback
+            let gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+            let isFallbackActive = false;
+
+            if (params.autoReachFallback) {
+                const h = _P0.y - worldTarget.y;
+                const D_total = Math.sqrt(horizDist * horizDist + h * h);
+                const theta_target = Math.atan2(-h, horizDist);
+                const D_max = (L2 + L3) * 0.98;
+
+                // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
+                const p1x_nom = L1 * Math.cos(gamma);
+                const p1y_nom = L1 * Math.sin(gamma);
+                const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
+
+                if (dist1_sq > D_max * D_max && D_total > 0.001) {
+                    const K = (D_total * D_total + L1 * L1 - D_max * D_max) / (2 * L1 * D_total);
+                    if (K <= 1.0) {
+                        const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
+                        const gammaLimit = theta_target + deltaTheta;
+                        if (gammaLimit < gamma) {
+                            gamma = gammaLimit;
+                            isFallbackActive = true;
+                        }
+                    } else {
+                        gamma = theta_target;
+                        isFallbackActive = true;
+                    }
+                }
+            }
+
+            _P1.copy(_P0)
+               .addScaledVector(_dirH, L1 * Math.cos(gamma))
+               .addScaledVector(_up, L1 * Math.sin(gamma));
+
+            _vTarget.subVectors(worldTarget, _P1);
+            const dist = _vTarget.length();
+
+            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2 - L3) * 1.02, (L2 + L3) * 0.98);
+            const cosAlpha = THREE.MathUtils.clamp((L2 * L2 + dClamped * dClamped - L3 * L3) / (2 * L2 * dClamped), -1, 1);
+            const alpha = Math.acos(cosAlpha);
+
+            _vTUnit.copy(_vTarget).divideScalar(dist);
+            _hingeAxis.crossVectors(_dirH, _up).normalize();
+
+            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
+            if (_perpUp.y < 0) _perpUp.negate();
+
+            _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
+                     .addScaledVector(_perpUp, Math.sin(alpha))
+                     .normalize();
+
+            _P2.copy(_P1).addScaledVector(_femurDir, L2);
+            _tibiaDir.subVectors(worldTarget, _P2).normalize();
+            _P3.copy(_P2).addScaledVector(_tibiaDir, L3);
+            _coxaDir.subVectors(_P1, _P0).normalize();
+
+            // Feedback Visual de Tensão e Fallback
+            const tensionRatio = dist / (L2 + L3);
+
+            if (lineMesh) {
+                if (isFallbackActive) {
+                    lineMesh.material.color.setHex(0xff0038); // Vermelho Intenso: Atuação Adaptativa / Fallback Ativo
+                } else if (tensionRatio > 0.85) {
+                    lineMesh.material.color.setHex(0xffd32a); // Amarelo: Sob Tensão
+                } else {
+                    lineMesh.material.color.setHex(leg.side === 'D' ? 0x38bdf8 : 0x7bed9f); // Ciano (D) / Verde (E)
+                }
+            }
+
+            if (targetMeshes[index]) {
+                if (isFallbackActive) {
+                    targetMeshes[index].material.color.setHex(0xff0038);
+                    targetMeshes[index].material.emissive.setHex(0x880011);
+                } else if (tensionRatio > 0.85) {
+                    targetMeshes[index].material.color.setHex(0xffd32a);
+                    targetMeshes[index].material.emissive.setHex(0x554400);
+                } else {
+                    targetMeshes[index].material.color.setHex(leg.side === 'D' ? 0x00d2ff : 0x2ed573);
+                    targetMeshes[index].material.emissive.setHex(leg.side === 'D' ? 0x003366 : 0x115522);
+                }
+            }
+
+            // Link 1 (Coxa)
+            _X1.copy(_coxaDir);
+            _Y1.copy(_hingeAxis);
+            _Z1.crossVectors(_X1, _Y1).normalize();
+            _matWorld1.makeBasis(_X1, _Y1, _Z1);
+            _qWorld1.setFromRotationMatrix(_matWorld1);
+
+            baseNode.getWorldQuaternion(_qWorldBase);
+            _qInvBase.copy(_qWorldBase).invert();
+            j1Node.quaternion.multiplyQuaternions(_qInvBase, _qWorld1);
+            j1Node.updateMatrixWorld(true);
+
+            // Link 2 (Fêmur)
+            _X2.copy(_femurDir);
+            _Y2.copy(_hingeAxis);
+            _Z2.crossVectors(_X2, _Y2).normalize();
+            _matWorld2.makeBasis(_X2, _Y2, _Z2);
+            _qWorld2.setFromRotationMatrix(_matWorld2);
+
+            _qInv1.copy(_qWorld1).invert();
+            j2Node.quaternion.multiplyQuaternions(_qInv1, _qWorld2);
+            j2Node.updateMatrixWorld(true);
+
+            // Link 3 (Tíbia)
+            _X3.copy(_tibiaDir);
+            _Y3.copy(_hingeAxis);
+            _Z3.crossVectors(_X3, _Y3).normalize();
+            _matWorld3.makeBasis(_X3, _Y3, _Z3);
+            _qWorld3.setFromRotationMatrix(_matWorld3);
+
+            _qInv2.copy(_qWorld2).invert();
+            j3Node.quaternion.multiplyQuaternions(_qInv2, _qWorld3);
+            j3Node.updateMatrixWorld(true);
+
+            // Atualizar Linhas Esqueleto IK
+            if (lineMesh && (skeletonLinesGroup.visible || params.xrayMode)) {
+                lineMesh.geometry.setPositions([
+                    _P0.x, _P0.y, _P0.z,
+                    _P1.x, _P1.y, _P1.z,
+                    _P2.x, _P2.y, _P2.z,
+                    _P3.x, _P3.y, _P3.z
+                ]);
+            }
+
+            // Atualizar Gizmos XRay
+            if (legJointGizmos[index] && xrayGizmosGroup.visible) {
+                const gz = legJointGizmos[index];
+                gz[0].position.copy(_P0); gz[0].quaternion.copy(_qWorldBase);
+                gz[1].position.copy(_P1); gz[1].quaternion.copy(_qWorld1);
+                gz[2].position.copy(_P2); gz[2].quaternion.copy(_qWorld2);
+                gz[3].position.copy(_P3); gz[3].quaternion.copy(_qWorld3);
+            }
+
+            return isFallbackActive;
+        }
+
+        // --- SETUP PRINCIPAL DO ROBÔ (A PARTIR DE MANIFESTO OU AUTO-CALIBRAÇÃO) ---
+        function buildRobotRuntime(gltfScene, manifest = null, fileName = 'Modelo 3D') {
+            activeManifest = manifest;
+
+            // 1. Limpeza de Estado Anterior
+            while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
+            while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
+            while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
+            while (xrayGizmosGroup.children.length > 0) xrayGizmosGroup.remove(xrayGizmosGroup.children[0]);
+            legs.length = 0;
+            footTargets.length = 0;
+            targetMeshes.length = 0;
+            legLines.length = 0;
+            legJointGizmos.length = 0;
+            morphMeshes.length = 0;
+
+            bodyGroup.add(gltfScene);
+            bodyGroup.updateMatrixWorld(true);
+
+            // Coletar meshes de morph target (BlendShapes)
+            gltfScene.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.morphTargetInfluences && child.morphTargetDictionary) {
+                        morphMeshes.push(child);
+                    }
+                }
+            });
+
+            let sumL1 = 0, sumL2 = 0, sumL3 = 0;
+
+            // 2. Montagem Guiada por Manifesto
+            if (manifest && manifest.anatomy && manifest.anatomy.legs && manifest.anatomy.legs.length > 0) {
+                document.getElementById('status-badge').className = 'badge badge-runtime';
+                document.getElementById('status-badge').innerText = '🟢 Manifesto Calibrado';
+                document.getElementById('tel-source').innerText = 'Manifesto Embutido (.glb)';
+                document.getElementById('tel-source').style.color = '#34d399';
+
+                manifest.anatomy.legs.forEach((legDef, index) => {
+                    let baseNode = gltfScene.getObjectByName(legDef.socketName) || gltfScene.getObjectByName(legDef.id);
+                    if (!baseNode) {
+                        gltfScene.traverse(n => {
+                            if (n.name && (n.name.includes(legDef.socketName) || n.name.includes(legDef.id))) baseNode = n;
+                        });
+                    }
+
+                    if (baseNode) {
+                        const j1Node = gltfScene.getObjectByName(legDef.j1Name) || (baseNode.children[0]);
+                        const j2Node = gltfScene.getObjectByName(legDef.j2Name) || (j1Node ? j1Node.children[0] : null);
+                        const j3Node = gltfScene.getObjectByName(legDef.j3Name) || (j2Node ? j2Node.children[0] : null);
+
+                        const isRight = legDef.side === 'D';
+
+                        const legObj = {
+                            id: legDef.id,
+                            side: legDef.side,
+                            baseNode,
+                            j1Node,
+                            j2Node,
+                            j3Node,
+                            L1: legDef.L1,
+                            L2: legDef.L2,
+                            L3: legDef.L3,
+                            calibratedFootTarget: legDef.defaultFootTarget ? new THREE.Vector3(...legDef.defaultFootTarget) : null,
+                            index
+                        };
+                        legs.push(legObj);
+
+                        sumL1 += legDef.L1; sumL2 += legDef.L2; sumL3 += legDef.L3;
+
+                        // Criar Âncora
+                        const targetSphere = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.14, 16, 16),
+                            new THREE.MeshStandardMaterial({
+                                color: isRight ? 0x00d2ff : 0x2ed573,
+                                emissive: isRight ? 0x003366 : 0x115522,
+                                roughness: 0.3
+                            })
+                        );
+                        targetSphere.castShadow = true;
+                        footTargetGroup.add(targetSphere);
+                        targetMeshes.push(targetSphere);
+
+                        // Criar Linha de Esqueleto Line2
+                        const lineGeo = new LineGeometry();
+                        lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                        const lineMat = new LineMaterial({
+                            color: isRight ? 0x38bdf8 : 0x7bed9f,
+                            linewidth: 5.0,
+                            transparent: true,
+                            opacity: 0.95,
+                            depthTest: false
+                        });
+                        lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                        const lineMesh = new Line2(lineGeo, lineMat);
+                        skeletonLinesGroup.add(lineMesh);
+                        legLines.push(lineMesh);
+
+                        // Gizmos XRay
+                        const gizmos = [
+                            createCrossGizmo(0.35, 0.11),
+                            createCrossGizmo(0.35, 0.11),
+                            createCrossGizmo(0.35, 0.11),
+                            createCrossGizmo(0.35, 0.11)
+                        ];
+                        gizmos.forEach(g => xrayGizmosGroup.add(g));
+                        legJointGizmos[index] = gizmos;
+                    }
+                });
+
+                if (manifest.calibration) {
+                    if (manifest.calibration.defaultHeight !== undefined) params.bodyPosY = manifest.calibration.defaultHeight;
+                    if (manifest.calibration.stanceSpread !== undefined) params.stanceSpread = manifest.calibration.stanceSpread;
+                    if (manifest.calibration.coxaElevation !== undefined) params.coxaElevation = manifest.calibration.coxaElevation;
+                    if (manifest.calibration.adaptiveElevation !== undefined) params.adaptiveElevation = manifest.calibration.adaptiveElevation;
+                    if (manifest.calibration.autoReachFallback !== undefined) params.autoReachFallback = manifest.calibration.autoReachFallback;
+                    if (manifest.calibration.swayDefaults) {
+                        params.swaySpeed = manifest.calibration.swayDefaults.speed ?? params.swaySpeed;
+                        params.swayHeightCenter = manifest.calibration.swayDefaults.heightCenter ?? params.bodyPosY;
+                        params.swayHeightAmp = manifest.calibration.swayDefaults.heightAmp ?? params.swayHeightAmp;
+                        params.swayPitchRoll = manifest.calibration.swayDefaults.pitchRoll ?? params.swayPitchRoll;
+                        params.swayYaw = manifest.calibration.swayDefaults.yaw ?? params.swayYaw;
+                        params.swayShift = manifest.calibration.swayDefaults.shift ?? params.swayShift;
+                    }
+                }
+            } else {
+                // Fallback: Auto-Calibração Dinâmica
+                document.getElementById('status-badge').className = 'badge badge-dynamic';
+                document.getElementById('status-badge').innerText = '🟡 Auto-Calibração Ativa';
+                document.getElementById('tel-source').innerText = 'Auto-Calibração Dinâmica';
+                document.getElementById('tel-source').style.color = '#fbbf24';
+
+                const socketRegex = /^(D0|E0)[\_\-\(\s\d]|^Socket[\_\-\d]|^Hip[\_\-\d]|^LegSocket[\_\-\d]/i;
+                const detectedSockets = [];
+                gltfScene.traverse((child) => {
+                    if (child.name && socketRegex.test(child.name)) detectedSockets.push(child);
+                });
+
+                detectedSockets.sort((a, b) => {
+                    const isRightA = a.name.startsWith('D') || a.position.x < 0;
+                    const isRightB = b.name.startsWith('D') || b.position.x < 0;
+                    if (isRightA !== isRightB) return isRightA ? -1 : 1;
+                    return (b.position.y - a.position.y) || (b.position.z - a.position.z);
+                });
+
+                detectedSockets.forEach((baseSocket, index) => {
+                    const isRight = baseSocket.name.startsWith('D') || baseSocket.position.x <= 0;
+                    const sVec = new THREE.Vector3();
+                    baseSocket.getWorldScale(sVec);
+                    const socketWorldScale = sVec.x || 1.0;
+
+                    const j1Node = baseSocket.children[0];
+                    const j2Node = j1Node ? j1Node.children[0] : null;
+                    const j3Node = j2Node ? j2Node.children[0] : null;
+
+                    if (!j1Node || !j2Node || !j3Node) return;
+
+                    const l1Native = j2Node.position.length() * socketWorldScale;
+                    const l2Native = j3Node.position.length() * socketWorldScale;
+                    let maxX = 0;
+                    j3Node.traverse(c => {
+                        if (c.isMesh && c.geometry) {
+                            c.geometry.computeBoundingBox();
+                            if (c.geometry.boundingBox) maxX = Math.max(maxX, c.geometry.boundingBox.max.x);
+                        }
+                    });
+                    let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : 3.206;
+                    if (l3Native > 10.0) l3Native *= 0.01;
+                    if (l3Native < 0.5) l3Native = 3.206;
+
+                    sumL1 += l1Native; sumL2 += l2Native; sumL3 += l3Native;
+
+                    const legObj = {
+                        id: `Leg_${index}_${baseSocket.name}`,
+                        side: isRight ? 'D' : 'E',
+                        baseNode: baseSocket,
+                        j1Node,
+                        j2Node,
+                        j3Node,
+                        L1: l1Native,
+                        L2: l2Native,
+                        L3: l3Native,
+                        calibratedFootTarget: null,
+                        index
+                    };
+                    legs.push(legObj);
+
+                    const targetSphere = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.14, 16, 16),
+                        new THREE.MeshStandardMaterial({
+                            color: isRight ? 0x00d2ff : 0x2ed573,
+                            emissive: isRight ? 0x003366 : 0x115522,
+                            roughness: 0.3
+                        })
+                    );
+                    targetSphere.castShadow = true;
+                    footTargetGroup.add(targetSphere);
+                    targetMeshes.push(targetSphere);
+
+                    const lineGeo = new LineGeometry();
+                    lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                    const lineMat = new LineMaterial({
+                        color: isRight ? 0x38bdf8 : 0x7bed9f,
+                        linewidth: 5.0,
+                        transparent: true,
+                        opacity: 0.95,
+                        depthTest: false
+                    });
+                    lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                    const lineMesh = new Line2(lineGeo, lineMat);
+                    skeletonLinesGroup.add(lineMesh);
+                    legLines.push(lineMesh);
+
+                    const gizmos = [
+                        createCrossGizmo(0.35, 0.11),
+                        createCrossGizmo(0.35, 0.11),
+                        createCrossGizmo(0.35, 0.11),
+                        createCrossGizmo(0.35, 0.11)
+                    ];
+                    gizmos.forEach(g => xrayGizmosGroup.add(g));
+                    legJointGizmos[index] = gizmos;
+                });
+            }
+
+            // Gizmo Central e Espinha Dorsal
+            bodyGizmo = createCrossGizmo(0.55, 0.18);
+            xrayGizmosGroup.add(bodyGizmo);
+
+            if (legs.length > 0) {
+                const totalSegments = legs.length * 2;
+                const spinePosArray = new Float32Array(totalSegments * 2 * 3);
+                const spineGeo = new LineSegmentsGeometry();
+                spineGeo.setPositions(spinePosArray);
+                const spineMat = new LineMaterial({
+                    color: 0x00d2ff,
+                    linewidth: 3.5,
+                    transparent: true,
+                    opacity: 0.95,
+                    depthTest: false
+                });
+                spineMat.resolution.set(window.innerWidth, window.innerHeight);
+                bodySpineMesh = new LineSegments2(spineGeo, spineMat);
+                bodySpineMesh.userData.isXrayHelper = true;
+                skeletonLinesGroup.add(bodySpineMesh);
+            }
+
+            const avgL1 = legs.length > 0 ? (sumL1 / legs.length) : 2.36;
+            const avgL2 = legs.length > 0 ? (sumL2 / legs.length) : 2.16;
+            const avgL3 = legs.length > 0 ? (sumL3 / legs.length) : 2.80;
+
+            if (!manifest) {
+                const totalReach = avgL1 + avgL2 + avgL3;
+                const recommendedHeight = +(Math.max(0.8, Math.min(3.5, totalReach * 0.18))).toFixed(2);
+                params.bodyPosY = recommendedHeight;
+                params.swayHeightCenter = recommendedHeight;
+            }
+
+            // Posicionar o corpo na postura e altura calibradas
+            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
+            updateFootTargets();
+            if (params.adaptiveElevation) {
+                params.coxaElevation = calculateAdaptiveElevation(params.bodyPosY);
+            }
+            updateHexaBOT();
+
+            document.getElementById('bot-title').innerText = `🕷️ ${manifest ? manifest.name : fileName}`;
+            document.getElementById('tel-legs').innerText = `${legs.length} Pernas`;
+            document.getElementById('tel-links').innerText = `${avgL1.toFixed(2)} / ${avgL2.toFixed(2)} / ${avgL3.toFixed(2)} m`;
+            document.getElementById('tel-reach').innerText = `${(avgL1 + avgL2 + avgL3).toFixed(2)} m`;
+
+            const loadingElem = document.getElementById('loading');
+            loadingElem.style.opacity = '0';
+            setTimeout(() => loadingElem.style.display = 'none', 400);
+
+            updateEnvironment();
+            initGUI();
+            updateMorphTargets();
+            updateAllGuiDisplays();
+        }
+
+        // --- CARREGADOR UNIVERSAL DE BOT / MODELO ---
+        const gltfLoader = new GLTFLoader();
+
+        function loadBotFromURL(url, forcedManifest = null) {
+            const loadingElem = document.getElementById('loading');
+            loadingElem.style.display = 'flex';
+            loadingElem.style.opacity = '1';
+            document.getElementById('loading-text').innerText = `Carregando ${url.split('/').pop()}...`;
+
+            gltfLoader.load(url, (gltf) => {
+                // Verificar se o próprio GLB traz o manifesto embutido no userData
+                const embeddedManifest = gltf.scene.userData.botManifest || forcedManifest;
+                buildRobotRuntime(gltf.scene, embeddedManifest, url.split('/').pop());
+            }, undefined, (err) => {
+                console.error('Erro ao carregar modelo:', err);
+                document.getElementById('loading-text').innerHTML = `❌ Erro: ${err.message}`;
+            });
+        }
+
+        function loadBotFromFile(file) {
+            if (!file) return;
+            const loadingElem = document.getElementById('loading');
+            loadingElem.style.display = 'flex';
+            loadingElem.style.opacity = '1';
+            document.getElementById('loading-text').innerText = `Lendo ${file.name}...`;
+
+            const reader = new FileReader();
+
+            if (file.name.endsWith('.json')) {
+                reader.onload = (e) => {
+                    try {
+                        const manifest = JSON.parse(e.target.result);
+                        if (manifest.model) {
+                            loadBotFromURL(manifest.model, manifest);
+                        } else {
+                            loadBotFromURL('./glb/aranha.glb', manifest);
+                        }
+                    } catch (err) {
+                        alert('JSON inválido: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                reader.onload = (e) => {
+                    const arrayBuffer = e.target.result;
+                    gltfLoader.parse(arrayBuffer, '', (gltf) => {
+                        const embeddedManifest = gltf.scene.userData.botManifest || null;
+                        buildRobotRuntime(gltf.scene, embeddedManifest, file.name);
+                    }, (err) => {
+                        console.error(err);
+                        alert('Falha ao processar arquivo 3D: ' + err.message);
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        // --- PRESETS DE AMBIENTE ---
+        function updateEnvironment() {
+            if (!scene) return;
+            switch (params.envPreset) {
+                case 'Studio':
+                    scene.background.setHex(0x0b0f17);
+                    scene.fog.color.setHex(0x0b0f17);
+                    ambientLight.color.setHex(0xffffff);
+                    ambientLight.intensity = 0.35;
+                    dirLight.color.setHex(0xfffaed);
+                    dirLight.intensity = 2.8;
+                    rimLight.color.setHex(0x00d2ff);
+                    rimLight2.color.setHex(0xff3366);
+                    break;
+                case 'Exterior Dia':
+                    scene.background.setHex(0x87ceeb);
+                    scene.fog.color.setHex(0x87ceeb);
+                    ambientLight.color.setHex(0x87ceeb);
+                    ambientLight.intensity = 0.6;
+                    dirLight.color.setHex(0xfffdf0);
+                    dirLight.intensity = 3.5;
+                    rimLight.color.setHex(0x38bdf8);
+                    rimLight2.color.setHex(0xffffff);
+                    break;
+                case 'Cyberpunk':
+                    scene.background.setHex(0x050510);
+                    scene.fog.color.setHex(0x050510);
+                    ambientLight.color.setHex(0x9900ff);
+                    ambientLight.intensity = 0.45;
+                    dirLight.color.setHex(0x00ffff);
+                    dirLight.intensity = 2.2;
+                    rimLight.color.setHex(0xff007f);
+                    rimLight2.color.setHex(0x00ffcc);
+                    break;
+                case 'Por do Sol':
+                    scene.background.setHex(0x2a0845);
+                    scene.fog.color.setHex(0x2a0845);
+                    ambientLight.color.setHex(0xff6b6b);
+                    ambientLight.intensity = 0.5;
+                    dirLight.color.setHex(0xffa500);
+                    dirLight.intensity = 3.2;
+                    rimLight.color.setHex(0xffd700);
+                    rimLight2.color.setHex(0xff0055);
+                    break;
+            }
+
+            if (scene.environment) {
+                scene.environmentIntensity = params.envIntensity;
+                scene.environmentRotation = new THREE.Euler(0, THREE.MathUtils.degToRad(params.envRotation), 0);
+            }
+        }
+
+        // --- FUNÇÃO DE RESET E CONTROLE GUI ---
+        let gui = null;
+
+        function updateAllGuiDisplays() {
+            if (!gui) return;
+            if (typeof gui.controllersRecursive === 'function') {
+                gui.controllersRecursive().forEach(c => c.updateDisplay());
+            } else {
+                const updateFolder = (f) => {
+                    f.controllers.forEach(c => c.updateDisplay());
+                    f.folders.forEach(updateFolder);
+                };
+                updateFolder(gui);
+            }
+        }
+
+        function toggleAutoSway(val) {
+            params.autoSway = (val !== undefined) ? val : !params.autoSway;
+            updateAllGuiDisplays();
+        }
+
+        function resetPose() {
+            params.autoSway = false;
+            const defaultH = (activeManifest && activeManifest.calibration && activeManifest.calibration.defaultHeight !== undefined)
+                ? activeManifest.calibration.defaultHeight : 1.10;
+            const defaultSpread = (activeManifest && activeManifest.calibration && activeManifest.calibration.stanceSpread !== undefined)
+                ? activeManifest.calibration.stanceSpread : 1.0;
+            const defaultCoxa = (activeManifest && activeManifest.calibration && activeManifest.calibration.coxaElevation !== undefined)
+                ? activeManifest.calibration.coxaElevation : 20.0;
+            const defaultAdapt = (activeManifest && activeManifest.calibration && activeManifest.calibration.adaptiveElevation !== undefined)
+                ? activeManifest.calibration.adaptiveElevation : true;
+            const defaultFallback = (activeManifest && activeManifest.calibration && activeManifest.calibration.autoReachFallback !== undefined)
+                ? activeManifest.calibration.autoReachFallback : true;
+
+            params.bodyPosY = defaultH;
+            params.bodyPosX = 0.0;
+            params.bodyPosZ = 0.0;
+            params.bodyPitch = 0.0;
+            params.bodyRoll = 0.0;
+            params.bodyYaw = 0.0;
+            params.stanceSpread = defaultSpread;
+            params.coxaElevation = defaultCoxa;
+            params.adaptiveElevation = defaultAdapt;
+            params.autoReachFallback = defaultFallback;
+            params.irisE = 0.0;
+            params.irisD = 0.0;
+
+            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
+            updateMorphTargets();
+            updateFootTargets();
+            if (params.adaptiveElevation) {
+                params.coxaElevation = calculateAdaptiveElevation(params.bodyPosY);
+            }
+            updateHexaBOT();
+            updateAllGuiDisplays();
+        }
+
+        function initGUI() {
+            if (gui) gui.destroy();
+            gui = new GUI({ title: '🕷️ HexaBOT Runtime' });
+
+            const fPreset = gui.addFolder('🎨 Presets de Ambiente');
+            fPreset.add(params, 'envPreset', ['Studio', 'Exterior Dia', 'Cyberpunk', 'Por do Sol']).name('Ambiente').onChange(updateEnvironment);
+
+            const fPosture = gui.addFolder('Postura Geral (IK)');
+            fPosture.add(params, 'stanceSpread', 0.5, 2.0, 0.01).name('Abertura Patas').listen().onChange(updateFootTargets);
+            const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
+            const cElevation = fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
+            fPosture.add(params, 'autoReachFallback').name('🛡️ Relaxamento Alcance (Auto)').listen();
+
+            cAdapt.onChange(v => {
+                cElevation.disable(v);
+            });
+
+            let sumL = 0;
+            legs.forEach(l => { sumL += (l.L1 + l.L2 + l.L3); });
+            const avgReach = legs.length > 0 ? (sumL / legs.length) : 7.5;
+            const maxY = Math.max(2.5, +(avgReach * 0.45).toFixed(2));
+            const maxShift = Math.max(2.0, +(avgReach * 0.35).toFixed(2));
+
+            const fBodyPos = gui.addFolder('Translação do Corpo');
+            fBodyPos.add(params, 'bodyPosY', 0.0, maxY, 0.01).name('Altura (Y)').listen();
+            fBodyPos.add(params, 'bodyPosX', -maxShift, maxShift, 0.01).name('Lateral (X)').listen();
+            fBodyPos.add(params, 'bodyPosZ', -maxShift, maxShift, 0.01).name('Frente/Trás (Z)').listen();
+
+            const fBodyRot = gui.addFolder('Rotação do Corpo');
+            fBodyRot.add(params, 'bodyPitch', -35, 35, 0.1).name('Pitch (Frente/Trás)').listen();
+            fBodyRot.add(params, 'bodyRoll', -35, 35, 0.1).name('Roll (Lateral)').listen();
+            fBodyRot.add(params, 'bodyYaw', -40, 40, 0.1).name('Yaw (Giro)').listen();
+
+            const fHead = gui.addFolder('👁️ Cabeça & Expressão');
+            fHead.add(params, 'irisE', 0.0, 1.0, 0.01).name('Íris Esquerda (IRIS_E)').listen().onChange(updateMorphTargets);
+            fHead.add(params, 'irisD', 0.0, 1.0, 0.01).name('Íris Direita (IRIS_D)').listen().onChange(updateMorphTargets);
+
+            const fDemo = gui.addFolder('Auto Balanço / Rebolado');
+            fDemo.add(params, 'autoSway').name('Ativar Balanço (Tecla A)').listen();
+            fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade').listen();
+            fDemo.add(params, 'swayHeightCenter', 0.2, maxY, 0.05).name('Altura Média').listen();
+            fDemo.add(params, 'swayHeightAmp', 0.0, Math.max(0.8, +(maxY * 0.4).toFixed(2)), 0.05).name('Amplitude Altura').listen();
+            fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll').listen();
+            fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw').listen();
+            fDemo.add(params, 'swayShift', 0.0, maxShift * 0.5, 0.05).name('Deslocamento X/Z').listen();
+
+            const fLights = gui.addFolder('💡 Iluminação & Reflexos');
+            const fEnv = fLights.addFolder('🌐 Reflexos Globais (IBL Room)');
+            fEnv.add(params, 'envIntensity', 0.0, 4.0, 0.05).name('Intensidade Reflexo').listen().onChange(updateEnvironment);
+            fEnv.add(params, 'envRotation', 0, 360, 1).name('Giro do Reflexo (°)').listen().onChange(updateEnvironment);
+            fEnv.open();
+            fLights.close();
+
+            const fVis = gui.addFolder('Exibição & Auxiliares');
+            fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
+            fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
+            fVis.add(params, 'ikEnabled').name('IK Habilitado');
+            fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
+                if (!params.xrayMode) skeletonLinesGroup.visible = v;
+            });
+            fVis.add(params, 'showFootTargets').name('Mostrar Âncoras Patas').onChange(v => {
+                if (!params.xrayMode) footTargetGroup.visible = v;
+            });
+            fVis.add(gridHelper, 'visible').name('Mostrar Grade');
+            fVis.close();
+
+            gui.add(params, 'resetPose').name('↺ Resetar Postura (Tecla R)');
+
+            fPosture.open();
+            fBodyPos.open();
+            fBodyRot.open();
+            fDemo.close();
+        }
+
+        // --- LOOP DE ATUALIZAÇÃO ---
+        function updateHexaBOT() {
+            if (legs.length === 0) return;
+
+            let currentElevation = params.coxaElevation;
+            if (params.adaptiveElevation) {
+                currentElevation = calculateAdaptiveElevation(params.bodyPosY);
+                params.coxaElevation = currentElevation;
+            }
+
+            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
+
+            const pitchRad = THREE.MathUtils.degToRad(params.bodyPitch);
+            const rollRad = THREE.MathUtils.degToRad(params.bodyRoll);
+            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw);
+            bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
+            bodyGroup.updateMatrixWorld(true);
+
+            let fallbackCount = 0;
+            for (let i = 0; i < legs.length; i++) {
+                if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
+                    fallbackCount++;
+                }
+            }
+
+            // Atualizar Gizmo Central
+            bodyGroup.getWorldPosition(_tempVecBc);
+            if (bodyGizmo) {
+                bodyGizmo.position.copy(_tempVecBc);
+                bodyGizmo.quaternion.copy(bodyGroup.quaternion);
+            }
+
+            // Atualizar Espinha Dorsal Central
+            if (bodySpineMesh && (skeletonLinesGroup.visible || params.xrayMode) && legs.length > 0) {
+                const posArray = [];
+                for (let i = 0; i < legs.length; i++) {
+                    legs[i].baseNode.getWorldPosition(_tempVec1);
+                    posArray.push(_tempVecBc.x, _tempVecBc.y, _tempVecBc.z);
+                    posArray.push(_tempVec1.x, _tempVec1.y, _tempVec1.z);
+                }
+                for (let i = 0; i < legs.length; i++) {
+                    const nextI = (i + 1) % legs.length;
+                    legs[i].baseNode.getWorldPosition(_tempVec1);
+                    legs[nextI].baseNode.getWorldPosition(_tempVec2);
+                    posArray.push(_tempVec1.x, _tempVec1.y, _tempVec1.z);
+                    posArray.push(_tempVec2.x, _tempVec2.y, _tempVec2.z);
+                }
+                bodySpineMesh.geometry.setPositions(posArray);
+            }
+
+            // Telemetria HUD
+            if (params.showTelemetry) {
+                document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
+                document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : ''}`;
+                const telFallback = document.getElementById('tel-fallback');
+                if (fallbackCount > 0) {
+                    telFallback.innerText = `⚠️ Ativo (${fallbackCount} patas)`;
+                    telFallback.style.color = '#ff0038';
+                } else {
+                    telFallback.innerText = 'Nominal (0)';
+                    telFallback.style.color = '#38bdf8';
+                }
+            }
+        }
+
+        // --- ATALHOS DE TECLADO ---
+        window.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+            if (e.key === 'x' || e.key === 'X') {
+                setXRayMode(!params.xrayMode);
+            } else if (e.key === 'i' || e.key === 'I') {
+                toggleTelemetry();
+            } else if (e.key === 'r' || e.key === 'R') {
+                resetPose();
+            } else if (e.key === 'a' || e.key === 'A') {
+                toggleAutoSway();
+            }
+        });
+
+        // --- DRAG AND DROP & INPUT DE ARQUIVOS ---
+        const fileInput = document.getElementById('file-input-hidden');
+        document.getElementById('btn-load-custom').addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => loadBotFromFile(e.target.files[0]));
+
+        const dropIndicator = document.getElementById('drop-indicator');
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropIndicator.classList.add('active');
+        });
+        window.addEventListener('dragleave', (e) => {
+            if (e.clientX <= 0 || e.clientY <= 0) {
+                dropIndicator.classList.remove('active');
+            }
+        });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropIndicator.classList.remove('active');
+            if (e.dataTransfer.files.length > 0) {
+                loadBotFromFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // --- ANIMAÇÃO E RENDER LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            if (params.autoSway) {
+                const t = elapsedTime * params.swaySpeed;
+                params.bodyPosY = params.swayHeightCenter + Math.sin(t * 1.5) * params.swayHeightAmp;
+                params.bodyPitch = Math.sin(t) * params.swayPitchRoll;
+                params.bodyRoll = Math.cos(t * 0.8) * params.swayPitchRoll;
+                params.bodyYaw = Math.sin(t * 0.6) * params.swayYaw;
+                params.bodyPosX = Math.sin(t * 0.7) * params.swayShift;
+                params.bodyPosZ = Math.cos(t * 0.5) * params.swayShift;
+            }
+
+            if (params.ikEnabled) {
+                updateHexaBOT();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            legLines.forEach(l => l.material.resolution.set(window.innerWidth, window.innerHeight));
+            if (bodySpineMesh) bodySpineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
+        });
+
+        // INICIALIZAÇÃO: Carregar modelo padrão
+        loadBotFromURL('./glb/aranha.glb');
+    </script>
+</body>
+</html>

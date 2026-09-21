@@ -327,6 +327,8 @@
             <p class="subtitle">Varredura inteligente de hierarquia via raízes <strong>D0 e E0</strong>. Solver IK Ortonormal de Giro Zero, preservação total de materiais PBR e nós acessórios.</p>
             
             <button class="btn-panel-importer" id="btn-open-importer">📦 Importar Novo Modelo (.glb)</button>
+            <button class="btn-panel-importer" id="btn-export-glb" style="background: linear-gradient(135deg, #10b981, #059669); margin-top: 8px;">💾 Baixar Modelo Calibrado (.glb)</button>
+            <button class="btn-panel-importer" id="btn-export-json" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); margin-top: 6px;">📄 Baixar Manifesto (.bot.json)</button>
 
             <div class="telemetry" id="telemetry-box" style="display: none;">
                 <div class="telemetry-row"><span>Criatura / Arquivo:</span> <strong id="tel-name" style="color: #38bdf8;">--</strong></div>
@@ -359,18 +361,22 @@
         </div>
 
         <div class="scan-info">
-            <div class="scan-info-title">⚡ Diagnóstico da Varredura</div>
-            <div id="scan-status">Pronto para escanear novo modelo.</div>
-            <div id="scan-details" style="color: #8b949e; margin-top: 4px;"></div>
+            <div class="scan-status" id="scan-status">Nenhum modelo carregado ainda</div>
+            <div style="font-size: 0.72rem; color: #8b949e; margin-top: 4px;" id="scan-details">Aguardando importação para iniciar o diagnóstico...</div>
         </div>
 
-        <button class="btn-quickload" id="btn-quickload-default">🚀 Carregar Modelo Padrão (aranha.glb)</button>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+            <button class="btn-quickload" id="btn-quickload-default">🚀 Carregar Aranha Padrão (aranha.glb)</button>
+            <button class="btn-quickload" id="btn-quickload-pernalonga" style="background: linear-gradient(135deg, #8957e5, #1f6feb);">🕷️ Carregar Aranha Pernalonga (aranha_pernalonga.glb)</button>
+            <button class="btn-quickload" id="btn-quickload-material2" style="background: linear-gradient(135deg, #f59e0b, #d97706);">🎨 Carregar Aranha Material 2 (aranha_material_2.glb)</button>
+        </div>
     </div>
 
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
         import { Line2 } from 'three/addons/lines/Line2.js';
         import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
@@ -590,6 +596,10 @@
         let bodyGizmo = null;
         let bodySpineMesh = null;
         let loadedCreatureName = 'aranha.glb';
+        let currentModelScene = null;
+        let currentBodyNodeName = 'Corpo Principal';
+        let currentAvgL1 = 2.36, currentAvgL2 = 2.16, currentAvgL3 = 2.80;
+        const detectedBlendshapes = [];
 
         const _tempVec1 = new THREE.Vector3();
         const _tempVec2 = new THREE.Vector3();
@@ -601,6 +611,7 @@
         // --- DETECTOR HIERÁRQUICO INTELIGENTE E AUTO-RIGGING ---
         function scanAndRigCreature(gltfScene, creatureName = 'Modelo 3D') {
             loadedCreatureName = creatureName;
+            currentModelScene = gltfScene;
 
             // 1. Limpeza de Estado Anterior
             while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
@@ -612,9 +623,20 @@
             targetMeshes.length = 0;
             legLines.length = 0;
             legJointGizmos.length = 0;
+            detectedBlendshapes.length = 0;
 
-            // 2. Adicionar o Modelo à Cena
+            // Detectar BlendShapes / Morph Targets no modelo
+            gltfScene.traverse((child) => {
+                if (child.isMesh && child.morphTargetDictionary) {
+                    Object.keys(child.morphTargetDictionary).forEach(k => {
+                        if (!detectedBlendshapes.includes(k)) detectedBlendshapes.push(k);
+                    });
+                }
+            });
+
+            // 2. Adicionar o Modelo à Cena e Sincronizar Matrizes
             bodyGroup.add(gltfScene);
+            bodyGroup.updateMatrixWorld(true);
 
             // 3. Descobrir todos os Sockets de Pernas (D0 e E0)
             const socketRegex = /^(D0|E0)[\_\-\(\s\d]|^Socket[\_\-\d]|^Hip[\_\-\d]|^LegSocket[\_\-\d]/i;
@@ -627,7 +649,8 @@
             });
 
             if (detectedSockets.length === 0) {
-                document.getElementById('scan-status').innerHTML = '❌ <strong style="color: #f85149;">Nenhum socket D0/E0 encontrado!</strong> Certifique-se de que os nós das pernas começam com D0 ou E0.';
+                const el = document.getElementById('scan-status');
+                if (el) el.innerHTML = '❌ <strong style="color: #f85149;">Nenhum socket D0/E0 encontrado!</strong> Certifique-se de que os nós das pernas começam com D0 ou E0.';
                 return;
             }
 
@@ -782,31 +805,56 @@
             calculateProceduralFootTargets();
 
             // Atualização de Diagnóstico e Telemetria
-            document.getElementById('scan-status').innerHTML = `✅ <strong style="color: #7ee787;">Rigging Realizado com Sucesso!</strong> (${legs.length} pernas conectadas)`;
-            document.getElementById('scan-details').innerHTML = `Corpo: <strong>${bodyNodeName}</strong> | Juntas: <strong>L1 = ${avgL1.toFixed(2)}m</strong>, <strong>L2 = ${avgL2.toFixed(2)}m</strong>, <strong>L3 = ${avgL3.toFixed(2)}m</strong>`;
+            const elScanStatus = document.getElementById('scan-status');
+            if (elScanStatus) elScanStatus.innerHTML = `✅ <strong style="color: #7ee787;">Rigging Realizado com Sucesso!</strong> (${legs.length} pernas conectadas)`;
+            const elScanDetails = document.getElementById('scan-details');
+            if (elScanDetails) elScanDetails.innerHTML = `Corpo: <strong>${bodyNodeName}</strong> | Juntas: <strong>L1 = ${avgL1.toFixed(2)}m</strong>, <strong>L2 = ${avgL2.toFixed(2)}m</strong>, <strong>L3 = ${avgL3.toFixed(2)}m</strong>`;
             
-            document.getElementById('tel-name').innerText = loadedCreatureName;
-            document.getElementById('tel-legs').innerText = legs.length;
-            document.getElementById('tel-body').innerText = bodyNodeName;
-            document.getElementById('tel-dims').innerText = `${avgL1.toFixed(2)} / ${avgL2.toFixed(2)} / ${avgL3.toFixed(2)} m`;
-            document.getElementById('tel-reach').innerText = `${(avgL1 + avgL2 + avgL3).toFixed(2)} m`;
+            const elTelName = document.getElementById('tel-name');
+            if (elTelName) elTelName.innerText = loadedCreatureName;
+            const elTelLegs = document.getElementById('tel-legs');
+            if (elTelLegs) elTelLegs.innerText = legs.length;
+            const elTelBody = document.getElementById('tel-body');
+            if (elTelBody) elTelBody.innerText = bodyNodeName;
+            const elTelDims = document.getElementById('tel-dims');
+            if (elTelDims) elTelDims.innerText = `${avgL1.toFixed(2)} / ${avgL2.toFixed(2)} / ${avgL3.toFixed(2)} m`;
+            const elTelReach = document.getElementById('tel-reach');
+            if (elTelReach) elTelReach.innerText = `${(avgL1 + avgL2 + avgL3).toFixed(2)} m`;
+
+            currentBodyNodeName = bodyNodeName;
+            currentAvgL1 = avgL1;
+            currentAvgL2 = avgL2;
+            currentAvgL3 = avgL3;
+
+            const totalReach = avgL1 + avgL2 + avgL3;
+            const recommendedHeight = +(Math.max(0.8, Math.min(3.5, totalReach * 0.18))).toFixed(2);
+            params.bodyPosY = recommendedHeight;
+            params.swayHeightCenter = recommendedHeight;
 
             document.getElementById('importer-modal').classList.remove('active');
             updateEnvironment();
             initGUI();
         }
 
+        const _qInvBody = new THREE.Quaternion();
+
         // --- CÁLCULO PROCEDURAL DE ÂNCORAS RADIAIS ($P_3$) NO CHÃO ---
         function calculateProceduralFootTargets() {
             footTargets.length = 0;
             bodyGroup.getWorldPosition(_tempVecBc);
+            bodyGroup.getWorldQuaternion(_qInvBody);
+            _qInvBody.invert();
 
             legs.forEach((leg, index) => {
                 leg.baseNode.getWorldPosition(_tempVec1);
 
+                // Vetor do socket relativo ao corpo no espaço neutro sem rotação
+                const relVec = new THREE.Vector3().subVectors(_tempVec1, _tempVecBc);
+                relVec.applyQuaternion(_qInvBody);
+
                 const stanceReach = (leg.L1 * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (leg.L2 + leg.L3)) * params.stanceSpread;
 
-                const dirH = new THREE.Vector2(_tempVec1.x - _tempVecBc.x, _tempVec1.z - _tempVecBc.z);
+                const dirH = new THREE.Vector2(relVec.x, relVec.z);
                 if (dirH.length() < 0.01) {
                     const angle = (index / legs.length) * Math.PI * 2;
                     dirH.set(Math.sin(angle), Math.cos(angle));
@@ -814,7 +862,7 @@
                     dirH.normalize();
                 }
 
-                const baseDist = new THREE.Vector2(_tempVec1.x - _tempVecBc.x, _tempVec1.z - _tempVecBc.z).length();
+                const baseDist = new THREE.Vector2(relVec.x, relVec.z).length();
                 const totalRadialDist = baseDist + stanceReach;
 
                 const targetWorldPos = new THREE.Vector3(
@@ -829,6 +877,119 @@
                     targetMeshes[index].position.copy(targetWorldPos);
                 }
             });
+        }
+
+        // --- FUNÇÕES DE EXPORTAÇÃO DE MANIFESTO E MODELO (.GLB) ---
+        function getBotManifest() {
+            if (!currentModelScene || legs.length === 0) return null;
+
+            // Altura de repouso configurada (ou centro de balanço se o auto-sway estiver ligado)
+            const defaultRestHeight = params.autoSway ? params.swayHeightCenter : params.bodyPosY;
+
+            // Recalcular as âncoras exatas com o stanceSpread configurado
+            calculateProceduralFootTargets();
+
+            return {
+                manifestVersion: "1.0",
+                name: loadedCreatureName || "Criatura 3D",
+                exportedAt: new Date().toISOString(),
+                generator: "HexaBOT Rigging Workshop (index2)",
+                anatomy: {
+                    bodyNodeName: currentBodyNodeName,
+                    legCount: legs.length,
+                    legs: legs.map((leg, i) => ({
+                        id: leg.id,
+                        side: leg.side,
+                        socketName: leg.baseNode ? leg.baseNode.name : "",
+                        j1Name: leg.j1Node ? leg.j1Node.name : "",
+                        j2Name: leg.j2Node ? leg.j2Node.name : "",
+                        j3Name: leg.j3Node ? leg.j3Node.name : "",
+                        L1: parseFloat(leg.L1.toFixed(4)),
+                        L2: parseFloat(leg.L2.toFixed(4)),
+                        L3: parseFloat(leg.L3.toFixed(4)),
+                        defaultFootTarget: footTargets[i] ? [
+                            parseFloat(footTargets[i].x.toFixed(4)),
+                            0.0,
+                            parseFloat(footTargets[i].z.toFixed(4))
+                        ] : [0, 0, 0]
+                    })),
+                    averages: {
+                        L1: parseFloat(currentAvgL1.toFixed(4)),
+                        L2: parseFloat(currentAvgL2.toFixed(4)),
+                        L3: parseFloat(currentAvgL3.toFixed(4)),
+                        totalReach: parseFloat((currentAvgL1 + currentAvgL2 + currentAvgL3).toFixed(4))
+                    }
+                },
+                calibration: {
+                    defaultHeight: parseFloat(defaultRestHeight.toFixed(4)),
+                    stanceSpread: parseFloat(params.stanceSpread.toFixed(4)),
+                    coxaElevation: parseFloat(params.coxaElevation.toFixed(2)),
+                    adaptiveElevation: params.adaptiveElevation,
+                    autoReachFallback: params.autoReachFallback,
+                    elevationCurve: {
+                        yMin: 0.0, degAtMin: 45.0,
+                        yMid: 1.3, degAtMid: 35.0,
+                        yMax: 2.5, degAtMax: 5.0
+                    },
+                    swayDefaults: {
+                        speed: parseFloat(params.swaySpeed.toFixed(2)),
+                        heightCenter: parseFloat(params.swayHeightCenter.toFixed(4)),
+                        heightAmp: parseFloat(params.swayHeightAmp.toFixed(4)),
+                        pitchRoll: parseFloat(params.swayPitchRoll.toFixed(2)),
+                        yaw: parseFloat(params.swayYaw.toFixed(2)),
+                        shift: parseFloat(params.swayShift.toFixed(4))
+                    }
+                },
+                blendshapes: detectedBlendshapes
+            };
+        }
+
+        function downloadBlob(blob, filename) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        }
+
+        function exportBotJSON() {
+            const manifest = getBotManifest();
+            if (!manifest) {
+                alert('Nenhum modelo escaneado para exportar!');
+                return;
+            }
+            const jsonStr = JSON.stringify(manifest, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const cleanName = (loadedCreatureName || 'bot').replace(/\.[^/.]+$/, "").replace(/[\s\(\)]+/g, '_').toLowerCase();
+            downloadBlob(blob, `${cleanName}.bot.json`);
+        }
+
+        function exportBotGLB() {
+            if (!currentModelScene || legs.length === 0) {
+                alert('Nenhum modelo escaneado para exportar!');
+                return;
+            }
+
+            const manifest = getBotManifest();
+            currentModelScene.userData.botManifest = manifest;
+
+            const exporter = new GLTFExporter();
+            const cleanName = (loadedCreatureName || 'bot').replace(/\.[^/.]+$/, "").replace(/[\s\(\)]+/g, '_').toLowerCase();
+
+            exporter.parse(
+                currentModelScene,
+                (result) => {
+                    const blob = new Blob([result], { type: 'model/gltf-binary' });
+                    downloadBlob(blob, `${cleanName}_calibrado.glb`);
+                },
+                (error) => {
+                    console.error('Erro ao exportar GLB:', error);
+                    alert('Erro ao exportar modelo GLB.');
+                },
+                { binary: true }
+            );
         }
 
         // --- CURVA ADAPTATIVA DE ELEVAÇÃO DA COXA ---
@@ -1035,7 +1196,26 @@
             return isFallbackActive;
         }
 
+        function updateAllGuiDisplays() {
+            if (!gui) return;
+            if (typeof gui.controllersRecursive === 'function') {
+                gui.controllersRecursive().forEach(c => c.updateDisplay());
+            } else {
+                const updateFolder = (f) => {
+                    f.controllers.forEach(c => c.updateDisplay());
+                    f.folders.forEach(updateFolder);
+                };
+                updateFolder(gui);
+            }
+        }
+
+        function toggleAutoSway(val) {
+            params.autoSway = (val !== undefined) ? val : !params.autoSway;
+            updateAllGuiDisplays();
+        }
+
         function resetPose() {
+            params.autoSway = false;
             params.bodyPosY = 1.10;
             params.bodyPosX = 0.0;
             params.bodyPosZ = 0.0;
@@ -1046,9 +1226,15 @@
             params.adaptiveElevation = true;
             params.autoReachFallback = true;
             params.stanceSpread = 1.0;
-            params.autoSway = false;
+            
+            // ATUALIZAR TRANSFORMAÇÃO DO CORPO ANTES DO CÁLCULO PROCEDURAL DAS PATAS
+            bodyGroup.position.set(0.0, 1.10, 0.0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
             calculateProceduralFootTargets();
-            if (gui) gui.controllers.forEach(c => c.updateDisplay());
+            if (typeof updateHexaBOT === 'function') updateHexaBOT();
+            updateAllGuiDisplays();
         }
 
         // --- LOOP DE ATUALIZAÇÃO ---
@@ -1125,10 +1311,14 @@
                 cElevation.disable(v);
             });
 
+            const totalReach = (currentAvgL1 + currentAvgL2 + currentAvgL3) || 7.5;
+            const maxY = Math.max(2.5, +(totalReach * 0.45).toFixed(2));
+            const maxShift = Math.max(2.0, +(totalReach * 0.35).toFixed(2));
+
             const fBodyPos = gui.addFolder('Translação do Corpo');
-            fBodyPos.add(params, 'bodyPosY', 0.0, 2.5, 0.01).name('Altura (Y)').listen();
-            fBodyPos.add(params, 'bodyPosX', -2.0, 2.0, 0.01).name('Lateral (X)').listen();
-            fBodyPos.add(params, 'bodyPosZ', -2.0, 2.0, 0.01).name('Frente/Trás (Z)').listen();
+            fBodyPos.add(params, 'bodyPosY', 0.0, maxY, 0.01).name('Altura (Y)').listen();
+            fBodyPos.add(params, 'bodyPosX', -maxShift, maxShift, 0.01).name('Lateral (X)').listen();
+            fBodyPos.add(params, 'bodyPosZ', -maxShift, maxShift, 0.01).name('Frente/Trás (Z)').listen();
 
             const fBodyRot = gui.addFolder('Rotação do Corpo');
             fBodyRot.add(params, 'bodyPitch', -35, 35, 0.1).name('Pitch (Frente/Trás)').listen();
@@ -1136,13 +1326,13 @@
             fBodyRot.add(params, 'bodyYaw', -40, 40, 0.1).name('Yaw (Giro)').listen();
 
             const fDemo = gui.addFolder('Auto Balanço / Rebolado');
-            fDemo.add(params, 'autoSway').name('Ativar Balanço').listen();
+            fDemo.add(params, 'autoSway').name('Ativar Balanço (Tecla A)').listen();
             fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade');
-            fDemo.add(params, 'swayHeightCenter', 0.2, 1.8, 0.05).name('Altura Média');
-            fDemo.add(params, 'swayHeightAmp', 0.0, 0.8, 0.05).name('Amplitude Altura');
+            fDemo.add(params, 'swayHeightCenter', 0.2, maxY, 0.05).name('Altura Média');
+            fDemo.add(params, 'swayHeightAmp', 0.0, Math.max(0.8, +(maxY * 0.4).toFixed(2)), 0.05).name('Amplitude Altura');
             fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll');
             fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw');
-            fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
+            fDemo.add(params, 'swayShift', 0.0, maxShift * 0.5, 0.05).name('Deslocamento X/Z');
 
             const fLights = gui.addFolder('💡 Iluminação & Reflexos');
             const fEnv = fLights.addFolder('🌐 Reflexos Globais (IBL Room)');
@@ -1164,7 +1354,12 @@
             fVis.add(gridHelper, 'visible').name('Mostrar Grade');
             fVis.close();
 
-            gui.add(params, 'resetPose').name('↺ Resetar Postura');
+            gui.add(params, 'resetPose').name('↺ Resetar Postura (Tecla R)');
+
+            const fExport = gui.addFolder('💾 Exportar Modelo Calibrado');
+            fExport.add({ exportGLB: () => exportBotGLB() }, 'exportGLB').name('📦 Baixar .glb (Com Manifesto)');
+            fExport.add({ exportJSON: () => exportBotJSON() }, 'exportJSON').name('📄 Baixar Manifesto .bot.json');
+            fExport.close();
 
             fLab.open();
             fPosture.open();
@@ -1180,7 +1375,7 @@
         function loadModelFile(file) {
             if (!file) return;
             const statusBox = document.getElementById('scan-status');
-            statusBox.innerHTML = `⏳ Analisando e escaneando <strong>${file.name}</strong>...`;
+            if (statusBox) statusBox.innerHTML = `⏳ Analisando e escaneando <strong>${file.name}</strong>...`;
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -1188,7 +1383,7 @@
                 gltfLoader.parse(arrayBuffer, '', (gltf) => {
                     scanAndRigCreature(gltf.scene, file.name);
                 }, (err) => {
-                    statusBox.innerHTML = `❌ Erro ao analisar GLTF: ${err.message}`;
+                    if (statusBox) statusBox.innerHTML = `❌ Erro ao analisar GLTF: ${err.message}`;
                     console.error(err);
                 });
             };
@@ -1221,29 +1416,65 @@
             document.getElementById('importer-modal').classList.remove('active');
         });
 
-        // --- CARREGAMENTO DO MODELO PADRÃO ARANHA.GLB ---
-        function loadDefaultModel() {
-            const statusBox = document.getElementById('scan-status');
-            statusBox.innerHTML = '⏳ Carregando <code>./glb/aranha.glb</code>...';
+        const btnExportGLB = document.getElementById('btn-export-glb');
+        if (btnExportGLB) btnExportGLB.addEventListener('click', exportBotGLB);
 
-            gltfLoader.load('./glb/aranha.glb', (gltf) => {
-                scanAndRigCreature(gltf.scene, 'aranha.glb (Padrão)');
+        const btnExportJSON = document.getElementById('btn-export-json');
+        if (btnExportJSON) btnExportJSON.addEventListener('click', exportBotJSON);
+
+        // --- CARREGAMENTO DE MODELOS (URL / ARQUIVO) ---
+        function loadModelFromURL(url, displayName = null) {
+            const statusBox = document.getElementById('scan-status');
+            const name = displayName || url.split('/').pop();
+            if (statusBox) statusBox.innerHTML = `⏳ Carregando <code>${url}</code>...`;
+
+            gltfLoader.load(url, (gltf) => {
+                scanAndRigCreature(gltf.scene, name);
             }, undefined, (err) => {
-                statusBox.innerHTML = `❌ Falha ao carregar ./glb/aranha.glb: ${err.message}`;
+                if (statusBox) statusBox.innerHTML = `❌ Falha ao carregar ${url}: ${err.message}`;
                 console.error(err);
             });
         }
 
-        document.getElementById('btn-quickload-default').addEventListener('click', loadDefaultModel);
+        function loadDefaultModel() {
+            loadModelFromURL('./glb/aranha.glb', 'aranha.glb (Padrão)');
+        }
+
+        const btnQuickDefault = document.getElementById('btn-quickload-default');
+        if (btnQuickDefault) btnQuickDefault.addEventListener('click', loadDefaultModel);
+
+        const btnQuickPernalonga = document.getElementById('btn-quickload-pernalonga');
+        if (btnQuickPernalonga) btnQuickPernalonga.addEventListener('click', () => {
+            loadModelFromURL('./glb/aranha_pernalonga.glb', 'aranha_pernalonga.glb (Pernalonga)');
+        });
+
+        const btnQuickMat2 = document.getElementById('btn-quickload-material2');
+        if (btnQuickMat2) btnQuickMat2.addEventListener('click', () => {
+            loadModelFromURL('./glb/aranha_material_2.glb', 'aranha_material_2.glb (Material 2)');
+        });
+
+        // Drag and drop global na janela
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) {
+                loadModelFile(e.dataTransfer.files[0]);
+            }
+        });
 
         // --- ATALHOS DE TECLADO ---
         window.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
             if (e.key === 'x' || e.key === 'X') {
                 setXRayMode(!params.xrayMode);
             } else if (e.key === 'i' || e.key === 'I') {
                 toggleTelemetry();
             } else if (e.key === 'r' || e.key === 'R') {
                 resetPose();
+            } else if (e.key === 'a' || e.key === 'A') {
+                toggleAutoSway();
             }
         });
 

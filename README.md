@@ -6,23 +6,31 @@ Simulador 3D interativo de robótica biomecânica em **Three.js** com cinemátic
 
 ## 🌟 Visão Geral & Módulos
 
-O projeto é dividido em dois ambientes complementares:
+O ecossistema é estruturado em três ambientes complementares:
 
-### 1. 🤖 `index.html` — Simulador Calibrado HexaBOT
-* Ambiente especializado e calibrado para o modelo hexápode **HexaBOT** (`aranha.glb` / `aranha_material_2.glb`).
+### 1. 🤖 `index.html` — Simulador Clássico HexaBOT
+* Ambiente especializado para o modelo hexápode **HexaBOT** (`aranha.glb` / `aranha_material_2.glb`).
 * Curva de elevação adaptativa com interpolação hermítica (Smoothstep) para a coxa.
 * Controle de postura estática (Posição X/Y/Z, Rotação Pitch/Yaw/Roll, Altura).
 * Balanço orgânico procedural contínuo (*Auto-Sway / Rebolado*).
 * Controle de BlendShapes faciais (`IRIS_E` e `IRIS_D`).
-* Ajuste dinâmico de abertura das âncoras das patas no solo (*Spread Factor*).
 
-### 2. 🧬 `index2.html` — Universal Creature Auto-Rigging & IK Engine
+### 2. 🔬 `index2.html` — Oficina de Rigging & Exportador de Bots (.glb / .bot.json)
 * **Laboratório Universal de Criaturas**: Importe qualquer modelo 3D GLB/glTF via *Drag-and-Drop* ou seletor de arquivos.
 * **Auto-Rigging & Detecção Hierárquica**:
   - Varredura inteligente de sockets de pernas via Regex (`D0/E0`, `Socket`, `Hip`, `LegSocket`, etc.).
   - Medição métrica automática dos comprimentos nativos das juntas no espaço 3D ($L_1, L_2, L_3$).
   - Geração procedural e paramétrica das âncoras de contato proporcionais à anatomia do modelo.
-  - Reconstrução dinâmica da espinha dorsal central esquelética.
+* **Exportação Não-Intrusiva**:
+  - 💾 **Baixar Modelo .glb (Com Manifesto)**: Empacota a malha 3D com o manifesto completo gravado no chunk `userData.botManifest` (100% compatível com Blender e visualizadores 3D padrão).
+  - 📄 **Baixar Manifesto .bot.json**: Exporta a receita de calibração avulsa em JSON.
+
+### 3. 🚀 `index3.html` — Runtime / Simulador de Produção (Consumidor de Manifesto)
+* **Simulador de Produção de Alta Precisão**:
+  - Carrega qualquer `.glb` calibrado ou `.bot.json` e constrói a cinemática inversa diretamente das dimensões e âncoras personalizadas do manifesto.
+  - **Travamento Milimétrico das Âncoras**: Elimina qualquer folga ou desvio entre a ponta da tíbia ($P_3$) e a âncora no solo.
+  - Interface moderna com iluminação PBR HDR (*RoomEnvironment*), atalhos de teclado (`X`, `I`, `A`, `R`), telemetria HUD e BlendShapes.
+  - Suporta *Drag-and-Drop* de arquivos para troca imediata de criaturas em tempo de execução.
 
 ---
 
@@ -70,6 +78,7 @@ O projeto é dividido em dois ambientes complementares:
 | :---: | :--- |
 | **`X`** | Alternar **Modo X-Ray** (Visão esquelética / biomecânica) |
 | **`I`** | Alternar **Painel de Telemetria / Métricas HUD** |
+| **`A`** | Ativar / Desativar **Auto-Balanço (Rebolado)** |
 | **`R`** | **Resetar Postura** para os valores nominais padrão |
 
 ---
@@ -81,8 +90,9 @@ O projeto é dividido em dois ambientes complementares:
 │   ├── aranha.glb               # Modelo 3D base da Aranha HexaBOT
 │   ├── aranha_material.glb      # Variação de materiais e texturas
 │   └── aranha_material_2.glb    # Modelo em alta resolução com blendshapes
-├── index.html                   # Aplicação principal (HexaBOT calibrado)
-├── index2.html                  # Motor universal de Auto-Rig e IK para qualquer GLTF/GLB
+├── index.html                   # Simulador clássico (HexaBOT calibrado)
+├── index2.html                  # Oficina de Auto-Rig e Exportador de Bots (.glb / .bot.json)
+├── index3.html                  # Runtime de Produção orientado a Modelos Calibrados
 └── README.md                    # Documentação do projeto
 ```
 
@@ -97,8 +107,9 @@ Por utilizar carregamento dinâmico de modelos GLB e módulos ES6 via CDN, execu
 python -m http.server 8080
 ```
 Acesse em seu navegador:
-* `http://localhost:8080/index.html` (HexaBOT)
-* `http://localhost:8080/index2.html` (Universal Auto-Rigging Lab)
+* `http://localhost:8080/index.html` (HexaBOT Clássico)
+* `http://localhost:8080/index2.html` (Oficina de Rigging & Exportador)
+* `http://localhost:8080/index3.html` (Runtime de Produção com Manifesto)
 
 ### Com Node.js (`npx serve` ou `live-server`):
 ```bash
@@ -112,5 +123,6 @@ npx serve .
 * **[Three.js (r160)](https://threejs.org/)**: Motor gráfico 3D WebGL / PBR.
 * **`three/addons/lines/Line2.js` & `LineMaterial.js`**: Renderização de linhas esqueléticas espessas com anti-aliasing.
 * **`three/addons/environments/RoomEnvironment.js`**: Geração de mapa de ambiente HDR procedural.
+* **`three/addons/exporters/GLTFExporter.js`**: Exportação de modelos `.glb` auto-contidos com metadados embutidos.
 * **[lil-gui (v0.19.1)](https://lil-gui.georgealways.com/)**: Painel de controle paramétrico em tempo real.
 * **GLTFLoader** & **OrbitControls**: Carregamento e navegação 3D orbital suave.
