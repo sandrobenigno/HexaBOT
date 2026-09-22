@@ -417,8 +417,12 @@
                         <input type="range" id="slider-height" min="0.10" max="2.50" step="0.05" value="1.70" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">3.5x</strong></span>
-                        <input type="range" id="slider-pivot-speed" min="1.0" max="8.0" step="0.5" value="3.5" style="width: 130px; cursor: pointer;">
+                        <span>Velocidade de Avanço: <strong id="lbl-move-speed" style="color: #38bdf8;">10.0 m/s</strong></span>
+                        <input type="range" id="slider-move-speed" min="4.0" max="16.0" step="0.5" value="10.0" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">8.0x</strong></span>
+                        <input type="range" id="slider-pivot-speed" min="1.0" max="10.0" step="0.5" value="8.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
@@ -664,18 +668,30 @@
             // Postura Original Calibrada
             stanceSpread: 1.10, // Abertura padrão 1.10x
             bodyHeight: 1.70,   // Altura padrão do corpo (1.70m)
-            pivotSpeed: 3.5,    // Multiplicador da velocidade do pivô (slider)
+            pivotSpeed: 8.0,    // Multiplicador da velocidade do pivô (slider, padrão 8.0x)
 
             // Controle de Marcha Tripé (Escala 1:1)
             isMoving: false,
             isTurningInPlace: false,
             turnDir: 0,
-            moveSpeed: 6.5,     // Velocidade de avanço em m/s
+            moveSpeed: 10.0,    // Velocidade de avanço (10 m/s em Full Battery)
             stepTurnAngle: 16.0 * (Math.PI / 180.0), // 16 graus por passada de pivô
             stepHeight: 0.50,   // Altura do arco do passo (0.50m)
-            strideLength: 1.80, // Alcance do passo (1.80m)
-            gaitProgress: 0,    // 0.0 a 1.0 (ciclo do passo atual)
+            strideLength: 2.00, // Alcance do passo (2.00m)
+            
+            // Dinâmica Reativa de Proximidade do Alvo (Pitch, Elevação e Recuo Logarítmico)
+            dynPitch: 0,
+            dynLift: 0,
+            dynShiftZ: 0,
+
+            // Estado do Passo Ativo (Corpo move pelas âncoras, pés nunca deslizam)
+            isStepActive: false,
+            gaitProgress: 0,    // 0.0 a 1.0
             activeTripodGroup: 0, // 0: Grupo A (FR, ML, BR), 1: Grupo B (FL, MR, BL)
+            phaseStartPos: new THREE.Vector2(0, 0),
+            phaseEndPos: new THREE.Vector2(0, 0),
+            phaseStartHeading: 0,
+            phaseEndHeading: 0,
 
             // Câmera Tática a 45°
             travelHeading: 0,
@@ -1035,10 +1051,12 @@
         // --- CONTROLES DOS SLIDERS DO HUD ---
         const sliderSpread = document.getElementById('slider-spread');
         const sliderHeight = document.getElementById('slider-height');
+        const sliderMoveSpeed = document.getElementById('slider-move-speed');
         const sliderPivotSpeed = document.getElementById('slider-pivot-speed');
         const sliderZoom = document.getElementById('slider-zoom');
         const lblSpread = document.getElementById('lbl-spread');
         const lblHeight = document.getElementById('lbl-height');
+        const lblMoveSpeed = document.getElementById('lbl-move-speed');
         const lblPivotSpeed = document.getElementById('lbl-pivot-speed');
         const lblZoom = document.getElementById('lbl-zoom');
 
@@ -1057,6 +1075,14 @@
                 walkerState.bodyHeight = val;
                 if (lblHeight) lblHeight.innerText = `${val.toFixed(2)}m`;
                 updateAllLegNominalOffsets();
+            });
+        }
+
+        if (sliderMoveSpeed) {
+            sliderMoveSpeed.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.moveSpeed = val;
+                if (lblMoveSpeed) lblMoveSpeed.innerText = `${val.toFixed(1)} m/s`;
             });
         }
 
@@ -1141,6 +1167,7 @@
             walkerState.torsoYaw = 0;
             walkerState.travelHeading = 0;
             walkerState.camAzimuth = Math.PI;
+            walkerState.isStepActive = false;
             walkerState.gaitProgress = 0;
             walkerState.activeTripodGroup = 0;
             
@@ -1165,11 +1192,6 @@
                 walkerState.aimWorldPoint.copy(groundHit);
             }
 
-            // Atualizar Linha Laser do Focinho/Canhão até a Mira
-            const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
-            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.1, walkerState.aimWorldPoint.z);
-            laserLine.geometry.setFromPoints([snoutPos, laserHit]);
-
             // 2. ENTRADA DE MOVIMENTO (WASD)
             let moveFwd = 0;
             let moveSide = 0;
@@ -1180,13 +1202,9 @@
 
             walkerState.isMoving = (moveFwd !== 0 || moveSide !== 0);
 
-            // 3. MIRA EM DOIS NÍVEIS (DUAL-TIER AIMING)
-            const bodyWorldPos = new THREE.Vector3();
-            bodyGroup.getWorldPosition(bodyWorldPos);
-
-            const toAimX = walkerState.aimWorldPoint.x - bodyWorldPos.x;
-            const toAimZ = walkerState.aimWorldPoint.z - bodyWorldPos.z;
-            const targetAimAngle = Math.atan2(toAimX, toAimZ);
+            // 3. MIRA EM DOIS NÍVEIS (DUAL-TIER AIMING) E REAÇÃO DE PROXIMIDADE
+            const toAimDistH = Math.hypot(walkerState.aimWorldPoint.x - walkerState.posX, walkerState.aimWorldPoint.z - walkerState.posZ);
+            const targetAimAngle = Math.atan2(walkerState.aimWorldPoint.x - walkerState.posX, walkerState.aimWorldPoint.z - walkerState.posZ);
 
             let deltaAngle = targetAimAngle - walkerState.baseHeading;
             deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle)); // Normalizado [-PI, PI]
@@ -1205,11 +1223,34 @@
                 walkerState.turnDir = Math.sign(deltaAngle);
             }
 
-            // 4. SEQUENCIADOR DE MARCHA TRIPÉ PROCEDURAL
-            const isGaitActive = walkerState.isMoving || walkerState.isTurningInPlace;
-            document.getElementById('gait-state-text').innerText = isGaitActive 
-                ? (walkerState.isMoving ? 'AVANÇANDO' : 'PIVÔ NO PRÓPRIO EIXO') 
-                : 'ESTÁTICO (ZONA DE CONFORTO)';
+            // --- CURVA LOGARÍTMICA DE PROXIMIDADE (Forte de perto, suave à distância) ---
+            const proxThreshold = 16.0; // raio de proximidade de 16m
+            const proxLinear = THREE.MathUtils.clamp((proxThreshold - toAimDistH) / proxThreshold, 0.0, 1.0);
+            const proxLog = Math.log(1.0 + 9.0 * proxLinear) / Math.log(10.0); // 0.0 a 1.0 logarítmico
+
+            // Elevação do corpo (sobe a altura com o alvo muito próximo)
+            const targetLift = proxLog * 0.85; // até +0.85m
+
+            // Recuo do corpo para trás no eixo Z local (-Z)
+            const targetShiftZ = -proxLog * 0.95; // até -0.95m para trás
+
+            // Pitch dinâmico do robô acompanhando o alvo em relação ao solo
+            const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
+            const effectiveBodyY = walkerState.bodyHeight + targetLift;
+            const aimRelY = walkerState.aimWorldPoint.y - currentTerrainY;
+            const heightDiff = effectiveBodyY - aimRelY;
+            const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.0));
+            const targetPitch = pitchDownAngle * proxLog * 0.90;
+
+            // Suavização das variáveis dinâmicas (Damp)
+            walkerState.dynLift = THREE.MathUtils.damp(walkerState.dynLift || 0, targetLift, 8.0, dt);
+            walkerState.dynShiftZ = THREE.MathUtils.damp(walkerState.dynShiftZ || 0, targetShiftZ, 8.0, dt);
+            walkerState.dynPitch = THREE.MathUtils.damp(walkerState.dynPitch || 0, targetPitch, 8.0, dt);
+
+            // 4. SEQUENCIADOR DE MARCHA TRIPÉ PROCEDURAL (O CORPO SE MOVE PELAS ÂNCORAS DE APOIO)
+            const wantsMove = walkerState.isMoving;
+            const wantsTurn = walkerState.isTurningInPlace;
+            const wantsGait = wantsMove || wantsTurn;
 
             // Vetor de Deslocamento Global
             const moveVec = new THREE.Vector3();
@@ -1221,117 +1262,150 @@
                 walkerState.travelHeading = walkerState.baseHeading;
             }
 
+            const isGaitActive = wantsGait || walkerState.isStepActive;
+            document.getElementById('gait-state-text').innerText = isGaitActive 
+                ? (wantsMove ? 'AVANÇANDO' : 'PIVÔ NO PRÓPRIO EIXO') 
+                : 'ESTÁTICO (ZONA DE CONFORTO)';
+
             if (isGaitActive) {
-                const stepSpeed = walkerState.isMoving ? 2.8 : (2.4 * (walkerState.pivotSpeed / 2.5));
-                walkerState.gaitProgress += dt * stepSpeed;
-
-                // Deslocar a base gradualmente durante o ciclo
-                if (walkerState.isMoving) {
-                    const stepDistance = walkerState.moveSpeed * dt;
-                    walkerState.posX += moveVec.x * stepDistance;
-                    walkerState.posZ += moveVec.z * stepDistance;
-                }
-
-                if (walkerState.isTurningInPlace) {
-                    const turnRate = (walkerState.stepTurnAngle * walkerState.pivotSpeed);
-                    walkerState.baseHeading += walkerState.turnDir * turnRate * dt;
-                }
-
-                if (walkerState.gaitProgress >= 1.0) {
+                // Iniciar um novo meio-passo de tripé se não houver um em andamento
+                if (!walkerState.isStepActive) {
+                    walkerState.isStepActive = true;
                     walkerState.gaitProgress = 0;
+
+                    // Posição e Rumo de Início do Passo
+                    walkerState.phaseStartPos.set(walkerState.posX, walkerState.posZ);
+                    walkerState.phaseStartHeading = walkerState.baseHeading;
+
+                    // Calcular Rumo de Fim do Passo
+                    let deltaH = 0;
+                    if (wantsTurn) {
+                        deltaH = walkerState.turnDir * walkerState.stepTurnAngle;
+                    }
+                    walkerState.phaseEndHeading = walkerState.phaseStartHeading + deltaH;
+
+                    // Calcular Posição de Fim do Passo
+                    const stepMove = new THREE.Vector2(0, 0);
+                    if (wantsMove) {
+                        stepMove.set(moveVec.x, moveVec.z).normalize().multiplyScalar(walkerState.strideLength);
+                    }
+                    walkerState.phaseEndPos.copy(walkerState.phaseStartPos).add(stepMove);
+
+                    // Inicializar Pernas que vão executar Swing (no ar)
+                    const activeGroup = walkerState.activeTripodGroup;
+                    legs.forEach((leg) => {
+                        if (leg.group === activeGroup) {
+                            leg.isStepping = true;
+                            leg.stepStartTarget.copy(leg.currentTarget);
+
+                            const endCenter = new THREE.Vector3(walkerState.phaseEndPos.x, 0, walkerState.phaseEndPos.y);
+                            const nominalLanding = leg.nominalOffset.clone()
+                                .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.phaseEndHeading)
+                                .add(endCenter);
+
+                            // Projeção dinâmica na direção de avanço
+                            if (wantsMove) {
+                                nominalLanding.x += moveVec.x * (walkerState.strideLength * 0.4);
+                                nominalLanding.z += moveVec.z * (walkerState.strideLength * 0.4);
+                            }
+
+                            nominalLanding.y = getTerrainHeight(nominalLanding.x, nominalLanding.z);
+                            leg.stepEndTarget.copy(nominalLanding);
+                        } else {
+                            leg.isStepping = false;
+                        }
+                    });
+                }
+
+                // Cadência do Passo
+                const stepCadence = wantsMove 
+                    ? (walkerState.moveSpeed / walkerState.strideLength * 0.85)
+                    : (2.0 * (walkerState.pivotSpeed / 4.0));
+
+                walkerState.gaitProgress += dt * stepCadence;
+                const t = THREE.MathUtils.clamp(walkerState.gaitProgress, 0, 1);
+                const smoothT = THREE.MathUtils.smoothstep(t, 0, 1);
+
+                // O CORPO AVANÇA E GIRA IMPULSIONADO PELAS ÂNCORAS DE APOIO (STANCE)
+                walkerState.posX = THREE.MathUtils.lerp(walkerState.phaseStartPos.x, walkerState.phaseEndPos.x, smoothT);
+                walkerState.posZ = THREE.MathUtils.lerp(walkerState.phaseStartPos.y, walkerState.phaseEndPos.y, smoothT);
+                walkerState.baseHeading = THREE.MathUtils.lerp(walkerState.phaseStartHeading, walkerState.phaseEndHeading, smoothT);
+
+                // Atualizar Posição das Patas no Espaço Mundial
+                const activeGroup = walkerState.activeTripodGroup;
+                legs.forEach((leg) => {
+                    const isSwingLeg = (leg.group === activeGroup);
+                    const legDot = document.getElementById(`dot-${leg.id}`);
+                    if (legDot) legDot.className = isSwingLeg ? 'leg-dot swing' : 'leg-dot stance';
+
+                    if (isSwingLeg) {
+                        // Swing Leg: Arco parabólico suave no ar em direção ao pouso
+                        leg.currentTarget.lerpVectors(leg.stepStartTarget, leg.stepEndTarget, smoothT);
+                        const groundY = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                        const lift = Math.sin(t * Math.PI) * walkerState.stepHeight;
+                        leg.currentTarget.y = groundY + lift;
+                    } else {
+                        // Stance Leg: 100% TRAVADA NA COORDENADA DO SOLO (NUNCA DESLIZA!)
+                        leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                    }
+                });
+
+                // Finalizar o Meio-Ciclo do Passo (Touchdown)
+                if (walkerState.gaitProgress >= 1.0) {
+                    walkerState.isStepActive = false;
+                    walkerState.gaitProgress = 0;
+                    legs.forEach((leg) => {
+                        if (leg.group === activeGroup) {
+                            leg.currentTarget.copy(leg.stepEndTarget);
+                            leg.isStepping = false;
+                        }
+                    });
+                    // Trocar grupo de tripé ativo
                     walkerState.activeTripodGroup = (walkerState.activeTripodGroup === 0) ? 1 : 0;
-                    legs.forEach(l => { l.isStepping = false; });
                 }
             } else {
-                walkerState.gaitProgress = 0;
-                legs.forEach(l => { l.isStepping = false; });
+                // Modo Estático (Totalmente Parado): Todas as 6 patas em Stance firmes no chão (SEM LERP!)
+                legs.forEach((leg) => {
+                    leg.isStepping = false;
+                    const legDot = document.getElementById(`dot-${leg.id}`);
+                    if (legDot) legDot.className = 'leg-dot stance';
+                    leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                });
             }
 
-            // Posicionar o Robô no Terreno em Escala 1:1
-            const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
+            // Posicionar o Robô no Terreno em Escala 1:1 com Elevação, Recuo Z e Pitch Dinâmicos
             robotMasterGroup.position.set(walkerState.posX, currentTerrainY, walkerState.posZ);
             robotMasterGroup.rotation.y = walkerState.baseHeading;
-            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
-            bodyGroup.rotation.y = walkerState.torsoYaw;
+            bodyGroup.position.set(0, walkerState.bodyHeight + walkerState.dynLift, walkerState.dynShiftZ);
+            bodyGroup.rotation.set(walkerState.dynPitch, walkerState.torsoYaw, 0, 'YXZ');
 
             // Atualizar matriz de mundo antes do solver IK
             robotMasterGroup.updateMatrixWorld(true);
 
-            // 5. ATUALIZAR TRAJETÓRIAS DAS PATAS E SOLVER IK
-            const activeGroup = walkerState.activeTripodGroup;
-            const stepT = THREE.MathUtils.clamp(walkerState.gaitProgress, 0, 1);
-            const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight);
+            // Atualizar Linha Laser do Focinho/Canhão até a Mira
+            const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
+            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.1, walkerState.aimWorldPoint.z);
+            laserLine.geometry.setFromPoints([snoutPos, laserHit]);
 
+            // 5. ATUALIZAR GIZMOS E SOLVER IK RIGOROSO
+            const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight + walkerState.dynLift);
             legs.forEach((leg) => {
-                const isSwingLeg = isGaitActive && (leg.group === activeGroup);
-                const legDot = document.getElementById(`dot-${leg.id}`);
-
-                if (legDot) {
-                    legDot.className = isSwingLeg ? 'leg-dot swing' : 'leg-dot stance';
-                }
-
-                if (isSwingLeg) {
-                    if (!leg.isStepping) {
-                        leg.isStepping = true;
-                        leg.stepStartTarget.copy(leg.currentTarget);
-
-                        // Ponto Futuro de Pouso (Touchdown Prediction)
-                        let targetHeading = walkerState.baseHeading;
-                        if (walkerState.isTurningInPlace) {
-                            targetHeading += walkerState.turnDir * (walkerState.stepTurnAngle * 0.6);
-                        }
-
-                        const nominalWorld = leg.nominalOffset.clone()
-                            .applyAxisAngle(new THREE.Vector3(0, 1, 0), targetHeading)
-                            .add(robotMasterGroup.position);
-
-                        if (walkerState.isMoving) {
-                            nominalWorld.addScaledVector(moveVec, walkerState.strideLength * 0.5);
-                        }
-
-                        nominalWorld.y = getTerrainHeight(nominalWorld.x, nominalWorld.z);
-                        leg.stepEndTarget.copy(nominalWorld);
-                    }
-
-                    // Interpolação do Passo no Ar
-                    const smoothProgress = THREE.MathUtils.smoothstep(stepT, 0, 1);
-                    leg.currentTarget.lerpVectors(leg.stepStartTarget, leg.stepEndTarget, smoothProgress);
-
-                    // Arco de Elevação no Ar
-                    const lift = Math.sin(stepT * Math.PI) * walkerState.stepHeight;
-                    const baseGroundY = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
-                    leg.currentTarget.y = baseGroundY + lift;
-
-                } else {
-                    // Stance Phase: Patas 100% travadas no solo
-                    leg.isStepping = false;
-                    if (!isGaitActive) {
-                        const targetWorld = leg.nominalOffset.clone()
-                            .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.baseHeading)
-                            .add(robotMasterGroup.position);
-                        targetWorld.y = getTerrainHeight(targetWorld.x, targetWorld.z);
-                        leg.currentTarget.lerp(targetWorld, 0.15);
-                    } else {
-                        leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
-                    }
-                }
-
                 if (leg.targetMesh) {
                     leg.targetMesh.position.copy(leg.currentTarget);
                 }
-
-                // Resolver IK 3-DoF com o algoritmo analítico 100% idêntico ao original
                 solveLegIK(leg, leg.currentTarget, leg.lineMesh, currentElevation);
             });
 
             // 6. CÂMERA TÁTICA A 45°
-            // A câmera só reorbita para trás do robô quando ele está ATIVAMENTE AVANÇANDO (isMoving com WASD)
-            // Quando parado ou apenas pivoteando no próprio eixo, o azimute da câmera permanece 100% ESTÁTICO
-            if (walkerState.isMoving) {
+            // A câmera só reorbita para trás do robô quando ele está AVANÇANDO PARA FRENTE (tecla W)
+            // Deslocamentos "A", "S" e "D", ou pivô no próprio eixo mantêm o azimute da câmera 100% ESTÁTICO
+            if (moveFwd > 0) {
                 const targetCamAzimuth = walkerState.baseHeading + Math.PI;
                 let angleDiff = targetCamAzimuth - walkerState.camAzimuth;
-                angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-                walkerState.camAzimuth += angleDiff * Math.min(1.0, dt * walkerState.camSmoothFactor);
+                angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff)); // [-PI, PI]
+
+                // Curva Ease-Out suave (Damp com desaceleração exponencial assintótica)
+                walkerState.camAzimuth = THREE.MathUtils.damp(walkerState.camAzimuth, walkerState.camAzimuth + angleDiff, 2.5, dt);
             }
 
             const pitchRad = THREE.MathUtils.degToRad(walkerState.camPitchDeg);
