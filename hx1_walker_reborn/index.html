@@ -865,32 +865,70 @@
         // --- SISTEMA DE RESTRIÇÃO DE ESPAÇO: LIMITES DA ARENA & COLISÃO RÍGIDA DE OBSTÁCULOS ---
         const ARENA_HALF_BOUND = 130.0; // Limite do tabuleiro (280x280m -> borda segura 130m)
 
-        function constrainPosition(targetX, targetZ) {
-            let nx = THREE.MathUtils.clamp(targetX, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
-            let nz = THREE.MathUtils.clamp(targetZ, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+        // Raio Dinâmico do Polígono de Suporte das Patas (considerando abertura stanceSpread)
+        function getMechFootprintRadius() {
+            const spread = (typeof walkerState !== 'undefined' && walkerState.stanceSpread) ? walkerState.stanceSpread : 1.10;
+            // Distância máxima nominal da pata em relação ao centro do corpo (~6.65m * spread) + margem da passada
+            return 6.65 * spread + 0.9;
+        }
 
-            // Resolução de colisão circular com cada pilar/cilindro (Slide & Push Out)
+        // Restrição de Posição do Corpo / Centro do Robô (Garante que nenhuma pata penetre nos pilares nem saia do tabuleiro)
+        function constrainPosition(targetX, targetZ) {
+            const legFootprint = getMechFootprintRadius();
+            const safeBound = Math.max(ARENA_HALF_BOUND - legFootprint, 20.0);
+
+            let nx = THREE.MathUtils.clamp(targetX, -safeBound, safeBound);
+            let nz = THREE.MathUtils.clamp(targetZ, -safeBound, safeBound);
+
+            // Resolução de colisão circular com cada pilar considerando o raio total de abertura das patas
             for (let i = 0; i < pillarsData.length; i++) {
                 const p = pillarsData[i];
+                const totalRadius = p.radius + legFootprint;
                 const dx = nx - p.x;
                 const dz = nz - p.z;
                 const dist = Math.hypot(dx, dz);
-                if (dist < p.radius) {
+                if (dist < totalRadius) {
                     if (dist > 0.001) {
-                        const overlap = p.radius - dist;
+                        const overlap = totalRadius - dist;
                         nx += (dx / dist) * overlap;
                         nz += (dz / dist) * overlap;
                     } else {
-                        nx = p.x + p.radius;
+                        nx = p.x + totalRadius;
                     }
                 }
             }
 
             // Re-clamp após resolução de colisão
-            nx = THREE.MathUtils.clamp(nx, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
-            nz = THREE.MathUtils.clamp(nz, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+            nx = THREE.MathUtils.clamp(nx, -safeBound, safeBound);
+            nz = THREE.MathUtils.clamp(nz, -safeBound, safeBound);
 
             return { x: nx, z: nz, y: nz };
+        }
+
+        // Restrição Individual para a Ponta de cada Pata (Impede que a pata pouse ou passe dentro do cilindro)
+        function constrainFootPosition(footX, footZ) {
+            let fx = THREE.MathUtils.clamp(footX, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+            let fz = THREE.MathUtils.clamp(footZ, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+            const footMargin = 0.5; // Margem física ao redor do pilar
+
+            for (let i = 0; i < pillarsData.length; i++) {
+                const p = pillarsData[i];
+                const minClearance = p.radius + footMargin;
+                const dx = fx - p.x;
+                const dz = fz - p.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < minClearance) {
+                    if (dist > 0.001) {
+                        const overlap = minClearance - dist;
+                        fx += (dx / dist) * overlap;
+                        fz += (dz / dist) * overlap;
+                    } else {
+                        fx = p.x + minClearance;
+                    }
+                }
+            }
+
+            return { x: fx, z: fz };
         }
 
         // Função de Atualização Dinâmica do Relevo e Posição das Caixas
@@ -1403,6 +1441,9 @@
                     const baseOffset = defaultFootPositions[index].clone();
                     const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
                     const initTarget = nominalWorldOffset.clone();
+                    const validInit = constrainFootPosition(initTarget.x, initTarget.z);
+                    initTarget.x = validInit.x;
+                    initTarget.z = validInit.z;
                     initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
 
                     legs.push({
@@ -1459,6 +1500,9 @@
                     const nominalWorld = leg.nominalOffset.clone()
                         .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.baseHeading)
                         .add(robotMasterGroup.position);
+                    const validPos = constrainFootPosition(nominalWorld.x, nominalWorld.z);
+                    nominalWorld.x = validPos.x;
+                    nominalWorld.z = validPos.z;
                     nominalWorld.y = getTerrainHeight(nominalWorld.x, nominalWorld.z);
                     leg.currentTarget.copy(nominalWorld);
                     leg.stepStartTarget.copy(nominalWorld);
@@ -1811,13 +1855,14 @@
                                 .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.phaseEndHeading)
                                 .add(endCenter);
 
-                            // Projeção dinâmica na direção de avanço com contenção no tabuleiro
+                            // Projeção dinâmica na direção de avanço com contenção no tabuleiro e fora dos pilares
                             if (wantsMove) {
                                 nominalLanding.x += moveVec.x * (walkerState.strideLength * 0.4);
                                 nominalLanding.z += moveVec.z * (walkerState.strideLength * 0.4);
                             }
-                            nominalLanding.x = THREE.MathUtils.clamp(nominalLanding.x, -135.0, 135.0);
-                            nominalLanding.z = THREE.MathUtils.clamp(nominalLanding.z, -135.0, 135.0);
+                            const validLanding = constrainFootPosition(nominalLanding.x, nominalLanding.z);
+                            nominalLanding.x = validLanding.x;
+                            nominalLanding.z = validLanding.z;
 
                             nominalLanding.y = getTerrainHeight(nominalLanding.x, nominalLanding.z);
                             leg.stepEndTarget.copy(nominalLanding);
@@ -1854,6 +1899,9 @@
                     if (isSwingLeg) {
                         // Swing Leg: Arco parabólico suave no ar em direção ao pouso
                         leg.currentTarget.lerpVectors(leg.stepStartTarget, leg.stepEndTarget, smoothT);
+                        const validSwing = constrainFootPosition(leg.currentTarget.x, leg.currentTarget.z);
+                        leg.currentTarget.x = validSwing.x;
+                        leg.currentTarget.z = validSwing.z;
                         const groundY = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
                         const lift = Math.sin(t * Math.PI) * walkerState.stepHeight;
                         leg.currentTarget.y = groundY + lift;
@@ -1882,6 +1930,9 @@
                     leg.isStepping = false;
                     const legDot = document.getElementById(`dot-${leg.id}`);
                     if (legDot) legDot.className = 'leg-dot stance';
+                    const validStatic = constrainFootPosition(leg.currentTarget.x, leg.currentTarget.z);
+                    leg.currentTarget.x = validStatic.x;
+                    leg.currentTarget.z = validStatic.z;
                     leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
                 });
             }
