@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>HX1 Walker: Reborn — Tactical Mech Prototype</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #030712;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* --- HUD PRINCIPAL & SCI-FI OVERLAY --- */
+        #hud-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px 24px;
+        }
+
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .mech-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 14px;
+            padding: 14px 18px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1);
+            max-width: 360px;
+            pointer-events: auto;
+        }
+
+        .mech-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .mech-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #38bdf8;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .status-active {
+            background: rgba(46, 213, 115, 0.18);
+            color: #2ed573;
+            border: 1px solid rgba(46, 213, 115, 0.4);
+        }
+
+        .mech-sub {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        /* Bússola & Telemetria Superior */
+        .compass-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 14px;
+            padding: 10px 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            pointer-events: auto;
+        }
+
+        .compass-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .compass-readout {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* HUD Inferior */
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .controls-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 12px 18px;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        kbd {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.72rem;
+            color: #38bdf8;
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        .gait-meter-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 14px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 220px;
+            pointer-events: auto;
+        }
+
+        .gait-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.74rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        .gait-indicators {
+            display: flex;
+            gap: 6px;
+            justify-content: space-between;
+        }
+
+        .leg-dot {
+            width: 28px;
+            height: 10px;
+            border-radius: 4px;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.1s ease;
+        }
+
+        .leg-dot.stance {
+            background: #2ed573;
+            box-shadow: 0 0 8px rgba(46, 213, 115, 0.6);
+            border-color: #2ed573;
+        }
+
+        .leg-dot.swing {
+            background: #38bdf8;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+            border-color: #38bdf8;
+        }
+
+        /* Retículo de Mira Customizado */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 32px;
+            height: 32px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.85;
+        }
+
+        .crosshair-ring {
+            width: 24px;
+            height: 24px;
+            border: 1.5px solid #38bdf8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            transition: transform 0.08s ease;
+        }
+
+        .crosshair-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #ff3366;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #ff3366;
+        }
+
+        /* Modal de Ajuda */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(3, 7, 18, 0.82);
+            backdrop-filter: blur(16px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #0f172a;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            width: 460px;
+            max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
+        }
+
+        .modal-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.3rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 0.84rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .modal-body strong {
+            color: #f8fafc;
+        }
+
+        /* Drag & Drop File Zone */
+        #drop-zone {
+            position: fixed;
+            inset: 0;
+            background: rgba(14, 165, 233, 0.15);
+            border: 3px dashed #38bdf8;
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #38bdf8;
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+        }
+
+        #loading {
+            position: fixed;
+            inset: 0;
+            background: #030712;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            transition: opacity 0.4s ease;
+        }
+
+        .spinner {
+            width: 54px;
+            height: 54px;
+            border: 4px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div style="font-size: 0.95rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.1em; text-transform: uppercase;">
+            Inicializando HX1 Tactical Engine...
+        </div>
+    </div>
+
+    <div id="drop-zone">📂 Solte o modelo .GLB / .BOT.JSON para carregar criatura personalizada</div>
+
+    <div id="crosshair">
+        <div class="crosshair-ring" id="crosshair-ring"></div>
+        <div class="crosshair-dot"></div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="hud-overlay">
+        <div class="hud-header">
+            <div class="mech-card">
+                <div class="mech-title-row">
+                    <span class="mech-title">🤖 HX1 Walker</span>
+                    <span class="status-badge status-active" id="mech-status">Online</span>
+                </div>
+                <div class="mech-sub" id="model-desc">Escala Real 1:1 • IK Analítico Rigoroso • Zoom com a Roda do Mouse</div>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <input type="file" id="glb-file-input" accept=".glb,.gltf,.json" style="display: none;">
+                    <button onclick="document.getElementById('glb-file-input').click()" 
+                        style="background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.72rem; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
+                        📂 Carregar Outro Modelo
+                    </button>
+                    <button id="btn-xray"
+                        style="background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.2); color: #94a3b8; font-size: 0.72rem; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
+                        🦴 Raio-X (X)
+                    </button>
+                </div>
+                <!-- Sliders de Ajuste Fino de Postura e Câmera -->
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.72rem; color: #94a3b8; border-top: 1px solid rgba(255,255,200,0.08); padding-top: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Abertura Patas: <strong id="lbl-spread" style="color: #38bdf8;">1.10x</strong></span>
+                        <input type="range" id="slider-spread" min="0.60" max="1.80" step="0.05" value="1.10" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Altura do Corpo: <strong id="lbl-height" style="color: #38bdf8;">1.70m</strong></span>
+                        <input type="range" id="slider-height" min="0.10" max="2.50" step="0.05" value="1.70" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">3.5x</strong></span>
+                        <input type="range" id="slider-pivot-speed" min="1.0" max="8.0" step="0.5" value="3.5" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
+                        <input type="range" id="slider-zoom" min="50" max="100" step="1" value="50" style="width: 130px; cursor: pointer;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="compass-card">
+                <div class="compass-label">Rumo de Avanço (Heading)</div>
+                <div class="compass-readout" id="compass-val">000° N</div>
+            </div>
+        </div>
+
+        <div class="hud-footer">
+            <div class="controls-card">
+                <div class="control-item"><kbd>W</kbd> / <kbd>S</kbd> <span>Avançar / Recuar</span></div>
+                <div class="control-item"><kbd>A</kbd> / <kbd>D</kbd> <span>Desvio Lateral</span></div>
+                <div class="control-item"><kbd>Mouse</kbd> <span>Mirar no Solo</span></div>
+                <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
+                <div class="control-item"><kbd>H</kbd> <span>Ajuda</span></div>
+            </div>
+
+            <div class="gait-meter-card">
+                <div class="gait-row">
+                    <span>CICLO DE MARCHA TRIPÉ</span>
+                    <span id="gait-state-text" style="color: #38bdf8;">ESTÁTICO</span>
+                </div>
+                <div class="gait-indicators">
+                    <div class="leg-dot stance" id="dot-FL" title="FL (Front Left)"></div>
+                    <div class="leg-dot stance" id="dot-ML" title="ML (Mid Left)"></div>
+                    <div class="leg-dot stance" id="dot-BL" title="BL (Back Left)"></div>
+                    <div class="leg-dot stance" id="dot-FR" title="FR (Front Right)"></div>
+                    <div class="leg-dot stance" id="dot-MR" title="MR (Mid Right)"></div>
+                    <div class="leg-dot stance" id="dot-BR" title="BR (Back Right)"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Ajuda -->
+    <div id="help-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">⌨️ Controles & Mecânica Tática</div>
+                <button class="modal-close" id="btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>🎯 Mira em Dois Níveis:</strong> Ao mover o mouse próximo da frente da criatura (&le; 25°), o tronco se torce com as patas firmes no solo (IK puro). Ao mirar além de 25°, o robô executa passos de pivô para girar a base.</p>
+                <p><strong>🎥 Câmera Tática a 45°:</strong> A câmera orbita suavemente acompanhando a locomoção. Use a <strong>roda do mouse (scroll)</strong> ou o slider no painel para afastar/aproximar a visão (zoom).</p>
+                <p><strong>🎮 Teclas:</strong></p>
+                <ul style="padding-left: 20px;">
+                    <li><kbd>W</kbd>, <kbd>A</kbd>, <kbd>S</kbd>, <kbd>D</kbd> — Locomoção no terreno</li>
+                    <li><kbd>X</kbd> — Alternar Modo Raio-X Biomecânico</li>
+                    <li><kbd>Scroll Mouse</kbd> — Zoom da Câmera</li>
+                    <li><kbd>H</kbd> — Abrir / Fechar esta tela de ajuda</li>
+                    <li><kbd>R</kbd> — Resetar Posição na Arena</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMPORTAÇÕES THREE.JS -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+
+        // --- CENA, CÂMERA & RENDERER ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030712);
+        scene.fog = new THREE.FogExp2(0x030712, 0.007);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 500);
+        camera.position.set(0, 35, 40);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        container.appendChild(renderer.domElement);
+
+        // --- AMBIENTE IBL ROOM ---
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        const roomEnv = new RoomEnvironment();
+        scene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+
+        // --- ILUMINAÇÃO SCI-FI ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 2.8);
+        sunLight.position.set(40, 70, 40);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 1.0;
+        sunLight.shadow.camera.far = 250;
+        sunLight.shadow.camera.left = -65;
+        sunLight.shadow.camera.right = 65;
+        sunLight.shadow.camera.top = 65;
+        sunLight.shadow.camera.bottom = -65;
+        sunLight.shadow.bias = -0.0004;
+        scene.add(sunLight);
+
+        const rimLightBlue = new THREE.PointLight(0x00d2ff, 35.0, 150);
+        rimLightBlue.position.set(-45, 20, -35);
+        scene.add(rimLightBlue);
+
+        const rimLightRed = new THREE.PointLight(0xff0055, 28.0, 150);
+        rimLightRed.position.set(45, 20, -35);
+        scene.add(rimLightRed);
+
+        // --- ARENA DE TESTES PROCEDURAL EM ESCALA TOTAL 1:1 ---
+        const arenaGroup = new THREE.Group();
+        scene.add(arenaGroup);
+
+        // Função de Altura do Terreno
+        function getTerrainHeight(x, z) {
+            const d = Math.hypot(x, z);
+            if (d < 12.0) return 0.0; // Centro plano para o robô em escala 1:1
+            const wave1 = Math.sin(x * 0.04) * Math.cos(z * 0.04) * 0.85;
+            const wave2 = Math.sin(x * 0.02 + 1.2) * Math.cos(z * 0.02) * 1.35;
+            return wave1 + wave2;
+        }
+
+        // Criar Malha do Terreno Ampliada
+        const terrainGeo = new THREE.PlaneGeometry(280, 280, 120, 120);
+        terrainGeo.rotateX(-Math.PI / 2);
+        const posAttr = terrainGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            const px = posAttr.getX(i);
+            const pz = posAttr.getZ(i);
+            posAttr.setY(i, getTerrainHeight(px, pz));
+        }
+        terrainGeo.computeVertexNormals();
+
+        const terrainMat = new THREE.MeshStandardMaterial({
+            color: 0x080e1a,
+            roughness: 0.88,
+            metalness: 0.15,
+            wireframe: false
+        });
+        const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+        terrainMesh.receiveShadow = true;
+        arenaGroup.add(terrainMesh);
+
+        // Grade Tática Holográfica Sobreposta
+        const gridHelper = new THREE.GridHelper(280, 70, 0x1e293b, 0x0f172a);
+        gridHelper.position.y = 0.04;
+        arenaGroup.add(gridHelper);
+
+        // Coleção de Obstáculos Proporcionais (Escala 1:1)
+        const colGeo = new THREE.CylinderGeometry(2.5, 3.2, 10.0, 8);
+        const colMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.7 });
+        const boxGeo = new THREE.BoxGeometry(6.5, 4.0, 6.5);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7, metalness: 0.5 });
+        const targetGeo = new THREE.SphereGeometry(1.5, 16, 16);
+        const targetMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x660022, roughness: 0.2 });
+
+        for (let i = 0; i < 30; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 24.0 + Math.random() * 95.0;
+            const ox = Math.cos(angle) * radius;
+            const oz = Math.sin(angle) * radius;
+            const oy = getTerrainHeight(ox, oz);
+
+            let mesh;
+            const type = i % 3;
+            if (type === 0) {
+                mesh = new THREE.Mesh(colGeo, colMat);
+                mesh.position.set(ox, oy + 5.0, oz);
+            } else if (type === 1) {
+                mesh = new THREE.Mesh(boxGeo, boxMat);
+                mesh.position.set(ox, oy + 2.0, oz);
+                mesh.rotation.y = Math.random() * Math.PI;
+            } else {
+                mesh = new THREE.Mesh(targetGeo, targetMat);
+                mesh.position.set(ox, oy + 2.5, oz);
+            }
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            arenaGroup.add(mesh);
+        }
+
+        // --- SISTEMA CINEMÁTICO & ROBÔ DO HX1 WALKER (ESCALA ORIGINAL 1:1) ---
+        const robotMasterGroup = new THREE.Group();
+        scene.add(robotMasterGroup);
+
+        const bodyGroup = new THREE.Group();
+        robotMasterGroup.add(bodyGroup);
+
+        const footTargetGroup = new THREE.Group();
+        scene.add(footTargetGroup);
+
+        const skeletonLinesGroup = new THREE.Group();
+        scene.add(skeletonLinesGroup);
+        skeletonLinesGroup.visible = false;
+
+        // Laser Reticle / Mira
+        const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const laserMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65 });
+        const laserLine = new THREE.Line(laserGeo, laserMat);
+        scene.add(laserLine);
+
+        // Estrutura de Pernas e Calibração
+        let modelRoot = null;
+        const legs = [];
+        let xrayMode = false;
+
+        // Dimensões Padrão dos Ossos (100% Exatas do GLB em Escala 1:1)
+        const L1_M = 2.3608; // Coxa
+        const L2_M = 2.1611; // Fêmur
+        const L3_M = 2.8000; // Tíbia
+
+        // Posições Padrão das Patas (100% Exatas do index.html Original)
+        const defaultFootPositions = [
+            new THREE.Vector3(-5.8, 0.0,  3.2), // FR (0)
+            new THREE.Vector3(-6.4, 0.0, -0.4), // MR (1)
+            new THREE.Vector3(-5.2, 0.0, -4.0), // BR (2)
+            new THREE.Vector3( 5.8, 0.0,  3.2), // FL (3)
+            new THREE.Vector3( 6.4, 0.0, -0.4), // ML (4)
+            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL (5)
+        ];
+
+        // Parâmetros de Locomoção & Cinemática em Escala Real
+        const walkerState = {
+            // Posição no mundo
+            posX: 0,
+            posZ: 0,
+            baseHeading: 0,     // Rumo da base/passadas (radianos)
+            torsoYaw: 0,        // Rotação local do chassi/tronco
+            aimWorldPoint: new THREE.Vector3(0, 0, 15),
+            
+            // Postura Original Calibrada
+            stanceSpread: 1.10, // Abertura padrão 1.10x
+            bodyHeight: 1.70,   // Altura padrão do corpo (1.70m)
+            pivotSpeed: 3.5,    // Multiplicador da velocidade do pivô (slider)
+
+            // Controle de Marcha Tripé (Escala 1:1)
+            isMoving: false,
+            isTurningInPlace: false,
+            turnDir: 0,
+            moveSpeed: 6.5,     // Velocidade de avanço em m/s
+            stepTurnAngle: 16.0 * (Math.PI / 180.0), // 16 graus por passada de pivô
+            stepHeight: 0.50,   // Altura do arco do passo (0.50m)
+            strideLength: 1.80, // Alcance do passo (1.80m)
+            gaitProgress: 0,    // 0.0 a 1.0 (ciclo do passo atual)
+            activeTripodGroup: 0, // 0: Grupo A (FR, ML, BR), 1: Grupo B (FL, MR, BL)
+
+            // Câmera Tática a 45°
+            travelHeading: 0,
+            camAzimuth: Math.PI, // Inicia diretamente atrás das costas da aranha
+            camDistance: 50.0,   // Distância padrão 50m (clamp 50m a 100m)
+            camPitchDeg: 45.0,
+            camSmoothFactor: 3.5,
+
+            // Conforto de Mira (25 graus)
+            comfortAngle: 25.0 * (Math.PI / 180.0)
+        };
+
+        // Inputs de Teclado
+        const keys = {
+            KeyW: false,
+            KeyS: false,
+            KeyA: false,
+            KeyD: false,
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code in keys) keys[e.code] = true;
+            if (e.key === 'x' || e.key === 'X') toggleXRay();
+            if (e.key === 'h' || e.key === 'H') toggleHelpModal();
+            if (e.key === 'r' || e.key === 'R') resetWalker();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code in keys) keys[e.code] = false;
+        });
+
+        // Zoom da Câmera via Roda do Mouse (Scroll Wheel limitado entre 50m e 100m)
+        window.addEventListener('wheel', (e) => {
+            walkerState.camDistance = THREE.MathUtils.clamp(
+                walkerState.camDistance + e.deltaY * 0.04,
+                50.0,
+                100.0
+            );
+            const sliderZoom = document.getElementById('slider-zoom');
+            const lblZoom = document.getElementById('lbl-zoom');
+            if (sliderZoom) sliderZoom.value = Math.round(walkerState.camDistance);
+            if (lblZoom) lblZoom.innerText = `${Math.round(walkerState.camDistance)}m`;
+        }, { passive: true });
+
+        // Mouse Aiming via Raycaster no Plano do Terreno
+        const raycaster = new THREE.Raycaster();
+        const mouseNorm = new THREE.Vector2();
+        const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        window.addEventListener('mousemove', (e) => {
+            mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseNorm.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            const crosshair = document.getElementById('crosshair');
+            if (crosshair) {
+                crosshair.style.left = `${e.clientX}px`;
+                crosshair.style.top = `${e.clientY}px`;
+            }
+        });
+
+        // --- FUNÇÃO DE CURVA ADAPTATIVA DA COXA (Exata de index.html) ---
+        // Y = 2.5m -> 5°
+        // Y = 1.3m -> 35°
+        // Y = 0.0m -> 45°
+        function calculateAdaptiveElevation(yHeight) {
+            const y = THREE.MathUtils.clamp(yHeight, 0.0, 2.5);
+            if (y >= 1.3) {
+                const t = (y - 1.3) / (2.5 - 1.3);
+                const s = t * t * (3 - 2 * t);
+                return 35.0 - s * (35.0 - 5.0);
+            } else {
+                const t = (1.3 - y) / 1.3;
+                const s = t * t * (3 - 2 * t);
+                return 35.0 + s * (45.0 - 35.0);
+            }
+        }
+
+        // --- SOLVER DE CINEMÁTICA INVERSA VETORIAL 3-DOF COM BASE ORTONORMAL RIGOROSA (ZERO-BANK) ---
+        const _P0 = new THREE.Vector3();
+        const _P1 = new THREE.Vector3();
+        const _P2 = new THREE.Vector3();
+        const _P3 = new THREE.Vector3();
+        const _up = new THREE.Vector3(0, 1, 0);
+        const _dirH = new THREE.Vector3();
+        const _vTarget = new THREE.Vector3();
+        const _vTUnit = new THREE.Vector3();
+        const _hingeAxis = new THREE.Vector3();
+        const _perpUp = new THREE.Vector3();
+        const _femurDir = new THREE.Vector3();
+        const _tibiaDir = new THREE.Vector3();
+        const _coxaDir = new THREE.Vector3();
+        const _X1 = new THREE.Vector3(); const _Y1 = new THREE.Vector3(); const _Z1 = new THREE.Vector3();
+        const _X2 = new THREE.Vector3(); const _Y2 = new THREE.Vector3(); const _Z2 = new THREE.Vector3();
+        const _X3 = new THREE.Vector3(); const _Y3 = new THREE.Vector3(); const _Z3 = new THREE.Vector3();
+        const _matWorld1 = new THREE.Matrix4();
+        const _matWorld2 = new THREE.Matrix4();
+        const _matWorld3 = new THREE.Matrix4();
+        const _qWorldBase = new THREE.Quaternion();
+        const _qWorld1 = new THREE.Quaternion();
+        const _qWorld2 = new THREE.Quaternion();
+        const _qWorld3 = new THREE.Quaternion();
+        const _qInvBase = new THREE.Quaternion();
+        const _qInv1 = new THREE.Quaternion();
+        const _qInv2 = new THREE.Quaternion();
+        const _tempSnout = new THREE.Vector3();
+        const _tempLaserHit = new THREE.Vector3();
+
+        function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
+            const { baseNode, j1Node, j2Node, j3Node, L1, L2, L3 } = leg;
+            if (!baseNode || !j1Node || !j2Node || !j3Node) return;
+
+            // 1. Posição Mundial do Quadril (P0)
+            baseNode.getWorldPosition(_P0);
+
+            // 2. Direção horizontal do Quadril até a Âncora no chão
+            _dirH.subVectors(worldTarget, _P0);
+            _dirH.y = 0;
+            const horizDist = _dirH.length();
+            if (horizDist > 0.0001) {
+                _dirH.divideScalar(horizDist);
+            } else {
+                _dirH.set(leg.side === 'D' ? -1 : 1, 0, 0);
+            }
+
+            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa e Auto-Reach Fallback
+            let gamma = THREE.MathUtils.degToRad(currentElevationDeg);
+
+            const h = _P0.y - worldTarget.y;
+            const D_total = Math.sqrt(horizDist * horizDist + h * h);
+            const theta_target = Math.atan2(-h, horizDist);
+            const D_max = (L2 + L3) * 0.98;
+
+            // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
+            const p1x_nom = L1 * Math.cos(gamma);
+            const p1y_nom = L1 * Math.sin(gamma);
+            const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
+
+            if (dist1_sq > D_max * D_max && D_total > 0.0001) {
+                const K = (D_total * D_total + L1 * L1 - D_max * D_max) / (2 * L1 * D_total);
+                if (K <= 1.0) {
+                    const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
+                    const gammaLimit = theta_target + deltaTheta;
+                    if (gammaLimit < gamma) {
+                        gamma = gammaLimit;
+                    }
+                } else {
+                    gamma = theta_target;
+                }
+            }
+
+            _P1.copy(_P0)
+               .addScaledVector(_dirH, L1 * Math.cos(gamma))
+               .addScaledVector(_up, L1 * Math.sin(gamma));
+
+            // 4. Cinemática 2-Bone de P1 até worldTarget (Fêmur P1->P2 e Tíbia P2->P3)
+            _vTarget.subVectors(worldTarget, _P1);
+            const dist = _vTarget.length();
+
+            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2 - L3) * 1.02, (L2 + L3) * 0.98);
+            const cosAlpha = THREE.MathUtils.clamp((L2 * L2 + dClamped * dClamped - L3 * L3) / (2 * L2 * dClamped), -1, 1);
+            const alpha = Math.acos(cosAlpha);
+
+            _vTUnit.copy(_vTarget).divideScalar(dist > 0.0001 ? dist : 1.0);
+
+            // Eixo da dobradiça UNIFICADO (dirH x UP) - Exato de index.html
+            _hingeAxis.crossVectors(_dirH, _up).normalize();
+
+            // Vetor perpendicular no plano vertical apontando para CIMA
+            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
+            if (_perpUp.y < 0) _perpUp.negate();
+
+            // Direção do Fêmur rotacionada para CIMA (Elbow-UP)
+            _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
+                     .addScaledVector(_perpUp, Math.sin(alpha))
+                     .normalize();
+
+            // Posição do Joelho (P2)
+            _P2.copy(_P1).addScaledVector(_femurDir, L2);
+
+            // Direção da Tíbia apontando para a âncora
+            _tibiaDir.subVectors(worldTarget, _P2).normalize();
+            _P3.copy(_P2).addScaledVector(_tibiaDir, L3);
+
+            // Direção da Coxa (P0 -> P1)
+            _coxaDir.subVectors(_P1, _P0).normalize();
+
+            // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK) - 100% Idêntico ao original
+            // --- SEGMENTO 1: COXA ---
+            _X1.copy(_coxaDir);
+            _Y1.copy(_hingeAxis);
+            _Z1.crossVectors(_X1, _Y1).normalize();
+            _matWorld1.makeBasis(_X1, _Y1, _Z1);
+            _qWorld1.setFromRotationMatrix(_matWorld1);
+
+            baseNode.getWorldQuaternion(_qWorldBase);
+            _qInvBase.copy(_qWorldBase).invert();
+            j1Node.quaternion.multiplyQuaternions(_qInvBase, _qWorld1);
+            j1Node.updateMatrixWorld(true);
+
+            // --- SEGMENTO 2: FÊMUR ---
+            _X2.copy(_femurDir);
+            _Y2.copy(_hingeAxis);
+            _Z2.crossVectors(_X2, _Y2).normalize();
+            _matWorld2.makeBasis(_X2, _Y2, _Z2);
+            _qWorld2.setFromRotationMatrix(_matWorld2);
+
+            _qInv1.copy(_qWorld1).invert();
+            j2Node.quaternion.multiplyQuaternions(_qInv1, _qWorld2);
+            j2Node.updateMatrixWorld(true);
+
+            // --- SEGMENTO 3: TÍBIA ---
+            _X3.copy(_tibiaDir);
+            _Y3.copy(_hingeAxis);
+            _Z3.crossVectors(_X3, _Y3).normalize();
+            _matWorld3.makeBasis(_X3, _Y3, _Z3);
+            _qWorld3.setFromRotationMatrix(_matWorld3);
+
+            _qInv2.copy(_qWorld2).invert();
+            j3Node.quaternion.multiplyQuaternions(_qInv2, _qWorld3);
+            j3Node.updateMatrixWorld(true);
+
+            // Linha de Esqueleto XRay
+            if (lineMesh && skeletonLinesGroup.visible) {
+                lineMesh.geometry.setPositions([
+                    _P0.x, _P0.y, _P0.z,
+                    _P1.x, _P1.y, _P1.z,
+                    _P2.x, _P2.y, _P2.z,
+                    _P3.x, _P3.y, _P3.z
+                ]);
+            }
+        }
+
+        // --- SETUP DO MODELO DA ARANHA ---
+        function setupRobotModel(gltfScene) {
+            while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
+            while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
+            while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
+            legs.length = 0;
+
+            modelRoot = gltfScene;
+            bodyGroup.add(modelRoot);
+
+            modelRoot.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
+            const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
+            const legSides = ['D', 'D', 'D', 'E', 'E', 'E'];
+            // Grupos de Tripé Alternados:
+            // Grupo 0: FR(0), ML(4), BR(2)
+            // Grupo 1: FL(3), MR(1), BL(5)
+            const tripodGroups = [0, 1, 0, 1, 0, 1];
+
+            legBaseNames.forEach((baseName, index) => {
+                let baseNode = null;
+                modelRoot.traverse((n) => {
+                    if (n.name && (n.name === baseName || n.name.includes(baseName.replace(/[()]/g, '')))) {
+                        baseNode = n;
+                    }
+                });
+
+                if (baseNode && baseNode.children.length > 0) {
+                    const j1Node = baseNode.children[0];
+                    const j2Node = j1Node.children.length > 0 ? j1Node.children[0] : null;
+                    const j3Node = j2Node && j2Node.children.length > 0 ? j2Node.children[0] : null;
+
+                    const isRight = legSides[index] === 'D';
+
+                    // Âncora Visual
+                    const targetMesh = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.18, 16, 16),
+                        new THREE.MeshStandardMaterial({
+                            color: isRight ? 0x00d2ff : 0x2ed573,
+                            emissive: isRight ? 0x003366 : 0x115522,
+                            roughness: 0.3
+                        })
+                    );
+                    targetMesh.castShadow = true;
+                    footTargetGroup.add(targetMesh);
+
+                    // Linha de Esqueleto XRay
+                    const lineGeo = new LineGeometry();
+                    lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                    const lineMat = new LineMaterial({
+                        color: isRight ? 0x38bdf8 : 0x7bed9f,
+                        linewidth: 4.5,
+                        transparent: true,
+                        opacity: 0.95
+                    });
+                    lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                    const lineMesh = new Line2(lineGeo, lineMat);
+                    skeletonLinesGroup.add(lineMesh);
+
+                    const baseOffset = defaultFootPositions[index].clone();
+                    const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
+                    const initTarget = nominalWorldOffset.clone();
+                    initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
+
+                    legs.push({
+                        id: legIds[index],
+                        side: legSides[index],
+                        group: tripodGroups[index],
+                        baseNode,
+                        j1Node,
+                        j2Node,
+                        j3Node,
+                        L1: L1_M,
+                        L2: L2_M,
+                        L3: L3_M,
+                        baseOffset: baseOffset.clone(),
+                        nominalOffset: nominalWorldOffset,
+                        lineMesh,
+                        targetMesh,
+                        currentTarget: initTarget.clone(),
+                        stepStartTarget: initTarget.clone(),
+                        stepEndTarget: initTarget.clone(),
+                        isStepping: false
+                    });
+                }
+            });
+
+            resetWalker();
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.opacity = '0';
+                setTimeout(() => loading.style.display = 'none', 400);
+            }
+        }
+
+        function updateAllLegNominalOffsets() {
+            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
+
+            legs.forEach((leg) => {
+                leg.nominalOffset.copy(leg.baseOffset).multiplyScalar(walkerState.stanceSpread);
+
+                if (!walkerState.isMoving && !walkerState.isTurningInPlace) {
+                    const nominalWorld = leg.nominalOffset.clone()
+                        .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.baseHeading)
+                        .add(robotMasterGroup.position);
+                    nominalWorld.y = getTerrainHeight(nominalWorld.x, nominalWorld.z);
+                    leg.currentTarget.copy(nominalWorld);
+                    leg.stepStartTarget.copy(nominalWorld);
+                    leg.stepEndTarget.copy(nominalWorld);
+                    if (leg.targetMesh) leg.targetMesh.position.copy(nominalWorld);
+                }
+            });
+        }
+
+        // --- CONTROLES DOS SLIDERS DO HUD ---
+        const sliderSpread = document.getElementById('slider-spread');
+        const sliderHeight = document.getElementById('slider-height');
+        const sliderPivotSpeed = document.getElementById('slider-pivot-speed');
+        const sliderZoom = document.getElementById('slider-zoom');
+        const lblSpread = document.getElementById('lbl-spread');
+        const lblHeight = document.getElementById('lbl-height');
+        const lblPivotSpeed = document.getElementById('lbl-pivot-speed');
+        const lblZoom = document.getElementById('lbl-zoom');
+
+        if (sliderSpread) {
+            sliderSpread.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.stanceSpread = val;
+                if (lblSpread) lblSpread.innerText = `${val.toFixed(2)}x`;
+                updateAllLegNominalOffsets();
+            });
+        }
+
+        if (sliderHeight) {
+            sliderHeight.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.bodyHeight = val;
+                if (lblHeight) lblHeight.innerText = `${val.toFixed(2)}m`;
+                updateAllLegNominalOffsets();
+            });
+        }
+
+        if (sliderPivotSpeed) {
+            sliderPivotSpeed.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.pivotSpeed = val;
+                if (lblPivotSpeed) lblPivotSpeed.innerText = `${val.toFixed(1)}x`;
+            });
+        }
+
+        if (sliderZoom) {
+            sliderZoom.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.camDistance = val;
+                if (lblZoom) lblZoom.innerText = `${Math.round(val)}m`;
+            });
+        }
+
+        // --- CARREGAMENTO INICIAL DO GLB ---
+        const gltfLoader = new GLTFLoader();
+        const modelUrl = '../glb/aranha.glb';
+        gltfLoader.load(
+            modelUrl,
+            (gltf) => {
+                setupRobotModel(gltf.scene);
+            },
+            undefined,
+            (err) => {
+                console.warn('Tentando ./glb/aranha.glb...', err);
+                gltfLoader.load('./glb/aranha.glb', (gltf2) => setupRobotModel(gltf2.scene));
+            }
+        );
+
+        // Suporte a Drag & Drop
+        const dropZone = document.getElementById('drop-zone');
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; });
+        window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) dropZone.style.display = 'none'; });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.display = 'none';
+            if (e.dataTransfer.files.length > 0) loadCustomFile(e.dataTransfer.files[0]);
+        });
+
+        document.getElementById('glb-file-input').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) loadCustomFile(e.target.files[0]);
+        });
+
+        function loadCustomFile(file) {
+            const url = URL.createObjectURL(file);
+            gltfLoader.load(url, (gltf) => {
+                setupRobotModel(gltf.scene);
+                document.getElementById('model-desc').innerText = `Modelo Customizado: ${file.name}`;
+            });
+        }
+
+        function toggleXRay() {
+            xrayMode = !xrayMode;
+            skeletonLinesGroup.visible = xrayMode;
+            footTargetGroup.visible = xrayMode;
+            if (modelRoot) {
+                modelRoot.traverse((c) => {
+                    if (c.isMesh) c.visible = !xrayMode;
+                });
+            }
+            document.getElementById('btn-xray').style.borderColor = xrayMode ? '#38bdf8' : 'rgba(255,255,255,0.2)';
+            document.getElementById('btn-xray').style.color = xrayMode ? '#38bdf8' : '#94a3b8';
+        }
+        document.getElementById('btn-xray').addEventListener('click', toggleXRay);
+
+        function toggleHelpModal() {
+            document.getElementById('help-modal').classList.toggle('active');
+        }
+        document.getElementById('btn-close-modal').addEventListener('click', () => {
+            document.getElementById('help-modal').classList.remove('active');
+        });
+
+        function resetWalker() {
+            walkerState.posX = 0;
+            walkerState.posZ = 0;
+            walkerState.baseHeading = 0;
+            walkerState.torsoYaw = 0;
+            walkerState.travelHeading = 0;
+            walkerState.camAzimuth = Math.PI;
+            walkerState.gaitProgress = 0;
+            walkerState.activeTripodGroup = 0;
+            
+            robotMasterGroup.position.set(0, 0, 0);
+            robotMasterGroup.rotation.set(0, 0, 0);
+            updateAllLegNominalOffsets();
+        }
+
+        // --- LOOP PRINCIPAL: MIRA, LOCOMOÇÃO, TRIPOD GAIT & CÂMERA A 45° ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            // 1. MIRA DO MOUSE NO PLANO DO TERRENO
+            raycaster.setFromCamera(mouseNorm, camera);
+            const groundHit = new THREE.Vector3();
+            raycaster.ray.intersectPlane(aimPlane, groundHit);
+            if (groundHit) {
+                walkerState.aimWorldPoint.copy(groundHit);
+            }
+
+            // Atualizar Linha Laser do Focinho/Canhão até a Mira
+            const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
+            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.1, walkerState.aimWorldPoint.z);
+            laserLine.geometry.setFromPoints([snoutPos, laserHit]);
+
+            // 2. ENTRADA DE MOVIMENTO (WASD)
+            let moveFwd = 0;
+            let moveSide = 0;
+            if (keys.KeyW || keys.ArrowUp) moveFwd += 1;
+            if (keys.KeyS || keys.ArrowDown) moveFwd -= 1;
+            if (keys.KeyA || keys.ArrowLeft) moveSide -= 1;
+            if (keys.KeyD || keys.ArrowRight) moveSide += 1;
+
+            walkerState.isMoving = (moveFwd !== 0 || moveSide !== 0);
+
+            // 3. MIRA EM DOIS NÍVEIS (DUAL-TIER AIMING)
+            const bodyWorldPos = new THREE.Vector3();
+            bodyGroup.getWorldPosition(bodyWorldPos);
+
+            const toAimX = walkerState.aimWorldPoint.x - bodyWorldPos.x;
+            const toAimZ = walkerState.aimWorldPoint.z - bodyWorldPos.z;
+            const targetAimAngle = Math.atan2(toAimX, toAimZ);
+
+            let deltaAngle = targetAimAngle - walkerState.baseHeading;
+            deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle)); // Normalizado [-PI, PI]
+
+            const comfortLimit = walkerState.comfortAngle; // 25 graus
+
+            if (Math.abs(deltaAngle) <= comfortLimit) {
+                // ZONA DE CONFORTO: Apenas torce o tronco/chassi, patas firmes no solo
+                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw, deltaAngle, 10.0, dt);
+                walkerState.isTurningInPlace = false;
+                walkerState.turnDir = 0;
+            } else {
+                // FORA DA ZONA DE CONFORTO: Tronco se inclina no limite e base ativa passos de pivô
+                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw, Math.sign(deltaAngle) * comfortLimit, 8.0, dt);
+                walkerState.isTurningInPlace = true;
+                walkerState.turnDir = Math.sign(deltaAngle);
+            }
+
+            // 4. SEQUENCIADOR DE MARCHA TRIPÉ PROCEDURAL
+            const isGaitActive = walkerState.isMoving || walkerState.isTurningInPlace;
+            document.getElementById('gait-state-text').innerText = isGaitActive 
+                ? (walkerState.isMoving ? 'AVANÇANDO' : 'PIVÔ NO PRÓPRIO EIXO') 
+                : 'ESTÁTICO (ZONA DE CONFORTO)';
+
+            // Vetor de Deslocamento Global
+            const moveVec = new THREE.Vector3();
+            if (walkerState.isMoving) {
+                moveVec.set(moveSide, 0, moveFwd).normalize();
+                moveVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.baseHeading);
+                walkerState.travelHeading = Math.atan2(moveVec.x, moveVec.z);
+            } else if (walkerState.isTurningInPlace) {
+                walkerState.travelHeading = walkerState.baseHeading;
+            }
+
+            if (isGaitActive) {
+                const stepSpeed = walkerState.isMoving ? 2.8 : (2.4 * (walkerState.pivotSpeed / 2.5));
+                walkerState.gaitProgress += dt * stepSpeed;
+
+                // Deslocar a base gradualmente durante o ciclo
+                if (walkerState.isMoving) {
+                    const stepDistance = walkerState.moveSpeed * dt;
+                    walkerState.posX += moveVec.x * stepDistance;
+                    walkerState.posZ += moveVec.z * stepDistance;
+                }
+
+                if (walkerState.isTurningInPlace) {
+                    const turnRate = (walkerState.stepTurnAngle * walkerState.pivotSpeed);
+                    walkerState.baseHeading += walkerState.turnDir * turnRate * dt;
+                }
+
+                if (walkerState.gaitProgress >= 1.0) {
+                    walkerState.gaitProgress = 0;
+                    walkerState.activeTripodGroup = (walkerState.activeTripodGroup === 0) ? 1 : 0;
+                    legs.forEach(l => { l.isStepping = false; });
+                }
+            } else {
+                walkerState.gaitProgress = 0;
+                legs.forEach(l => { l.isStepping = false; });
+            }
+
+            // Posicionar o Robô no Terreno em Escala 1:1
+            const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
+            robotMasterGroup.position.set(walkerState.posX, currentTerrainY, walkerState.posZ);
+            robotMasterGroup.rotation.y = walkerState.baseHeading;
+            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
+            bodyGroup.rotation.y = walkerState.torsoYaw;
+
+            // Atualizar matriz de mundo antes do solver IK
+            robotMasterGroup.updateMatrixWorld(true);
+
+            // 5. ATUALIZAR TRAJETÓRIAS DAS PATAS E SOLVER IK
+            const activeGroup = walkerState.activeTripodGroup;
+            const stepT = THREE.MathUtils.clamp(walkerState.gaitProgress, 0, 1);
+            const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight);
+
+            legs.forEach((leg) => {
+                const isSwingLeg = isGaitActive && (leg.group === activeGroup);
+                const legDot = document.getElementById(`dot-${leg.id}`);
+
+                if (legDot) {
+                    legDot.className = isSwingLeg ? 'leg-dot swing' : 'leg-dot stance';
+                }
+
+                if (isSwingLeg) {
+                    if (!leg.isStepping) {
+                        leg.isStepping = true;
+                        leg.stepStartTarget.copy(leg.currentTarget);
+
+                        // Ponto Futuro de Pouso (Touchdown Prediction)
+                        let targetHeading = walkerState.baseHeading;
+                        if (walkerState.isTurningInPlace) {
+                            targetHeading += walkerState.turnDir * (walkerState.stepTurnAngle * 0.6);
+                        }
+
+                        const nominalWorld = leg.nominalOffset.clone()
+                            .applyAxisAngle(new THREE.Vector3(0, 1, 0), targetHeading)
+                            .add(robotMasterGroup.position);
+
+                        if (walkerState.isMoving) {
+                            nominalWorld.addScaledVector(moveVec, walkerState.strideLength * 0.5);
+                        }
+
+                        nominalWorld.y = getTerrainHeight(nominalWorld.x, nominalWorld.z);
+                        leg.stepEndTarget.copy(nominalWorld);
+                    }
+
+                    // Interpolação do Passo no Ar
+                    const smoothProgress = THREE.MathUtils.smoothstep(stepT, 0, 1);
+                    leg.currentTarget.lerpVectors(leg.stepStartTarget, leg.stepEndTarget, smoothProgress);
+
+                    // Arco de Elevação no Ar
+                    const lift = Math.sin(stepT * Math.PI) * walkerState.stepHeight;
+                    const baseGroundY = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                    leg.currentTarget.y = baseGroundY + lift;
+
+                } else {
+                    // Stance Phase: Patas 100% travadas no solo
+                    leg.isStepping = false;
+                    if (!isGaitActive) {
+                        const targetWorld = leg.nominalOffset.clone()
+                            .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.baseHeading)
+                            .add(robotMasterGroup.position);
+                        targetWorld.y = getTerrainHeight(targetWorld.x, targetWorld.z);
+                        leg.currentTarget.lerp(targetWorld, 0.15);
+                    } else {
+                        leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                    }
+                }
+
+                if (leg.targetMesh) {
+                    leg.targetMesh.position.copy(leg.currentTarget);
+                }
+
+                // Resolver IK 3-DoF com o algoritmo analítico 100% idêntico ao original
+                solveLegIK(leg, leg.currentTarget, leg.lineMesh, currentElevation);
+            });
+
+            // 6. CÂMERA TÁTICA A 45°
+            // A câmera só reorbita para trás do robô quando ele está ATIVAMENTE AVANÇANDO (isMoving com WASD)
+            // Quando parado ou apenas pivoteando no próprio eixo, o azimute da câmera permanece 100% ESTÁTICO
+            if (walkerState.isMoving) {
+                const targetCamAzimuth = walkerState.baseHeading + Math.PI;
+                let angleDiff = targetCamAzimuth - walkerState.camAzimuth;
+                angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+                walkerState.camAzimuth += angleDiff * Math.min(1.0, dt * walkerState.camSmoothFactor);
+            }
+
+            const pitchRad = THREE.MathUtils.degToRad(walkerState.camPitchDeg);
+            const camDistH = walkerState.camDistance * Math.cos(pitchRad);
+            const camDistV = walkerState.camDistance * Math.sin(pitchRad);
+
+            const camTargetX = robotMasterGroup.position.x;
+            const camTargetY = robotMasterGroup.position.y + 1.2;
+            const camTargetZ = robotMasterGroup.position.z;
+
+            const desiredCamX = camTargetX + Math.sin(walkerState.camAzimuth) * camDistH;
+            const desiredCamY = camTargetY + camDistV;
+            const desiredCamZ = camTargetZ + Math.cos(walkerState.camAzimuth) * camDistH;
+
+            camera.position.set(desiredCamX, desiredCamY, desiredCamZ);
+            camera.lookAt(camTargetX, camTargetY, camTargetZ);
+
+            // 7. TELEMETRIA HUD & BÚSSOLA
+            const currentRobotHeading = (walkerState.isMoving ? walkerState.travelHeading : (walkerState.baseHeading + walkerState.torsoYaw));
+            const headingDeg = Math.round(THREE.MathUtils.radToDeg(currentRobotHeading) % 360);
+            const normalizedDeg = (headingDeg + 360) % 360;
+            const directions = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
+            const dirIndex = Math.round(normalizedDeg / 45) % 8;
+            document.getElementById('compass-val').innerText = `${String(normalizedDeg).padStart(3, '0')}° ${directions[dirIndex]}`;
+
+            // Renderizar Cena
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Responsividade ao Redimensionar Janela
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            legs.forEach(l => {
+                if (l.lineMesh) l.lineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
+            });
+        });
+    </script>
+</body>
+</html>
