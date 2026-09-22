@@ -1780,6 +1780,18 @@
             const toAimDistH = Math.hypot(aimDX, aimDZ);
             const targetAimAngle = (toAimDistH > 0.01) ? Math.atan2(aimDX, aimDZ) : (walkerState.baseHeading || 0);
 
+            // Raio da abertura das patas (R)
+            let footprintRadius = 0;
+            for (let i = 0; i < legs.length; i++) {
+                const r = Math.hypot(legs[i].nominalOffset.x, legs[i].nominalOffset.z);
+                if (r > footprintRadius) footprintRadius = r;
+            }
+            if (footprintRadius < 0.1) footprintRadius = 7.0;
+
+            // Gradiente de Velocidade Dinâmica: D / R (onde D=R => 1.0 * moveSpeed), Clamping no topo em 24.0 m/s
+            const speedGradient = (footprintRadius > 0.001) ? (toAimDistH / footprintRadius) : 1.0;
+            const effectiveMoveSpeed = THREE.MathUtils.clamp(walkerState.moveSpeed * speedGradient, 0.0, 24.0);
+
             let deltaAngle = targetAimAngle - (walkerState.baseHeading || 0);
             deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle)); // Normalizado [-PI, PI]
             if (isNaN(deltaAngle)) deltaAngle = 0;
@@ -1818,11 +1830,11 @@
             const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, -maxPitch, maxPitch);
 
             // Suavização das variáveis dinâmicas (Damp)
-            walkerState.dynLift = THREE.MathUtils.damp(walkerState.dynLift || 0, targetLift, 8.0, dt);
-            walkerState.dynShiftZ = THREE.MathUtils.damp(walkerState.dynShiftZ || 0, targetShiftZ, 8.0, dt);
-            walkerState.dynPitch = THREE.MathUtils.damp(walkerState.dynPitch || 0, targetPitch, 8.0, dt);
+            walkerState.dynLift = THREE.MathUtils.damp(walkerState.dynLift || 0, targetLift, 6.0, dt);
+            walkerState.dynShiftZ = THREE.MathUtils.damp(walkerState.dynShiftZ || 0, targetShiftZ, 6.0, dt);
+            walkerState.dynPitch = THREE.MathUtils.damp(walkerState.dynPitch || 0, targetPitch, 6.0, dt);
 
-            // 4. SEQUENCIADOR DE MARCHA TRIPÉ PROCEDURAL (O CORPO SE MOVE PELAS ÂNCORAS DE APOIO)
+            // 4. MÁQUINA DE ESTADOS DO TRIPÉ: CONFORTO vs. PIVÔ vs. AVANÇO WASD
             const wantsMove = walkerState.isMoving;
             const wantsTurn = walkerState.isTurningInPlace;
             const wantsGait = wantsMove || wantsTurn;
@@ -1839,7 +1851,7 @@
 
             const isGaitActive = wantsGait || walkerState.isStepActive;
             document.getElementById('gait-state-text').innerText = isGaitActive 
-                ? (wantsMove ? 'AVANÇANDO' : 'PIVÔ NO PRÓPRIO EIXO') 
+                ? (wantsMove ? `AVANÇANDO (${effectiveMoveSpeed.toFixed(1)} m/s)` : 'PIVÔ NO PRÓPRIO EIXO') 
                 : 'ESTÁTICO (ZONA DE CONFORTO)';
 
             if (isGaitActive) {
@@ -1897,9 +1909,9 @@
                     });
                 }
 
-                // Cadência do Passo
+                // Cadência do Passo modulada dinamicamente pela velocidade efetiva (D/R)
                 const stepCadence = wantsMove 
-                    ? (walkerState.moveSpeed / walkerState.strideLength * 0.85)
+                    ? (effectiveMoveSpeed / walkerState.strideLength * 0.85)
                     : (2.0 * (walkerState.pivotSpeed / 4.0));
 
                 walkerState.gaitProgress += dt * stepCadence;
