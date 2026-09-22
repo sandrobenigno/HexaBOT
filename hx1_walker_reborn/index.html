@@ -552,26 +552,111 @@
         scene.add(rimLightRed);
 
         // --- ARENA DE TESTES PROCEDURAL EM ESCALA TOTAL 1:1 ---
+        // --- ARENA DE TESTES PROCEDURAL COM ELEVAÇÕES (BUMP UPS), CRATERAS (BUMP DOWNS) E CUBOS ESCALÁVEIS ---
         const arenaGroup = new THREE.Group();
         scene.add(arenaGroup);
 
-        // Função de Altura do Terreno
-        function getTerrainHeight(x, z) {
+        // Relevos Marcantes do Terreno (Colinas e Crateras)
+        const bumps = [
+            // Bump Ups (Elevações / Colinas)
+            { x: 32, z: 26, radius: 24, height: 2.8 },
+            { x: -36, z: 42, radius: 26, height: 3.2 },
+            { x: 48, z: -38, radius: 25, height: 2.6 },
+            { x: -48, z: -36, radius: 28, height: 3.0 },
+            { x: 2, z: 52, radius: 22, height: 2.2 },
+            { x: 55, z: 2, radius: 24, height: 2.5 },
+
+            // Bump Downs (Depressões / Crateras)
+            { x: -26, z: 16, radius: 18, height: -1.8 },
+            { x: 26, z: -22, radius: 20, height: -1.6 },
+            { x: -16, z: -46, radius: 22, height: -2.0 },
+            { x: 38, z: 36, radius: 19, height: -1.5 },
+            { x: -46, z: 2, radius: 18, height: -1.7 }
+        ];
+
+        // Função de Altura do Terreno Contínuo (Malha Base)
+        function getBaseGroundMeshHeight(x, z) {
             const d = Math.hypot(x, z);
-            if (d < 12.0) return 0.0; // Centro plano para o robô em escala 1:1
-            const wave1 = Math.sin(x * 0.04) * Math.cos(z * 0.04) * 0.85;
-            const wave2 = Math.sin(x * 0.02 + 1.2) * Math.cos(z * 0.02) * 1.35;
-            return wave1 + wave2;
+            if (d < 10.0) return 0.0; // Centro plano inicial
+            const centerFade = THREE.MathUtils.clamp((d - 10.0) / 6.0, 0.0, 1.0);
+
+            const wave1 = Math.sin(x * 0.035) * Math.cos(z * 0.035) * 0.75;
+            const wave2 = Math.sin(x * 0.018 + 0.8) * Math.cos(z * 0.018) * 1.15;
+            let h = wave1 + wave2;
+
+            for (let i = 0; i < bumps.length; i++) {
+                const b = bumps[i];
+                const distB = Math.hypot(x - b.x, z - b.z);
+                if (distB < b.radius) {
+                    const factor = 0.5 * (1.0 + Math.cos((distB / b.radius) * Math.PI));
+                    h += b.height * factor;
+                }
+            }
+
+            return h * centerFade;
         }
 
-        // Criar Malha do Terreno Ampliada
-        const terrainGeo = new THREE.PlaneGeometry(280, 280, 120, 120);
+        // Coleção de Plataformas e Cubos Pisáveis/Escaláveis (Geometria Sólida)
+        const steppableBoxes = [
+            // Degraus e plataformas próximas da base central (para teste imediato!)
+            { x: 12.0, z: 8.0, sizeX: 8.0, sizeZ: 8.0, height: 0.8, rotY: 0.2 },
+            { x: 19.0, z: 14.0, sizeX: 7.5, sizeZ: 7.5, height: 1.5, rotY: -0.3 },
+            { x: -14.0, z: 7.0, sizeX: 9.0, sizeZ: 7.0, height: 1.2, rotY: 0.35 },
+            { x: -10.0, z: -15.0, sizeX: 8.0, sizeZ: 8.0, height: 0.9, rotY: -0.2 },
+            { x: 11.0, z: -14.0, sizeX: 8.0, sizeZ: 9.0, height: 1.6, rotY: 0.45 },
+            { x: 0.0, z: 22.0, sizeX: 11.0, sizeZ: 7.0, height: 1.1, rotY: 0.0 },
+            { x: 0.0, z: -24.0, sizeX: 12.0, sizeZ: 8.0, height: 1.4, rotY: 0.1 },
+
+            // Plataformas maiores no campo aberto
+            { x: 36.0, z: 12.0, sizeX: 13.0, sizeZ: 11.0, height: 2.0, rotY: 0.35 },
+            { x: -40.0, z: -20.0, sizeX: 12.0, sizeZ: 12.0, height: 2.2, rotY: -0.4 },
+            { x: 24.0, z: -40.0, sizeX: 11.0, sizeZ: 14.0, height: 1.8, rotY: 0.6 },
+            { x: -30.0, z: 40.0, sizeX: 15.0, sizeZ: 11.0, height: 2.4, rotY: -0.5 },
+            { x: 46.0, z: -26.0, sizeX: 13.0, sizeZ: 13.0, height: 2.5, rotY: 0.15 }
+        ];
+
+        // Inicializar Altitude de Base e Topo de cada Caixa
+        steppableBoxes.forEach((b) => {
+            b.baseY = getBaseGroundMeshHeight(b.x, b.z);
+            b.topY = b.baseY + b.height;
+        });
+
+        // Função Unificada de Altura do Terreno (Malha + Superfícies dos Cubos)
+        function getTerrainHeight(x, z) {
+            let surfaceY = getBaseGroundMeshHeight(x, z);
+
+            for (let i = 0; i < steppableBoxes.length; i++) {
+                const b = steppableBoxes[i];
+                let dx = x - b.x;
+                let dz = z - b.z;
+                if (b.rotY) {
+                    const cosA = Math.cos(-b.rotY);
+                    const sinA = Math.sin(-b.rotY);
+                    const lx = dx * cosA - dz * sinA;
+                    const lz = dx * sinA + dz * cosA;
+                    dx = lx;
+                    dz = lz;
+                }
+                const halfX = b.sizeX * 0.5;
+                const halfZ = b.sizeZ * 0.5;
+                if (Math.abs(dx) <= halfX && Math.abs(dz) <= halfZ) {
+                    if (b.topY > surfaceY) {
+                        surfaceY = b.topY;
+                    }
+                }
+            }
+
+            return surfaceY;
+        }
+
+        // Criar Malha do Terreno com Relevo
+        const terrainGeo = new THREE.PlaneGeometry(280, 280, 140, 140);
         terrainGeo.rotateX(-Math.PI / 2);
         const posAttr = terrainGeo.attributes.position;
         for (let i = 0; i < posAttr.count; i++) {
             const px = posAttr.getX(i);
             const pz = posAttr.getZ(i);
-            posAttr.setY(i, getTerrainHeight(px, pz));
+            posAttr.setY(i, getBaseGroundMeshHeight(px, pz));
         }
         terrainGeo.computeVertexNormals();
 
@@ -590,37 +675,62 @@
         gridHelper.position.y = 0.04;
         arenaGroup.add(gridHelper);
 
-        // Coleção de Obstáculos Proporcionais (Escala 1:1)
+        // Renderizar Plataformas / Cubos Escaláveis na Cena 3D
+        const boxMat = new THREE.MeshStandardMaterial({
+            color: 0x151f32,
+            roughness: 0.45,
+            metalness: 0.8
+        });
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 });
+        const padMat = new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            emissive: 0x002244,
+            roughness: 0.3,
+            metalness: 0.9
+        });
+
+        steppableBoxes.forEach((b) => {
+            const boxGroup = new THREE.Group();
+            boxGroup.position.set(b.x, b.baseY + b.height * 0.5, b.z);
+            if (b.rotY) boxGroup.rotation.y = b.rotY;
+
+            // Bloco principal
+            const bGeo = new THREE.BoxGeometry(b.sizeX, b.height, b.sizeZ);
+            const bMesh = new THREE.Mesh(bGeo, boxMat);
+            bMesh.castShadow = true;
+            bMesh.receiveShadow = true;
+            boxGroup.add(bMesh);
+
+            // Borda Holográfica Neon
+            const edges = new THREE.EdgesGeometry(bGeo);
+            const line = new THREE.LineSegments(edges, edgeMat);
+            boxGroup.add(line);
+
+            // Pad tático no topo
+            const padGeo = new THREE.PlaneGeometry(b.sizeX * 0.85, b.sizeZ * 0.85);
+            padGeo.rotateX(-Math.PI / 2);
+            const padMesh = new THREE.Mesh(padGeo, padMat);
+            padMesh.position.y = b.height * 0.5 + 0.01;
+            padMesh.receiveShadow = true;
+            boxGroup.add(padMesh);
+
+            arenaGroup.add(boxGroup);
+        });
+
+        // Pilares / Colunas Decorativas Adicionais
         const colGeo = new THREE.CylinderGeometry(2.5, 3.2, 10.0, 8);
         const colMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.7 });
-        const boxGeo = new THREE.BoxGeometry(6.5, 4.0, 6.5);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7, metalness: 0.5 });
-        const targetGeo = new THREE.SphereGeometry(1.5, 16, 16);
-        const targetMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x660022, roughness: 0.2 });
-
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 15; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const radius = 24.0 + Math.random() * 95.0;
+            const radius = 35.0 + Math.random() * 85.0;
             const ox = Math.cos(angle) * radius;
             const oz = Math.sin(angle) * radius;
-            const oy = getTerrainHeight(ox, oz);
-
-            let mesh;
-            const type = i % 3;
-            if (type === 0) {
-                mesh = new THREE.Mesh(colGeo, colMat);
-                mesh.position.set(ox, oy + 5.0, oz);
-            } else if (type === 1) {
-                mesh = new THREE.Mesh(boxGeo, boxMat);
-                mesh.position.set(ox, oy + 2.0, oz);
-                mesh.rotation.y = Math.random() * Math.PI;
-            } else {
-                mesh = new THREE.Mesh(targetGeo, targetMat);
-                mesh.position.set(ox, oy + 2.5, oz);
-            }
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            arenaGroup.add(mesh);
+            const oy = getBaseGroundMeshHeight(ox, oz);
+            const col = new THREE.Mesh(colGeo, colMat);
+            col.position.set(ox, oy + 5.0, oz);
+            col.castShadow = true;
+            col.receiveShadow = true;
+            arenaGroup.add(col);
         }
 
         // --- SISTEMA CINEMÁTICO & ROBÔ DO HX1 WALKER (ESCALA ORIGINAL 1:1) ---
@@ -1321,6 +1431,9 @@
             walkerState.isStepActive = false;
             walkerState.gaitProgress = 0;
             walkerState.activeTripodGroup = 0;
+            walkerState.terrainElevationY = 0;
+            walkerState.terrainPitch = 0;
+            walkerState.terrainRoll = 0;
             
             robotMasterGroup.position.set(0, 0, 0);
             robotMasterGroup.rotation.set(0, 0, 0);
@@ -1335,12 +1448,13 @@
 
             const dt = Math.min(clock.getDelta(), 0.1);
 
-            // 1. MIRA DO MOUSE NO PLANO DO TERRENO
+            // 1. MIRA DO MOUSE NO PLANO DO TERRENO COM DETECÇÃO DE ALTURA
             raycaster.setFromCamera(mouseNorm, camera);
             const groundHit = new THREE.Vector3();
             raycaster.ray.intersectPlane(aimPlane, groundHit);
             if (groundHit) {
                 walkerState.aimWorldPoint.copy(groundHit);
+                walkerState.aimWorldPoint.y = getTerrainHeight(groundHit.x, groundHit.z);
             }
 
             // 2. ENTRADA DE MOVIMENTO (WASD)
@@ -1525,9 +1639,43 @@
                 });
             }
 
-            // Posicionar o Robô no Terreno em Escala 1:1 com Elevação, Recuo Z e Pitch Dinâmicos
-            robotMasterGroup.position.set(walkerState.posX, currentTerrainY, walkerState.posZ);
-            robotMasterGroup.rotation.y = walkerState.baseHeading;
+            // Cálculo do Centróide de Suporte e Inclinação do Relevo (Terrain Balancing)
+            let sumFootY = 0;
+            let frontY = 0;
+            let rearY = 0;
+            let leftY = 0;
+            let rightY = 0;
+            const footCount = legs.length || 6;
+
+            legs.forEach((leg) => {
+                const fy = leg.currentTarget.y;
+                sumFootY += fy;
+                if (leg.id === 'FR' || leg.id === 'FL') frontY += fy * 0.5;
+                if (leg.id === 'BR' || leg.id === 'BL') rearY += fy * 0.5;
+                if (leg.side === 'E') leftY += fy / 3;
+                if (leg.side === 'D') rightY += fy / 3;
+            });
+
+            const avgFootY = sumFootY / footCount;
+            const groundCenterY = getTerrainHeight(walkerState.posX, walkerState.posZ);
+            const targetBaseY = Math.max(groundCenterY, avgFootY);
+
+            // Suavização da Elevação e do Pitch/Roll de Relevo
+            walkerState.terrainElevationY = THREE.MathUtils.damp(walkerState.terrainElevationY || targetBaseY, targetBaseY, 8.0, dt);
+
+            // Inclinação Longitudinal (Subir / Descer Degraus e Colinas)
+            const stanceSpanZ = Math.max(7.0 * (walkerState.bodyHeight / 1.7), 4.0);
+            const rawTerrainPitch = -Math.atan2(frontY - rearY, stanceSpanZ) * 0.55;
+            walkerState.terrainPitch = THREE.MathUtils.damp(walkerState.terrainPitch || 0, rawTerrainPitch, 6.0, dt);
+
+            // Inclinação Transversal (Pata apoiada sobre degrau lateral)
+            const stanceSpanX = Math.max(9.0 * (walkerState.bodyHeight / 1.7), 5.0);
+            const rawTerrainRoll = Math.atan2(leftY - rightY, stanceSpanX) * 0.55;
+            walkerState.terrainRoll = THREE.MathUtils.damp(walkerState.terrainRoll || 0, rawTerrainRoll, 6.0, dt);
+
+            // Posicionar o Robô no Terreno em Escala 1:1 com Elevação Adaptativa e Equilíbrio de Relevo
+            robotMasterGroup.position.set(walkerState.posX, walkerState.terrainElevationY, walkerState.posZ);
+            robotMasterGroup.rotation.set(walkerState.terrainPitch, walkerState.baseHeading, walkerState.terrainRoll, 'YXZ');
             bodyGroup.position.set(0, walkerState.bodyHeight + walkerState.dynLift, walkerState.dynShiftZ);
             bodyGroup.rotation.set(walkerState.dynPitch, walkerState.torsoYaw, 0, 'YXZ');
 
@@ -1556,7 +1704,7 @@
             const camDistV = walkerState.camDistance * Math.sin(pitchRad);
 
             const camTargetX = robotMasterGroup.position.x;
-            const camTargetY = robotMasterGroup.position.y + 1.2;
+            const camTargetY = robotMasterGroup.position.y + walkerState.bodyHeight * 0.7;
             const camTargetZ = robotMasterGroup.position.z;
 
             const desiredCamX = camTargetX + Math.sin(walkerState.camAzimuth) * camDistH;
