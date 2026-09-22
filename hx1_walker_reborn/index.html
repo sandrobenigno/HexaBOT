@@ -442,6 +442,7 @@
                 <div class="control-item"><kbd>W</kbd> / <kbd>S</kbd> <span>Avançar / Recuar</span></div>
                 <div class="control-item"><kbd>A</kbd> / <kbd>D</kbd> <span>Desvio Lateral</span></div>
                 <div class="control-item"><kbd>Mouse</kbd> <span>Mirar no Solo</span></div>
+                <div class="control-item"><kbd>Botão Meio</kbd> <span>Girar Câmera</span></div>
                 <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
                 <div class="control-item"><kbd>H</kbd> <span>Ajuda</span></div>
             </div>
@@ -472,12 +473,13 @@
             </div>
             <div class="modal-body">
                 <p><strong>🎯 Mira em Dois Níveis:</strong> Ao mover o mouse próximo da frente da criatura (&le; 25°), o tronco se torce com as patas firmes no solo (IK puro). Ao mirar além de 25°, o robô executa passos de pivô para girar a base.</p>
-                <p><strong>🎥 Câmera Tática a 45°:</strong> A câmera orbita suavemente acompanhando a locomoção. Use a <strong>roda do mouse (scroll)</strong> ou o slider no painel para afastar/aproximar a visão (zoom).</p>
+                <p><strong>🎥 Câmera Tática Livre:</strong> A câmera acompanha o robô mantendo seu ângulo. Clique e arraste com o <strong>botão do meio do mouse (scroll click)</strong> para girar o ângulo do cenário e ajustar a inclinação. Use a <strong>roda do mouse (scroll)</strong> para zoom.</p>
                 <p><strong>🎮 Teclas:</strong></p>
                 <ul style="padding-left: 20px;">
                     <li><kbd>W</kbd>, <kbd>A</kbd>, <kbd>S</kbd>, <kbd>D</kbd> — Locomoção no terreno</li>
+                    <li><kbd>Botão Meio (Drag)</kbd> — Girar Câmera / Órbita Livre</li>
+                    <li><kbd>Scroll Mouse</kbd> — Zoom da Câmera (50m a 100m)</li>
                     <li><kbd>X</kbd> — Alternar Modo Raio-X Biomecânico</li>
-                    <li><kbd>Scroll Mouse</kbd> — Zoom da Câmera</li>
                     <li><kbd>H</kbd> — Abrir / Fechar esta tela de ajuda</li>
                     <li><kbd>R</kbd> — Resetar Posição na Arena</li>
                 </ul>
@@ -740,12 +742,51 @@
             if (lblZoom) lblZoom.innerText = `${Math.round(walkerState.camDistance)}m`;
         }, { passive: true });
 
-        // Mouse Aiming via Raycaster no Plano do Terreno
+        // Rotação Livre da Câmera com o Botão do Meio (MMB Drag)
+        let isMiddleDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 1) { // Botão do meio
+                isMiddleDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 1) {
+                isMiddleDragging = false;
+            }
+        });
+
+        window.addEventListener('blur', () => {
+            isMiddleDragging = false;
+        });
+
+        // Mouse Aiming via Raycaster no Plano do Terreno & Drag do Botão do Meio
         const raycaster = new THREE.Raycaster();
         const mouseNorm = new THREE.Vector2();
         const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
         window.addEventListener('mousemove', (e) => {
+            if (isMiddleDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+
+                // Rotação orbital do azimute e pitch da câmera
+                walkerState.camAzimuth -= deltaX * 0.006;
+                walkerState.camPitchDeg = THREE.MathUtils.clamp(
+                    walkerState.camPitchDeg - deltaY * 0.1,
+                    15.0,
+                    80.0
+                );
+            }
+
             mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouseNorm.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
@@ -1197,8 +1238,8 @@
             let moveSide = 0;
             if (keys.KeyW || keys.ArrowUp) moveFwd += 1;
             if (keys.KeyS || keys.ArrowDown) moveFwd -= 1;
-            if (keys.KeyA || keys.ArrowLeft) moveSide -= 1;
-            if (keys.KeyD || keys.ArrowRight) moveSide += 1;
+            if (keys.KeyA || keys.ArrowLeft) moveSide += 1; // Strafe Esquerda corrigido
+            if (keys.KeyD || keys.ArrowRight) moveSide -= 1; // Strafe Direita corrigido
 
             walkerState.isMoving = (moveFwd !== 0 || moveSide !== 0);
 
@@ -1397,17 +1438,8 @@
             });
 
             // 6. CÂMERA TÁTICA A 45°
-            // A câmera só reorbita para trás do robô quando ele está AVANÇANDO PARA FRENTE (tecla W)
-            // Deslocamentos "A", "S" e "D", ou pivô no próprio eixo mantêm o azimute da câmera 100% ESTÁTICO
-            if (moveFwd > 0) {
-                const targetCamAzimuth = walkerState.baseHeading + Math.PI;
-                let angleDiff = targetCamAzimuth - walkerState.camAzimuth;
-                angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff)); // [-PI, PI]
-
-                // Curva Ease-Out suave (Damp com desaceleração exponencial assintótica)
-                walkerState.camAzimuth = THREE.MathUtils.damp(walkerState.camAzimuth, walkerState.camAzimuth + angleDiff, 2.5, dt);
-            }
-
+            // O azimute da câmera permanece 100% ESTÁTICO durante todas as movimentações (W, A, S, D e Pivô)
+            // A câmera apenas translada acompanhando a posição do robô no mundo.
             const pitchRad = THREE.MathUtils.degToRad(walkerState.camPitchDeg);
             const camDistH = walkerState.camDistance * Math.cos(pitchRad);
             const camDistV = walkerState.camDistance * Math.sin(pitchRad);
