@@ -417,12 +417,12 @@
                         <input type="range" id="slider-height" min="0.10" max="2.50" step="0.05" value="1.70" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Velocidade de Avanço: <strong id="lbl-move-speed" style="color: #38bdf8;">10.0 m/s</strong></span>
-                        <input type="range" id="slider-move-speed" min="4.0" max="16.0" step="0.5" value="10.0" style="width: 130px; cursor: pointer;">
+                        <span>Velocidade de Avanço: <strong id="lbl-move-speed" style="color: #38bdf8;">16.0 m/s</strong></span>
+                        <input type="range" id="slider-move-speed" min="4.0" max="24.0" step="0.5" value="16.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">8.0x</strong></span>
-                        <input type="range" id="slider-pivot-speed" min="1.0" max="10.0" step="0.5" value="8.0" style="width: 130px; cursor: pointer;">
+                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">10.0x</strong></span>
+                        <input type="range" id="slider-pivot-speed" min="1.0" max="15.0" step="0.5" value="10.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
@@ -668,13 +668,13 @@
             // Postura Original Calibrada
             stanceSpread: 1.10, // Abertura padrão 1.10x
             bodyHeight: 1.70,   // Altura padrão do corpo (1.70m)
-            pivotSpeed: 8.0,    // Multiplicador da velocidade do pivô (slider, padrão 8.0x)
+            pivotSpeed: 10.0,   // Multiplicador da velocidade do pivô (slider, padrão 10.0x)
 
             // Controle de Marcha Tripé (Escala 1:1)
             isMoving: false,
             isTurningInPlace: false,
             turnDir: 0,
-            moveSpeed: 10.0,    // Velocidade de avanço (10 m/s em Full Battery)
+            moveSpeed: 16.0,    // Velocidade de avanço (16.0 m/s padrão)
             stepTurnAngle: 16.0 * (Math.PI / 180.0), // 16 graus por passada de pivô
             stepHeight: 0.50,   // Altura do arco do passo (0.50m)
             strideLength: 2.00, // Alcance do passo (2.00m)
