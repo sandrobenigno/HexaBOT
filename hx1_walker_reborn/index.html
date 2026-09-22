@@ -405,14 +405,14 @@
         <div class="hud-header">
             <div class="mech-card">
                 <div class="mech-title-row">
-                    <span class="mech-title">🤖 HX1 Walker</span>
+                    <span class="mech-title">🤖 HexaBOT Walker</span>
                     <span class="status-badge status-active" id="mech-status">Online</span>
                 </div>
                 <div class="mech-sub" id="model-desc">Escala Real 1:1 • IK Analítico Rigoroso • Zoom com a Roda do Mouse</div>
                 <div id="model-row" style="display: flex; gap: 6px; margin-bottom: 10px; align-items: center;">
                     <select id="model-select" style="flex: 1; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.73rem; font-weight: 600; padding: 5px 8px; border-radius: 6px; cursor: pointer; outline: none;">
-                        <option value="../glb/aranha.glb" selected>🕷️ Aranha HX1 (Clássica)</option>
-                        <option value="../glb/aranha_pernalonga.glb">🦵 Aranha Pernalonga</option>
+                        <option value="../glb/aranha_pernalonga.glb" selected>HX2 (Pernalonga)</option>
+                        <option value="../glb/aranha.glb">HX1 (Clássica)</option>
                         <option value="custom" disabled id="opt-custom">📂 Modelo Customizado...</option>
                     </select>
                     <input type="file" id="glb-file-input" accept=".glb,.gltf,.json" style="display: none;">
@@ -865,11 +865,12 @@
         // --- SISTEMA DE RESTRIÇÃO DE ESPAÇO: LIMITES DA ARENA & COLISÃO RÍGIDA DE OBSTÁCULOS ---
         const ARENA_HALF_BOUND = 130.0; // Limite do tabuleiro (280x280m -> borda segura 130m)
 
-        // Raio Dinâmico do Polígono de Suporte das Patas (considerando abertura stanceSpread)
+        // Raio Dinâmico do Polígono de Suporte das Patas (considerando abertura stanceSpread e modelo)
         function getMechFootprintRadius() {
+            const isPernalonga = legs.length > 0 && legs[0].L3 > 3.5;
+            const baseSpan = isPernalonga ? 8.8 : 6.65;
             const spread = (typeof walkerState !== 'undefined' && walkerState.stanceSpread) ? walkerState.stanceSpread : 1.10;
-            // Distância máxima nominal da pata em relação ao centro do corpo (~6.65m * spread) + margem da passada
-            return 6.65 * spread + 0.9;
+            return baseSpan * spread + 0.9;
         }
 
         // Restrição de Posição do Corpo / Centro do Robô (Garante que nenhuma pata penetre nos pilares nem saia do tabuleiro)
@@ -1156,18 +1157,18 @@
             }
         });
 
-        // --- FUNÇÃO DE CURVA ADAPTATIVA DA COXA (Exata de index.html) ---
-        // Y = 2.5m -> 5°
-        // Y = 1.3m -> 35°
-        // Y = 0.0m -> 45°
+        // --- FUNÇÃO DE CURVA ADAPTATIVA DA COXA ---
         function calculateAdaptiveElevation(yHeight) {
-            const y = THREE.MathUtils.clamp(yHeight, 0.0, 2.5);
-            if (y >= 1.3) {
-                const t = (y - 1.3) / (2.5 - 1.3);
+            const isPernalonga = legs.length > 0 && legs[0].L3 > 3.5;
+            const maxY = isPernalonga ? 3.5 : 2.5;
+            const midY = isPernalonga ? 1.8 : 1.3;
+            const y = THREE.MathUtils.clamp(yHeight, 0.0, maxY);
+            if (y >= midY) {
+                const t = (y - midY) / (maxY - midY);
                 const s = t * t * (3 - 2 * t);
                 return 35.0 - s * (35.0 - 5.0);
             } else {
-                const t = (1.3 - y) / 1.3;
+                const t = (midY - y) / midY;
                 const s = t * t * (3 - 2 * t);
                 return 35.0 + s * (45.0 - 35.0);
             }
@@ -1361,15 +1362,33 @@
             }
         }
 
+        // Posições Canônicas Base de Apoio Calibradas (HX1 - Escala 1.0)
+        const defaultFootPositionsHX1 = [
+            new THREE.Vector3(-5.8, 0.0,  3.2), // FR - D0_(1)
+            new THREE.Vector3(-6.4, 0.0, -0.4), // MR - D0_(2)
+            new THREE.Vector3(-5.2, 0.0, -4.0), // BR - D0_(3)
+            new THREE.Vector3( 5.8, 0.0,  3.2), // FL - E0_(1)
+            new THREE.Vector3( 6.4, 0.0, -0.4), // ML - E0_(2)
+            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL - E0_(3)
+        ];
+
         // --- SETUP DO MODELO DA ARANHA & MEDIÇÃO DINÂMICA DE OSSOS ---
-        function setupRobotModel(gltfScene) {
+        function setupRobotModel(gltfScene, modelId = '') {
             while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
             while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
             while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
             legs.length = 0;
 
             modelRoot = gltfScene;
-            bodyGroup.position.set(0, 0, 0);
+            const isPernalonga = modelId.toLowerCase().includes('pernalonga') || Boolean(modelRoot.name && modelRoot.name.toLowerCase().includes('pernalonga'));
+
+            // Parâmetros de locomoção e cinemática calibrados por modelo
+            walkerState.bodyHeight = isPernalonga ? 2.40 : 1.70;
+            walkerState.strideLength = isPernalonga ? 2.80 : 2.00;
+            walkerState.stepHeight = isPernalonga ? 0.65 : 0.50;
+            walkerState.stanceSpread = 1.10;
+
+            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
             bodyGroup.rotation.set(0, 0, 0);
             bodyGroup.add(modelRoot);
             bodyGroup.updateMatrixWorld(true);
@@ -1387,9 +1406,6 @@
             const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
             const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
             const legSides = ['D', 'D', 'D', 'E', 'E', 'E'];
-            // Grupos de Tripé Alternados:
-            // Grupo 0: FR(0), ML(4), BR(2)
-            // Grupo 1: FL(3), MR(1), BL(5)
             const tripodGroups = [0, 1, 0, 1, 0, 1];
 
             legBaseNames.forEach((baseName, index) => {
@@ -1407,15 +1423,14 @@
 
                     const isRight = legSides[index] === 'D';
 
-                    // Dimensões Canônicas 1:1 dos Ossos (Exatas do Modelo 3D)
-                    const measuredL1 = L1_M; // 2.3608m
-                    const measuredL2 = L2_M; // 2.1611m
-                    const isPernalonga = Boolean(modelRoot.name && modelRoot.name.toLowerCase().includes('pernalonga'));
-                    const measuredL3 = isPernalonga ? (L3_M * 2.0) : L3_M; // 2.8000m (ou 5.60m)
+                    // Dimensões Canônicas 1:1 dos Membros (Calibradas para Cinemática Analítica sem Sobreposição)
+                    const measuredL1 = isPernalonga ? 3.3132 : 2.3608; // Coxa
+                    const measuredL2 = isPernalonga ? 2.7678 : 2.1611; // Fêmur
+                    const measuredL3 = isPernalonga ? 3.7400 : 2.8000; // Tíbia (ponto de contato da pata)
 
                     // Âncora Visual
                     const targetMesh = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.18, 16, 16),
+                        new THREE.SphereGeometry(isPernalonga ? 0.20 : 0.18, 16, 16),
                         new THREE.MeshStandardMaterial({
                             color: isRight ? 0x00d2ff : 0x2ed573,
                             emissive: isRight ? 0x003366 : 0x115522,
@@ -1438,7 +1453,10 @@
                     const lineMesh = new Line2(lineGeo, lineMat);
                     skeletonLinesGroup.add(lineMesh);
 
-                    const baseOffset = defaultFootPositions[index].clone();
+                    // Posição base canônica proporcional ao alcance dos membros
+                    const canonicalBase = defaultFootPositionsHX1[index];
+                    const legRatio = (measuredL1 + measuredL2 + measuredL3) / (2.3608 + 2.1611 + 2.8000);
+                    const baseOffset = canonicalBase.clone().multiplyScalar(legRatio);
                     const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
                     const initTarget = nominalWorldOffset.clone();
                     const validInit = constrainFootPosition(initTarget.x, initTarget.z);
@@ -1469,18 +1487,25 @@
                 }
             });
 
-            // Altura e proporções 1:1 rigorosas
-            walkerState.bodyHeight = 1.70;
-            walkerState.strideLength = 2.00;
-            walkerState.stepHeight = 0.50;
+            // Parâmetros de locomoção e cinemática calibrados por modelo
+            walkerState.bodyHeight = isPernalonga ? 2.40 : 1.70;
+            walkerState.strideLength = isPernalonga ? 2.80 : 2.00;
+            walkerState.stepHeight = isPernalonga ? 0.65 : 0.50;
+            walkerState.stanceSpread = 1.10;
 
             const sliderHeight = document.getElementById('slider-height');
             const lblHeight = document.getElementById('lbl-height');
             if (sliderHeight) {
-                sliderHeight.max = '2.50';
-                sliderHeight.value = '1.70';
+                sliderHeight.min = isPernalonga ? '0.20' : '0.10';
+                sliderHeight.max = isPernalonga ? '3.80' : '2.50';
+                sliderHeight.value = walkerState.bodyHeight.toFixed(2);
             }
-            if (lblHeight) lblHeight.innerText = '1.70m';
+            if (lblHeight) lblHeight.innerText = `${walkerState.bodyHeight.toFixed(2)}m`;
+
+            const sliderSpread = document.getElementById('slider-spread');
+            const lblSpread = document.getElementById('lbl-spread');
+            if (sliderSpread) sliderSpread.value = '1.10';
+            if (lblSpread) lblSpread.innerText = '1.10x';
 
             resetWalker();
             const loading = document.getElementById('loading');
@@ -1604,7 +1629,7 @@
             gltfLoader.load(
                 url,
                 (gltf) => {
-                    setupRobotModel(gltf.scene);
+                    setupRobotModel(gltf.scene, url);
                     if (displayName) {
                         document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
                     }
@@ -1614,7 +1639,7 @@
                     console.warn(`Tentando caminho alternativo para ${url}...`, err);
                     const altUrl = url.startsWith('../') ? url.replace('../', './') : `../${url}`;
                     gltfLoader.load(altUrl, (gltf2) => {
-                        setupRobotModel(gltf2.scene);
+                        setupRobotModel(gltf2.scene, altUrl);
                         if (displayName) {
                             document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
                         }
@@ -1633,8 +1658,8 @@
             });
         }
 
-        // Carregar Modelo Inicial (Aranha Clássica HX1 Padrão)
-        loadModelPreset('../glb/aranha.glb', '🕷️ Aranha HX1 (Clássica)');
+        // Carregar Modelo Inicial Padrão: HX2 (Pernalonga)
+        loadModelPreset('../glb/aranha_pernalonga.glb', 'HX2 (Pernalonga)');
 
         // Suporte a Drag & Drop de Novos Modelos
         const dropZone = document.getElementById('drop-zone');
