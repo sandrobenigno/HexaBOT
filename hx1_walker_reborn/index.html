@@ -220,6 +220,20 @@
             border-color: #38bdf8;
         }
 
+        /* Modo Ocultar Painéis com a Tecla P */
+        body.hud-hidden .compass-card,
+        body.hud-hidden .hud-footer,
+        body.hud-hidden .mech-sub,
+        body.hud-hidden #model-row,
+        body.hud-hidden #sliders-panel {
+            display: none !important;
+        }
+
+        body.hud-hidden .mech-card {
+            padding: 8px 14px;
+            min-width: unset;
+        }
+
         /* Retículo de Mira Customizado */
         #crosshair {
             position: absolute;
@@ -395,10 +409,10 @@
                     <span class="status-badge status-active" id="mech-status">Online</span>
                 </div>
                 <div class="mech-sub" id="model-desc">Escala Real 1:1 • IK Analítico Rigoroso • Zoom com a Roda do Mouse</div>
-                <div style="display: flex; gap: 6px; margin-bottom: 10px; align-items: center;">
+                <div id="model-row" style="display: flex; gap: 6px; margin-bottom: 10px; align-items: center;">
                     <select id="model-select" style="flex: 1; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.73rem; font-weight: 600; padding: 5px 8px; border-radius: 6px; cursor: pointer; outline: none;">
-                        <option value="../glb/aranha_pernalonga.glb" selected>🦵 Aranha Pernalonga (Padrão)</option>
-                        <option value="../glb/aranha.glb">🕷️ Aranha HX1 (Clássica)</option>
+                        <option value="../glb/aranha.glb" selected>🕷️ Aranha HX1 (Clássica)</option>
+                        <option value="../glb/aranha_pernalonga.glb">🦵 Aranha Pernalonga</option>
                         <option value="custom" disabled id="opt-custom">📂 Modelo Customizado...</option>
                     </select>
                     <input type="file" id="glb-file-input" accept=".glb,.gltf,.json" style="display: none;">
@@ -412,7 +426,7 @@
                     </button>
                 </div>
                 <!-- Sliders de Ajuste Fino de Postura e Câmera -->
-                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.72rem; color: #94a3b8; border-top: 1px solid rgba(255,255,200,0.08); padding-top: 8px;">
+                <div id="sliders-panel" style="display: flex; flex-direction: column; gap: 6px; font-size: 0.72rem; color: #94a3b8; border-top: 1px solid rgba(255,255,200,0.08); padding-top: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Abertura Patas: <strong id="lbl-spread" style="color: #38bdf8;">1.10x</strong></span>
                         <input type="range" id="slider-spread" min="0.60" max="1.80" step="0.05" value="1.10" style="width: 130px; cursor: pointer;">
@@ -428,6 +442,14 @@
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">15.0x</strong></span>
                         <input type="range" id="slider-pivot-speed" min="1.0" max="25.0" step="0.5" value="15.0" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Relevo do Terreno: <strong id="lbl-relief" style="color: #38bdf8;">1.20x</strong></span>
+                        <input type="range" id="slider-relief" min="0.00" max="3.00" step="0.10" value="1.20" style="width: 130px; cursor: pointer;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Inclinação Câmera (Pitch): <strong id="lbl-pitch" style="color: #38bdf8;">25.0°</strong></span>
+                        <input type="range" id="slider-pitch" min="15.0" max="80.0" step="1.0" value="25.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
@@ -449,6 +471,7 @@
                 <div class="control-item"><kbd>Mouse</kbd> <span>Mirar no Solo</span></div>
                 <div class="control-item"><kbd>Botão Meio</kbd> <span>Girar Câmera</span></div>
                 <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
+                <div class="control-item"><kbd>P</kbd> <span>Painéis</span></div>
                 <div class="control-item"><kbd>H</kbd> <span>Ajuda</span></div>
             </div>
 
@@ -504,8 +527,8 @@
         // --- CENA, CÂMERA & RENDERER ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x030712);
-        scene.fog = new THREE.FogExp2(0x030712, 0.007);
+        scene.background = new THREE.Color(0x020306);
+        scene.fog = new THREE.Fog(0x020306, 30.0, 210.0); // Fog calibrado para manter a densidade perfeita de 60m em qualquer zoom
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 500);
         camera.position.set(0, 35, 40);
@@ -514,86 +537,101 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.type = THREE.PCFShadowMap; // Sombra nítida e bem marcada
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.1;
+        renderer.toneMappingExposure = 0.85;
         container.appendChild(renderer.domElement);
 
-        // --- AMBIENTE IBL ROOM ---
+        // --- AMBIENTE IBL ROOM (Reflexos Metálicos Vivos no Chassi e Articulações da Aranha) ---
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
         pmremGenerator.compileEquirectangularShader();
         const roomEnv = new RoomEnvironment();
         scene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
 
-        // --- ILUMINAÇÃO SCI-FI ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+        // --- ILUMINAÇÃO DE RUÍNAS EQUILIBRADA (Reflexos Metálicos Vivos + Sombras Fortes) ---
+        const ambientLight = new THREE.AmbientLight(0x0a1220, 0.04);
         scene.add(ambientLight);
 
-        const sunLight = new THREE.DirectionalLight(0xfffaed, 2.8);
-        sunLight.position.set(40, 70, 40);
+        // Vetor Direcional Fixo do Luar (Direção e Ângulo Imutáveis no Mundo)
+        const sunLightDirOffset = new THREE.Vector3(38, 70, 32);
+
+        const sunLight = new THREE.DirectionalLight(0x8faecf, 2.60); // Luar direcional potente
+        sunLight.position.copy(sunLightDirOffset);
         sunLight.castShadow = true;
         sunLight.shadow.mapSize.width = 2048;
         sunLight.shadow.mapSize.height = 2048;
-        sunLight.shadow.camera.near = 1.0;
-        sunLight.shadow.camera.far = 250;
-        sunLight.shadow.camera.left = -65;
-        sunLight.shadow.camera.right = 65;
-        sunLight.shadow.camera.top = 65;
-        sunLight.shadow.camera.bottom = -65;
-        sunLight.shadow.bias = -0.0004;
+        sunLight.shadow.camera.near = 10.0;
+        sunLight.shadow.camera.far = 180;
+        
+        // Frustum Focado em torno da Aranha (Raio de ~22m = Máxima Densidade de Pixels)
+        const shadowBound = 22.0;
+        sunLight.shadow.camera.left = -shadowBound;
+        sunLight.shadow.camera.right = shadowBound;
+        sunLight.shadow.camera.top = shadowBound;
+        sunLight.shadow.camera.bottom = -shadowBound;
+        sunLight.shadow.bias = -0.0001;
+        sunLight.shadow.normalBias = 0.0; // Sem deslocamento: contato perfeito das patas no solo
+        sunLight.shadow.camera.updateProjectionMatrix(); // CRUCIAL para aplicar o frustum na GPU!
         scene.add(sunLight);
+        scene.add(sunLight.target);
 
-        const rimLightBlue = new THREE.PointLight(0x00d2ff, 35.0, 150);
-        rimLightBlue.position.set(-45, 20, -35);
+        // Luzes de Borda Suaves e Distantes (Sem invadir a área central da sombra)
+        const rimLightBlue = new THREE.PointLight(0x00d2ff, 1.5, 45);
+        rimLightBlue.position.set(-55, 15, -45);
         scene.add(rimLightBlue);
 
-        const rimLightRed = new THREE.PointLight(0xff0055, 28.0, 150);
-        rimLightRed.position.set(45, 20, -35);
+        const rimLightRed = new THREE.PointLight(0xff0044, 1.2, 45);
+        rimLightRed.position.set(55, 15, -45);
         scene.add(rimLightRed);
 
-        // --- ARENA DE TESTES PROCEDURAL EM ESCALA TOTAL 1:1 ---
         // --- ARENA DE TESTES PROCEDURAL COM ELEVAÇÕES (BUMP UPS), CRATERAS (BUMP DOWNS) E CUBOS ESCALÁVEIS ---
         const arenaGroup = new THREE.Group();
         scene.add(arenaGroup);
 
-        // Relevos Marcantes do Terreno (Colinas e Crateras)
-        const bumps = [
-            // Bump Ups (Elevações / Colinas)
-            { x: 32, z: 26, radius: 24, height: 2.8 },
-            { x: -36, z: 42, radius: 26, height: 3.2 },
-            { x: 48, z: -38, radius: 25, height: 2.6 },
-            { x: -48, z: -36, radius: 28, height: 3.0 },
-            { x: 2, z: 52, radius: 22, height: 2.2 },
-            { x: 55, z: 2, radius: 24, height: 2.5 },
+        let currentTerrainReliefScale = 1.20; // Multiplicador dinâmico de relevo padrão 1.20x
 
-            // Bump Downs (Depressões / Crateras)
-            { x: -26, z: 16, radius: 18, height: -1.8 },
-            { x: 26, z: -22, radius: 20, height: -1.6 },
-            { x: -16, z: -46, radius: 22, height: -2.0 },
-            { x: 38, z: 36, radius: 19, height: -1.5 },
-            { x: -46, z: 2, radius: 18, height: -1.7 }
+        // Relevos Marcantes do Terreno (Montículos de Escombros e Entulho Positivos — Sem Zonas Negativas)
+        const bumps = [
+            { x: 32, z: 26, radius: 24, height: 4.8 },
+            { x: -36, z: 42, radius: 26, height: 5.4 },
+            { x: 48, z: -38, radius: 25, height: 4.5 },
+            { x: -48, z: -36, radius: 28, height: 5.2 },
+            { x: 2, z: 52, radius: 22, height: 3.8 },
+            { x: 55, z: 2, radius: 24, height: 4.2 },
+            { x: -20, z: -25, radius: 18, height: 3.6 },
+            { x: 25, z: 20, radius: 20, height: 3.8 },
+            { x: -26, z: 16, radius: 18, height: 3.2 },
+            { x: 26, z: -22, radius: 20, height: 3.0 },
+            { x: -16, z: -46, radius: 22, height: 3.6 },
+            { x: 38, z: 36, radius: 19, height: 2.8 },
+            { x: -46, z: 2, radius: 18, height: 3.0 },
+            { x: 18, z: -50, radius: 24, height: 3.4 }
         ];
 
-        // Função de Altura do Terreno Contínuo (Malha Base)
+        // Função de Altura do Terreno Contínuo (Clipping Estrito em Y = 0: Sem Depressões, Piso 100% Plano onde não há Escombros)
         function getBaseGroundMeshHeight(x, z) {
+            const relief = currentTerrainReliefScale;
             const d = Math.hypot(x, z);
             if (d < 10.0) return 0.0; // Centro plano inicial
             const centerFade = THREE.MathUtils.clamp((d - 10.0) / 6.0, 0.0, 1.0);
 
-            const wave1 = Math.sin(x * 0.035) * Math.cos(z * 0.035) * 0.75;
-            const wave2 = Math.sin(x * 0.018 + 0.8) * Math.cos(z * 0.018) * 1.15;
-            let h = wave1 + wave2;
+            // Relevo base suave de entulho (apenas positivo)
+            const wave1 = Math.max(0.0, Math.sin(x * 0.035) * Math.cos(z * 0.035)) * 0.9;
+            const wave2 = Math.max(0.0, Math.sin(x * 0.018 + 0.8) * Math.cos(z * 0.018)) * 1.35;
+            let h = (wave1 + wave2) * relief;
 
             for (let i = 0; i < bumps.length; i++) {
                 const b = bumps[i];
+                if (b.height <= 0) continue;
                 const distB = Math.hypot(x - b.x, z - b.z);
                 if (distB < b.radius) {
                     const factor = 0.5 * (1.0 + Math.cos((distB / b.radius) * Math.PI));
-                    h += b.height * factor;
+                    h += b.height * relief * factor;
                 }
             }
 
-            return h * centerFade;
+            // CLIPPING RIGOROSO EM Y = 0 (Sem zonas negativas)
+            return Math.max(0.0, h * centerFade);
         }
 
         // Coleção de Plataformas e Cubos Pisáveis/Escaláveis (Geometria Sólida)
@@ -661,32 +699,97 @@
         terrainGeo.computeVertexNormals();
 
         const terrainMat = new THREE.MeshStandardMaterial({
-            color: 0x080e1a,
-            roughness: 0.88,
-            metalness: 0.15,
+            roughness: 0.94,
+            metalness: 0.06,
+            envMapIntensity: 0.0, // Terreno não recebe radiação difusa do IBL: sombra fica 100% preta
             wireframe: false
         });
+
+        // Shader Customizado: Textura Tile no Piso (Y=0) + Escombros Terrosos nos Relevos (Y>0)
+        // - Piso Plano (Y=0): Grade de ladrilhos modulares em cinza-azulado ardósia escuro com juntas abissais
+        // - Relevos (Y>0): Escombros de terra preta, barro escuro e entulho sombrio
+        terrainMat.onBeforeCompile = (shader) => {
+            shader.vertexShader = `
+                varying float vWorldY;
+                varying vec2 vWorldXZ;
+                ${shader.vertexShader}
+            `.replace(
+                '#include <begin_vertex>',
+                `
+                #include <begin_vertex>
+                vWorldY = transformed.y;
+                vWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;
+                `
+            );
+
+            shader.fragmentShader = `
+                varying float vWorldY;
+                varying vec2 vWorldXZ;
+                ${shader.fragmentShader}
+            `.replace(
+                '#include <color_fragment>',
+                `
+                #include <color_fragment>
+
+                // --- 1. TEXTURA PROCEDURAL TILE PARA O PISO PLANO (Y = 0) ---
+                // Módulos principais de 4m x 4m
+                vec2 tileUV = vWorldXZ / 4.0;
+                vec2 fTile = fract(tileUV);
+                vec2 gridLine = smoothstep(0.0, 0.04, fTile) * smoothstep(1.0, 0.96, fTile);
+                float borderMask = min(gridLine.x, gridLine.y);
+
+                // Subdivisão interna de 2m x 2m
+                vec2 subTile = fract(vWorldXZ / 2.0);
+                vec2 subLine = smoothstep(0.0, 0.025, subTile) * smoothstep(1.0, 0.975, subTile);
+                float subMask = min(subLine.x, subLine.y);
+
+                // Ladrilho cinza-azulado ardósia noturna (base limpa para receber sombra projetada ultra forte)
+                float tileCheck = mod(floor(tileUV.x) + floor(tileUV.y), 2.0);
+                vec3 colFloorTileA = vec3(0.11, 0.14, 0.18); // Ladrilho ardósia
+                vec3 colFloorTileB = vec3(0.085, 0.11, 0.145); // Ladrilho complementar
+                vec3 colFloorTile = mix(colFloorTileA, colFloorTileB, tileCheck * 0.4);
+
+                vec3 colFloorBorder = vec3(0.020, 0.028, 0.040); // Juntas e ranhuras
+                vec3 finalTileFloor = mix(colFloorBorder, colFloorTile, borderMask * 0.85 + subMask * 0.15);
+
+                // --- 2. ESCOMBROS E MONTÍCULOS TERROSOS SOMBRIOS (Y > 0) ---
+                vec3 colEarthBase = vec3(0.07, 0.045, 0.030); // Base: Terra escura / entulho
+                vec3 colEarthMid  = vec3(0.13, 0.085, 0.055); // Encostas: Barro e terra queimada
+                vec3 colEarthPeak = vec3(0.19, 0.130, 0.085); // Picos: Entulho e cascalho mineral sombrio
+
+                float h = max(0.0, vWorldY);
+                float tElevation = smoothstep(0.2, 4.5, h);
+                vec3 colRubble = mix(colEarthBase, mix(colEarthMid, colEarthPeak, smoothstep(1.5, 4.5, h)), tElevation);
+
+                // --- 3. TRANSIÇÃO SUAVE ENTRE O PISO TILE E OS ESCOMBROS ---
+                float rubbleBlend = smoothstep(0.02, 0.30, h);
+                vec3 finalTerrain = mix(finalTileFloor, colRubble, rubbleBlend);
+
+                diffuseColor = vec4(finalTerrain, 1.0);
+                `
+            );
+        };
         const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
         terrainMesh.receiveShadow = true;
         arenaGroup.add(terrainMesh);
 
-        // Grade Tática Holográfica Sobreposta
-        const gridHelper = new THREE.GridHelper(280, 70, 0x1e293b, 0x0f172a);
+        // Grade Tática Holo Sutil para Ruínas Escuras
+        const gridHelper = new THREE.GridHelper(280, 70, 0x0a101d, 0x04070d);
         gridHelper.position.y = 0.04;
         arenaGroup.add(gridHelper);
 
-        // Renderizar Plataformas / Cubos Escaláveis na Cena 3D
+        // Renderizar Monólitos / Plataformas de Pedra Ancestral na Cena 3D
         const boxMat = new THREE.MeshStandardMaterial({
-            color: 0x151f32,
-            roughness: 0.45,
-            metalness: 0.8
+            color: 0x090d14,
+            roughness: 0.88,
+            metalness: 0.15
         });
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 });
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.35 });
         const padMat = new THREE.MeshStandardMaterial({
-            color: 0x0f172a,
-            emissive: 0x002244,
-            roughness: 0.3,
-            metalness: 0.9
+            color: 0x05070c,
+            emissive: 0x00060d,
+            roughness: 0.85,
+            metalness: 0.2
         });
 
         steppableBoxes.forEach((b) => {
@@ -714,23 +817,118 @@
             padMesh.receiveShadow = true;
             boxGroup.add(padMesh);
 
+            b.groupMesh = boxGroup;
             arenaGroup.add(boxGroup);
         });
 
-        // Pilares / Colunas Decorativas Adicionais
-        const colGeo = new THREE.CylinderGeometry(2.5, 3.2, 10.0, 8);
-        const colMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.7 });
-        for (let i = 0; i < 15; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 35.0 + Math.random() * 85.0;
-            const ox = Math.cos(angle) * radius;
-            const oz = Math.sin(angle) * radius;
-            const oy = getBaseGroundMeshHeight(ox, oz);
+        // Pilares / Colunas Decorativas com Colisão Rígida
+        const decorativePillars = [];
+        const pillarsData = [];
+        const colGeo = new THREE.CylinderGeometry(2.5, 3.2, 10.0, 16);
+        const colMat = new THREE.MeshStandardMaterial({
+            color: 0x0c121c,
+            roughness: 0.88,
+            metalness: 0.15
+        });
+
+        // Posições Estratégicas dos Pilares e Colunas (com Raio de Colisão)
+        const pillarLayout = [
+            { x: 28.0, z: -22.0, radius: 4.8 },
+            { x: -32.0, z: 28.0, radius: 4.8 },
+            { x: 42.0, z: 38.0, radius: 4.8 },
+            { x: -44.0, z: -38.0, radius: 4.8 },
+            { x: 58.0, z: -12.0, radius: 4.8 },
+            { x: -58.0, z: 14.0, radius: 4.8 },
+            { x: 16.0, z: 62.0, radius: 4.8 },
+            { x: -18.0, z: -64.0, radius: 4.8 },
+            { x: 74.0, z: 48.0, radius: 4.8 },
+            { x: -74.0, z: -52.0, radius: 4.8 },
+            { x: 82.0, z: -38.0, radius: 4.8 },
+            { x: -84.0, z: 42.0, radius: 4.8 },
+            { x: 0.0, z: 86.0, radius: 4.8 },
+            { x: 0.0, z: -86.0, radius: 4.8 },
+            { x: 92.0, z: 0.0, radius: 4.8 },
+            { x: -92.0, z: 0.0, radius: 4.8 }
+        ];
+
+        pillarLayout.forEach((p) => {
+            const oy = getBaseGroundMeshHeight(p.x, p.z);
             const col = new THREE.Mesh(colGeo, colMat);
-            col.position.set(ox, oy + 5.0, oz);
+            col.position.set(p.x, oy + 5.0, p.z);
             col.castShadow = true;
             col.receiveShadow = true;
+            decorativePillars.push(col);
+            pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
             arenaGroup.add(col);
+        });
+
+        // --- SISTEMA DE RESTRIÇÃO DE ESPAÇO: LIMITES DA ARENA & COLISÃO RÍGIDA DE OBSTÁCULOS ---
+        const ARENA_HALF_BOUND = 130.0; // Limite do tabuleiro (280x280m -> borda segura 130m)
+
+        function constrainPosition(targetX, targetZ) {
+            let nx = THREE.MathUtils.clamp(targetX, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+            let nz = THREE.MathUtils.clamp(targetZ, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+
+            // Resolução de colisão circular com cada pilar/cilindro (Slide & Push Out)
+            for (let i = 0; i < pillarsData.length; i++) {
+                const p = pillarsData[i];
+                const dx = nx - p.x;
+                const dz = nz - p.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < p.radius) {
+                    if (dist > 0.001) {
+                        const overlap = p.radius - dist;
+                        nx += (dx / dist) * overlap;
+                        nz += (dz / dist) * overlap;
+                    } else {
+                        nx = p.x + p.radius;
+                    }
+                }
+            }
+
+            // Re-clamp após resolução de colisão
+            nx = THREE.MathUtils.clamp(nx, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+            nz = THREE.MathUtils.clamp(nz, -ARENA_HALF_BOUND, ARENA_HALF_BOUND);
+
+            return { x: nx, z: nz, y: nz };
+        }
+
+        // Função de Atualização Dinâmica do Relevo e Posição das Caixas
+        function updateTerrainMeshAndObstacles() {
+            // Recalcular alturas base de cada caixa
+            steppableBoxes.forEach((b) => {
+                b.baseY = getBaseGroundMeshHeight(b.x, b.z);
+                b.topY = b.baseY + b.height;
+                if (b.groupMesh) {
+                    b.groupMesh.position.y = b.baseY + b.height * 0.5;
+                }
+            });
+
+            // Recalcular vértices da malha do terreno
+            const pAttr = terrainGeo.attributes.position;
+            for (let i = 0; i < pAttr.count; i++) {
+                const px = pAttr.getX(i);
+                const pz = pAttr.getZ(i);
+                pAttr.setY(i, getBaseGroundMeshHeight(px, pz));
+            }
+            pAttr.needsUpdate = true;
+            terrainGeo.computeVertexNormals();
+
+            // Recalcular colunas
+            decorativePillars.forEach((col, idx) => {
+                const p = pillarLayout[idx];
+                if (p) col.position.y = getBaseGroundMeshHeight(p.x, p.z) + 5.0;
+            });
+
+            // Atualizar âncoras das patas se estiver estático
+            if (typeof walkerState !== 'undefined' && !walkerState.isMoving && !walkerState.isTurningInPlace) {
+                legs.forEach((leg) => {
+                    leg.currentTarget.y = getTerrainHeight(leg.currentTarget.x, leg.currentTarget.z);
+                    leg.stepStartTarget.copy(leg.currentTarget);
+                    leg.stepEndTarget.copy(leg.currentTarget);
+                    if (leg.targetMesh) leg.targetMesh.position.copy(leg.currentTarget);
+                });
+            }
         }
 
         // --- SISTEMA CINEMÁTICO & ROBÔ DO HX1 WALKER (ESCALA ORIGINAL 1:1) ---
@@ -780,12 +978,13 @@
             posZ: 0,
             baseHeading: 0,     // Rumo da base/passadas (radianos)
             torsoYaw: 0,        // Rotação local do chassi/tronco
-            aimWorldPoint: new THREE.Vector3(0, 0, 15),
+            aimWorldPoint: new THREE.Vector3(0, 0, 18),
             
             // Postura Original Calibrada
             stanceSpread: 1.10, // Abertura padrão 1.10x
             bodyHeight: 1.70,   // Altura padrão do corpo (1.70m)
             pivotSpeed: 15.0,   // Multiplicador da velocidade do pivô (slider, padrão 15.0x)
+            terrainRelief: 1.20, // Multiplicador de relevo do terreno (padrão 1.20x)
 
             // Controle de Marcha Tripé (Escala 1:1)
             isMoving: false,
@@ -810,11 +1009,11 @@
             phaseStartHeading: 0,
             phaseEndHeading: 0,
 
-            // Câmera Tática a 45°
+            // Câmera Tática a 25° (Cinemática / Imersiva)
             travelHeading: 0,
             camAzimuth: Math.PI, // Inicia diretamente atrás das costas da aranha
             camDistance: 50.0,   // Distância padrão 50m (clamp 50m a 100m)
-            camPitchDeg: 45.0,
+            camPitchDeg: 25.0,   // Padrão 25.0°
             camSmoothFactor: 3.5,
 
             // Conforto de Mira (25 graus)
@@ -835,6 +1034,7 @@
 
         window.addEventListener('keydown', (e) => {
             if (e.code in keys) keys[e.code] = true;
+            if (e.key === 'p' || e.key === 'P') togglePanels();
             if (e.key === 'x' || e.key === 'X') toggleXRay();
             if (e.key === 'h' || e.key === 'H') toggleHelpModal();
             if (e.key === 'r' || e.key === 'R') resetWalker();
@@ -885,8 +1085,10 @@
         const raycaster = new THREE.Raycaster();
         const mouseNorm = new THREE.Vector2();
         const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        let isMouseActive = false;
 
         window.addEventListener('mousemove', (e) => {
+            isMouseActive = true;
             if (isMiddleDragging) {
                 const deltaX = e.clientX - lastMouseX;
                 const deltaY = e.clientY - lastMouseY;
@@ -900,6 +1102,10 @@
                     15.0,
                     80.0
                 );
+                const sliderPitch = document.getElementById('slider-pitch');
+                const lblPitch = document.getElementById('lbl-pitch');
+                if (sliderPitch) sliderPitch.value = walkerState.camPitchDeg.toFixed(1);
+                if (lblPitch) lblPitch.innerText = `${walkerState.camPitchDeg.toFixed(1)}°`;
             }
 
             mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -970,7 +1176,7 @@
             _dirH.subVectors(worldTarget, _P0);
             _dirH.y = 0;
             const horizDist = _dirH.length();
-            if (horizDist > 0.0001) {
+            if (horizDist > 0.001) {
                 _dirH.divideScalar(horizDist);
             } else {
                 _dirH.set(leg.side === 'D' ? -1 : 1, 0, 0);
@@ -981,7 +1187,7 @@
 
             const h = _P0.y - worldTarget.y;
             const D_total = Math.sqrt(horizDist * horizDist + h * h);
-            const theta_target = Math.atan2(-h, horizDist);
+            const theta_target = Math.atan2(-h, Math.max(horizDist, 0.001));
             const D_max = (L2 + L3) * 0.98;
 
             // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
@@ -989,7 +1195,7 @@
             const p1y_nom = L1 * Math.sin(gamma);
             const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
 
-            if (dist1_sq > D_max * D_max && D_total > 0.0001) {
+            if (dist1_sq > D_max * D_max && D_total > 0.001) {
                 const K = (D_total * D_total + L1 * L1 - D_max * D_max) / (2 * L1 * D_total);
                 if (K <= 1.0) {
                     const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
@@ -1010,39 +1216,70 @@
             _vTarget.subVectors(worldTarget, _P1);
             const dist = _vTarget.length();
 
-            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2 - L3) * 1.02, (L2 + L3) * 0.98);
-            const cosAlpha = THREE.MathUtils.clamp((L2 * L2 + dClamped * dClamped - L3 * L3) / (2 * L2 * dClamped), -1, 1);
+            const minReach = Math.max(Math.abs(L2 - L3) * 1.02, 0.1);
+            const maxReach = (L2 + L3) * 0.98;
+            const dClamped = THREE.MathUtils.clamp(dist, minReach, maxReach);
+            const cosAlpha = THREE.MathUtils.clamp((L2 * L2 + dClamped * dClamped - L3 * L3) / (2 * L2 * dClamped), -1.0, 1.0);
             const alpha = Math.acos(cosAlpha);
 
-            _vTUnit.copy(_vTarget).divideScalar(dist > 0.0001 ? dist : 1.0);
+            if (dist > 0.001) {
+                _vTUnit.copy(_vTarget).divideScalar(dist);
+            } else {
+                _vTUnit.copy(_dirH);
+            }
 
-            // Eixo da dobradiça UNIFICADO (dirH x UP) - Exato de index.html
-            _hingeAxis.crossVectors(_dirH, _up).normalize();
+            // Eixo da dobradiça UNIFICADO (dirH x UP)
+            _hingeAxis.crossVectors(_dirH, _up);
+            if (_hingeAxis.lengthSq() > 0.0001) {
+                _hingeAxis.normalize();
+            } else {
+                _hingeAxis.set(0, 0, leg.side === 'D' ? 1 : -1);
+            }
 
             // Vetor perpendicular no plano vertical apontando para CIMA
-            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
+            _perpUp.crossVectors(_hingeAxis, _vTUnit);
+            if (_perpUp.lengthSq() > 0.0001) {
+                _perpUp.normalize();
+            } else {
+                _perpUp.copy(_up);
+            }
             if (_perpUp.y < 0) _perpUp.negate();
 
             // Direção do Fêmur rotacionada para CIMA (Elbow-UP)
             _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
-                     .addScaledVector(_perpUp, Math.sin(alpha))
-                     .normalize();
+                     .addScaledVector(_perpUp, Math.sin(alpha));
+            if (_femurDir.lengthSq() > 0.0001) {
+                _femurDir.normalize();
+            } else {
+                _femurDir.copy(_vTUnit);
+            }
 
             // Posição do Joelho (P2)
             _P2.copy(_P1).addScaledVector(_femurDir, L2);
 
             // Direção da Tíbia apontando para a âncora
-            _tibiaDir.subVectors(worldTarget, _P2).normalize();
+            _tibiaDir.subVectors(worldTarget, _P2);
+            if (_tibiaDir.lengthSq() > 0.0001) {
+                _tibiaDir.normalize();
+            } else {
+                _tibiaDir.copy(_femurDir);
+            }
             _P3.copy(_P2).addScaledVector(_tibiaDir, L3);
 
             // Direção da Coxa (P0 -> P1)
-            _coxaDir.subVectors(_P1, _P0).normalize();
+            _coxaDir.subVectors(_P1, _P0);
+            if (_coxaDir.lengthSq() > 0.0001) {
+                _coxaDir.normalize();
+            } else {
+                _coxaDir.copy(_dirH);
+            }
 
-            // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK) - 100% Idêntico ao original
+            // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK)
             // --- SEGMENTO 1: COXA ---
             _X1.copy(_coxaDir);
             _Y1.copy(_hingeAxis);
-            _Z1.crossVectors(_X1, _Y1).normalize();
+            _Z1.crossVectors(_X1, _Y1);
+            if (_Z1.lengthSq() > 0.0001) _Z1.normalize(); else _Z1.set(0, 1, 0);
             _matWorld1.makeBasis(_X1, _Y1, _Z1);
             _qWorld1.setFromRotationMatrix(_matWorld1);
 
@@ -1054,7 +1291,8 @@
             // --- SEGMENTO 2: FÊMUR ---
             _X2.copy(_femurDir);
             _Y2.copy(_hingeAxis);
-            _Z2.crossVectors(_X2, _Y2).normalize();
+            _Z2.crossVectors(_X2, _Y2);
+            if (_Z2.lengthSq() > 0.0001) _Z2.normalize(); else _Z2.set(0, 1, 0);
             _matWorld2.makeBasis(_X2, _Y2, _Z2);
             _qWorld2.setFromRotationMatrix(_matWorld2);
 
@@ -1065,7 +1303,8 @@
             // --- SEGMENTO 3: TÍBIA ---
             _X3.copy(_tibiaDir);
             _Y3.copy(_hingeAxis);
-            _Z3.crossVectors(_X3, _Y3).normalize();
+            _Z3.crossVectors(_X3, _Y3);
+            if (_Z3.lengthSq() > 0.0001) _Z3.normalize(); else _Z3.set(0, 1, 0);
             _matWorld3.makeBasis(_X3, _Y3, _Z3);
             _qWorld3.setFromRotationMatrix(_matWorld3);
 
@@ -1101,6 +1340,9 @@
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
+                    if (child.material) {
+                        child.material.envMapIntensity = 1.2;
+                    }
                 }
             });
 
@@ -1111,9 +1353,6 @@
             // Grupo 0: FR(0), ML(4), BR(2)
             // Grupo 1: FL(3), MR(1), BL(5)
             const tripodGroups = [0, 1, 0, 1, 0, 1];
-
-            let sumScale = 0;
-            let legCount = 0;
 
             legBaseNames.forEach((baseName, index) => {
                 let baseNode = null;
@@ -1130,49 +1369,15 @@
 
                     const isRight = legSides[index] === 'D';
 
-                    // 1. MEDIÇÃO AUTOMÁTICA DOS OSSOS NA HIERARQUIA 3D
-                    const p0 = new THREE.Vector3();
-                    const p1 = new THREE.Vector3();
-                    const p2 = new THREE.Vector3();
-                    const p3 = new THREE.Vector3();
-
-                    baseNode.getWorldPosition(p0);
-                    j1Node.getWorldPosition(p1);
-                    let measuredL1 = p0.distanceTo(p1);
-                    if (measuredL1 < 0.01) measuredL1 = j1Node.position.length();
-                    if (measuredL1 < 0.01) measuredL1 = L1_M;
-
-                    let measuredL2 = L2_M;
-                    if (j2Node) {
-                        j2Node.getWorldPosition(p2);
-                        measuredL2 = p1.distanceTo(p2);
-                        if (measuredL2 < 0.01) measuredL2 = j2Node.position.length();
-                        if (measuredL2 < 0.01) measuredL2 = L2_M;
-                    }
-
-                    let measuredL3 = L3_M;
-                    if (j3Node) {
-                        j3Node.getWorldPosition(p3);
-                        measuredL3 = p2.distanceTo(p3);
-                        if (measuredL3 < 0.01) measuredL3 = j3Node.position.length();
-                        if (j3Node.children.length > 0) {
-                            const tipPos = new THREE.Vector3();
-                            j3Node.children[0].getWorldPosition(tipPos);
-                            const tipDist = p2.distanceTo(tipPos);
-                            if (tipDist > 0.05) measuredL3 = tipDist;
-                        }
-                        if (measuredL3 < 0.01) measuredL3 = L3_M;
-                    }
-
-                    const totalReach = measuredL1 + measuredL2 + measuredL3;
-                    const refReach = L1_M + L2_M + L3_M; // 7.3219m
-                    const legScale = totalReach / refReach;
-                    sumScale += legScale;
-                    legCount++;
+                    // Dimensões Canônicas 1:1 dos Ossos (Exatas do Modelo 3D)
+                    const measuredL1 = L1_M; // 2.3608m
+                    const measuredL2 = L2_M; // 2.1611m
+                    const isPernalonga = Boolean(modelRoot.name && modelRoot.name.toLowerCase().includes('pernalonga'));
+                    const measuredL3 = isPernalonga ? (L3_M * 2.0) : L3_M; // 2.8000m (ou 5.60m)
 
                     // Âncora Visual
                     const targetMesh = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.18 * legScale, 16, 16),
+                        new THREE.SphereGeometry(0.18, 16, 16),
                         new THREE.MeshStandardMaterial({
                             color: isRight ? 0x00d2ff : 0x2ed573,
                             emissive: isRight ? 0x003366 : 0x115522,
@@ -1195,7 +1400,7 @@
                     const lineMesh = new Line2(lineGeo, lineMat);
                     skeletonLinesGroup.add(lineMesh);
 
-                    const baseOffset = defaultFootPositions[index].clone().multiplyScalar(legScale);
+                    const baseOffset = defaultFootPositions[index].clone();
                     const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
                     const initTarget = nominalWorldOffset.clone();
                     initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
@@ -1223,21 +1428,18 @@
                 }
             });
 
-            // Recalcular proporções globais do robô com base na escala média medida
-            if (legCount > 0) {
-                const avgScale = sumScale / legCount;
-                walkerState.bodyHeight = 1.70 * avgScale;
-                walkerState.strideLength = 2.00 * avgScale;
-                walkerState.stepHeight = 0.50 * avgScale;
+            // Altura e proporções 1:1 rigorosas
+            walkerState.bodyHeight = 1.70;
+            walkerState.strideLength = 2.00;
+            walkerState.stepHeight = 0.50;
 
-                const sliderHeight = document.getElementById('slider-height');
-                const lblHeight = document.getElementById('lbl-height');
-                if (sliderHeight) {
-                    sliderHeight.max = (3.5 * avgScale).toFixed(2);
-                    sliderHeight.value = walkerState.bodyHeight.toFixed(2);
-                }
-                if (lblHeight) lblHeight.innerText = `${walkerState.bodyHeight.toFixed(2)}m`;
+            const sliderHeight = document.getElementById('slider-height');
+            const lblHeight = document.getElementById('lbl-height');
+            if (sliderHeight) {
+                sliderHeight.max = '2.50';
+                sliderHeight.value = '1.70';
             }
+            if (lblHeight) lblHeight.innerText = '1.70m';
 
             resetWalker();
             const loading = document.getElementById('loading');
@@ -1271,11 +1473,13 @@
         const sliderHeight = document.getElementById('slider-height');
         const sliderMoveSpeed = document.getElementById('slider-move-speed');
         const sliderPivotSpeed = document.getElementById('slider-pivot-speed');
+        const sliderRelief = document.getElementById('slider-relief');
         const sliderZoom = document.getElementById('slider-zoom');
         const lblSpread = document.getElementById('lbl-spread');
         const lblHeight = document.getElementById('lbl-height');
         const lblMoveSpeed = document.getElementById('lbl-move-speed');
         const lblPivotSpeed = document.getElementById('lbl-pivot-speed');
+        const lblRelief = document.getElementById('lbl-relief');
         const lblZoom = document.getElementById('lbl-zoom');
 
         if (sliderSpread) {
@@ -1309,6 +1513,27 @@
                 const val = parseFloat(e.target.value);
                 walkerState.pivotSpeed = val;
                 if (lblPivotSpeed) lblPivotSpeed.innerText = `${val.toFixed(1)}x`;
+            });
+        }
+
+        if (sliderRelief) {
+            sliderRelief.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                currentTerrainReliefScale = val;
+                walkerState.terrainRelief = val;
+                if (lblRelief) lblRelief.innerText = `${val.toFixed(2)}x`;
+                updateTerrainMeshAndObstacles();
+            });
+        }
+
+        const sliderPitch = document.getElementById('slider-pitch');
+        const lblPitch = document.getElementById('lbl-pitch');
+
+        if (sliderPitch) {
+            sliderPitch.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                walkerState.camPitchDeg = val;
+                if (lblPitch) lblPitch.innerText = `${val.toFixed(1)}°`;
             });
         }
 
@@ -1364,8 +1589,8 @@
             });
         }
 
-        // Carregar Modelo Inicial (Aranha Pernalonga Padrão)
-        loadModelPreset('../glb/aranha_pernalonga.glb', '🦵 Aranha Pernalonga');
+        // Carregar Modelo Inicial (Aranha Clássica HX1 Padrão)
+        loadModelPreset('../glb/aranha.glb', '🕷️ Aranha HX1 (Clássica)');
 
         // Suporte a Drag & Drop de Novos Modelos
         const dropZone = document.getElementById('drop-zone');
@@ -1414,6 +1639,10 @@
         }
         document.getElementById('btn-xray').addEventListener('click', toggleXRay);
 
+        function togglePanels() {
+            document.body.classList.toggle('hud-hidden');
+        }
+
         function toggleHelpModal() {
             document.getElementById('help-modal').classList.toggle('active');
         }
@@ -1427,6 +1656,7 @@
             walkerState.baseHeading = 0;
             walkerState.torsoYaw = 0;
             walkerState.travelHeading = 0;
+            walkerState.aimWorldPoint.set(0, 0, 18);
             walkerState.camAzimuth = Math.PI;
             walkerState.isStepActive = false;
             walkerState.gaitProgress = 0;
@@ -1434,6 +1664,10 @@
             walkerState.terrainElevationY = 0;
             walkerState.terrainPitch = 0;
             walkerState.terrainRoll = 0;
+            walkerState.dynLift = 0;
+            walkerState.dynShiftZ = 0;
+            walkerState.dynPitch = 0;
+            isMouseActive = false;
             
             robotMasterGroup.position.set(0, 0, 0);
             robotMasterGroup.rotation.set(0, 0, 0);
@@ -1449,12 +1683,16 @@
             const dt = Math.min(clock.getDelta(), 0.1);
 
             // 1. MIRA DO MOUSE NO PLANO DO TERRENO COM DETECÇÃO DE ALTURA
-            raycaster.setFromCamera(mouseNorm, camera);
-            const groundHit = new THREE.Vector3();
-            raycaster.ray.intersectPlane(aimPlane, groundHit);
-            if (groundHit) {
-                walkerState.aimWorldPoint.copy(groundHit);
-                walkerState.aimWorldPoint.y = getTerrainHeight(groundHit.x, groundHit.z);
+            if (isMouseActive) {
+                raycaster.setFromCamera(mouseNorm, camera);
+                const groundHit = new THREE.Vector3();
+                const hit = raycaster.ray.intersectPlane(aimPlane, groundHit);
+                if (hit) {
+                    groundHit.x = THREE.MathUtils.clamp(groundHit.x, -135.0, 135.0);
+                    groundHit.z = THREE.MathUtils.clamp(groundHit.z, -135.0, 135.0);
+                    walkerState.aimWorldPoint.copy(groundHit);
+                    walkerState.aimWorldPoint.y = getTerrainHeight(groundHit.x, groundHit.z);
+                }
             }
 
             // 2. ENTRADA DE MOVIMENTO (WASD)
@@ -1468,44 +1706,46 @@
             walkerState.isMoving = (moveFwd !== 0 || moveSide !== 0);
 
             // 3. MIRA EM DOIS NÍVEIS (DUAL-TIER AIMING) E REAÇÃO DE PROXIMIDADE
-            const toAimDistH = Math.hypot(walkerState.aimWorldPoint.x - walkerState.posX, walkerState.aimWorldPoint.z - walkerState.posZ);
-            const targetAimAngle = Math.atan2(walkerState.aimWorldPoint.x - walkerState.posX, walkerState.aimWorldPoint.z - walkerState.posZ);
+            const aimDX = walkerState.aimWorldPoint.x - walkerState.posX;
+            const aimDZ = walkerState.aimWorldPoint.z - walkerState.posZ;
+            const toAimDistH = Math.hypot(aimDX, aimDZ);
+            const targetAimAngle = (toAimDistH > 0.01) ? Math.atan2(aimDX, aimDZ) : (walkerState.baseHeading || 0);
 
-            let deltaAngle = targetAimAngle - walkerState.baseHeading;
+            let deltaAngle = targetAimAngle - (walkerState.baseHeading || 0);
             deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle)); // Normalizado [-PI, PI]
+            if (isNaN(deltaAngle)) deltaAngle = 0;
 
             const comfortLimit = walkerState.comfortAngle; // 25 graus
 
             if (Math.abs(deltaAngle) <= comfortLimit) {
                 // ZONA DE CONFORTO: Apenas torce o tronco/chassi, patas firmes no solo
-                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw, deltaAngle, 10.0, dt);
+                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw || 0, deltaAngle, 10.0, dt);
                 walkerState.isTurningInPlace = false;
                 walkerState.turnDir = 0;
             } else {
                 // FORA DA ZONA DE CONFORTO: Tronco se inclina no limite e base ativa passos de pivô
-                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw, Math.sign(deltaAngle) * comfortLimit, 8.0, dt);
+                const sign = Math.sign(deltaAngle) || 1;
+                walkerState.torsoYaw = THREE.MathUtils.damp(walkerState.torsoYaw || 0, sign * comfortLimit, 8.0, dt);
                 walkerState.isTurningInPlace = true;
-                walkerState.turnDir = Math.sign(deltaAngle);
+                walkerState.turnDir = sign;
             }
 
-            // --- CURVA LOGARÍTMICA DE PROXIMIDADE (Forte de perto, suave à distância) ---
+            // --- CURVA SUAVE DE PROXIMIDADE (Mantém o robô estável e impede compressão excessiva) ---
             const proxThreshold = 16.0; // raio de proximidade de 16m
             const proxLinear = THREE.MathUtils.clamp((proxThreshold - toAimDistH) / proxThreshold, 0.0, 1.0);
-            const proxLog = Math.log(1.0 + 9.0 * proxLinear) / Math.log(10.0); // 0.0 a 1.0 logarítmico
+            const proxLog = Math.log(1.0 + 4.0 * proxLinear) / Math.log(5.0); // 0.0 a 1.0 suave
 
-            // Elevação do corpo (sobe a altura com o alvo muito próximo)
-            const targetLift = proxLog * 0.85; // até +0.85m
+            // Elevação e recuo moderados
+            const targetLift = proxLog * 0.35; // até +0.35m
+            const targetShiftZ = -proxLog * 0.40; // até -0.40m para trás
 
-            // Recuo do corpo para trás no eixo Z local (-Z)
-            const targetShiftZ = -proxLog * 0.95; // até -0.95m para trás
-
-            // Pitch dinâmico do robô acompanhando o alvo no solo em qualquer distância
+            // Pitch dinâmico do robô acompanhando o alvo no solo com ângulo de conforto máximo de 18°
             const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
             const effectiveBodyY = walkerState.bodyHeight + targetLift;
             const aimRelY = walkerState.aimWorldPoint.y - currentTerrainY;
             const heightDiff = effectiveBodyY - aimRelY;
-            const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.0));
-            const maxPitch = THREE.MathUtils.degToRad(45.0);
+            const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 5.0));
+            const maxPitch = THREE.MathUtils.degToRad(18.0);
             const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, -maxPitch, maxPitch);
 
             // Suavização das variáveis dinâmicas (Damp)
@@ -1550,12 +1790,14 @@
                     }
                     walkerState.phaseEndHeading = walkerState.phaseStartHeading + deltaH;
 
-                    // Calcular Posição de Fim do Passo
+                    // Calcular Posição de Fim do Passo com restrições do tabuleiro e pilares
                     const stepMove = new THREE.Vector2(0, 0);
                     if (wantsMove) {
                         stepMove.set(moveVec.x, moveVec.z).normalize().multiplyScalar(walkerState.strideLength);
                     }
-                    walkerState.phaseEndPos.copy(walkerState.phaseStartPos).add(stepMove);
+                    const proposedEnd = walkerState.phaseStartPos.clone().add(stepMove);
+                    const validEnd = constrainPosition(proposedEnd.x, proposedEnd.y);
+                    walkerState.phaseEndPos.set(validEnd.x, validEnd.z);
 
                     // Inicializar Pernas que vão executar Swing (no ar)
                     const activeGroup = walkerState.activeTripodGroup;
@@ -1569,11 +1811,13 @@
                                 .applyAxisAngle(new THREE.Vector3(0, 1, 0), walkerState.phaseEndHeading)
                                 .add(endCenter);
 
-                            // Projeção dinâmica na direção de avanço
+                            // Projeção dinâmica na direção de avanço com contenção no tabuleiro
                             if (wantsMove) {
                                 nominalLanding.x += moveVec.x * (walkerState.strideLength * 0.4);
                                 nominalLanding.z += moveVec.z * (walkerState.strideLength * 0.4);
                             }
+                            nominalLanding.x = THREE.MathUtils.clamp(nominalLanding.x, -135.0, 135.0);
+                            nominalLanding.z = THREE.MathUtils.clamp(nominalLanding.z, -135.0, 135.0);
 
                             nominalLanding.y = getTerrainHeight(nominalLanding.x, nominalLanding.z);
                             leg.stepEndTarget.copy(nominalLanding);
@@ -1592,9 +1836,12 @@
                 const t = THREE.MathUtils.clamp(walkerState.gaitProgress, 0, 1);
                 const smoothT = THREE.MathUtils.smoothstep(t, 0, 1);
 
-                // O CORPO AVANÇA E GIRA IMPULSIONADO PELAS ÂNCORAS DE APOIO (STANCE)
-                walkerState.posX = THREE.MathUtils.lerp(walkerState.phaseStartPos.x, walkerState.phaseEndPos.x, smoothT);
-                walkerState.posZ = THREE.MathUtils.lerp(walkerState.phaseStartPos.y, walkerState.phaseEndPos.y, smoothT);
+                // O CORPO AVANÇA E GIRA IMPULSIONADO PELAS ÂNCORAS DE APOIO COM COLISÃO RÍGIDA
+                const rawX = THREE.MathUtils.lerp(walkerState.phaseStartPos.x, walkerState.phaseEndPos.x, smoothT);
+                const rawZ = THREE.MathUtils.lerp(walkerState.phaseStartPos.y, walkerState.phaseEndPos.y, smoothT);
+                const curPos = constrainPosition(rawX, rawZ);
+                walkerState.posX = curPos.x;
+                walkerState.posZ = curPos.z;
                 walkerState.baseHeading = THREE.MathUtils.lerp(walkerState.phaseStartHeading, walkerState.phaseEndHeading, smoothT);
 
                 // Atualizar Posição das Patas no Espaço Mundial
@@ -1685,7 +1932,10 @@
             // Atualizar Linha Laser do Focinho/Canhão até a Mira
             const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
             const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.1, walkerState.aimWorldPoint.z);
-            laserLine.geometry.setFromPoints([snoutPos, laserHit]);
+            const laserPosAttr = laserLine.geometry.attributes.position;
+            laserPosAttr.setXYZ(0, snoutPos.x, snoutPos.y, snoutPos.z);
+            laserPosAttr.setXYZ(1, laserHit.x, laserHit.y, laserHit.z);
+            laserPosAttr.needsUpdate = true;
 
             // 5. ATUALIZAR GIZMOS E SOLVER IK RIGOROSO
             const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight + walkerState.dynLift);
@@ -1714,13 +1964,38 @@
             camera.position.set(desiredCamX, desiredCamY, desiredCamZ);
             camera.lookAt(camTargetX, camTargetY, camTargetZ);
 
-            // 7. TELEMETRIA HUD & BÚSSOLA
-            const currentRobotHeading = (walkerState.isMoving ? walkerState.travelHeading : (walkerState.baseHeading + walkerState.torsoYaw));
-            const headingDeg = Math.round(THREE.MathUtils.radToDeg(currentRobotHeading) % 360);
-            const normalizedDeg = (headingDeg + 360) % 360;
+            // 7. ATUALIZAR ILUMINAÇÃO DIRECIONAL E FOCO DE SOMBRA (ZERO CLIPPING & MÁXIMA RESOLUÇÃO)
+            sunLight.target.position.set(robotMasterGroup.position.x, robotMasterGroup.position.y + walkerState.bodyHeight * 0.5, robotMasterGroup.position.z);
+            sunLight.position.set(
+                robotMasterGroup.position.x + sunLightDirOffset.x,
+                robotMasterGroup.position.y + sunLightDirOffset.y,
+                robotMasterGroup.position.z + sunLightDirOffset.z
+            );
+            sunLight.target.updateMatrixWorld(true);
+            sunLight.updateMatrixWorld(true);
+
+            // 8. ATUALIZAR FOG DINÂMICO ANCORADO NA CÂMERA (Mantém a visibilidade e contraste de 60m fixos em qualquer zoom)
+            const curCamDist = walkerState.camDistance;
+            scene.fog.near = Math.max(10.0, curCamDist - 30.0);
+            scene.fog.far = curCamDist + 150.0;
+
+            // 9. TELEMETRIA HUD & BÚSSOLA
+            const currentRobotHeading = (walkerState.isMoving 
+                ? (walkerState.travelHeading || 0) 
+                : ((walkerState.baseHeading || 0) + (walkerState.torsoYaw || 0)));
+            
+            const rawDeg = THREE.MathUtils.radToDeg(currentRobotHeading || 0);
+            const normalizedDeg = ((Math.round(rawDeg) % 360) + 360) % 360;
+            const safeDeg = isNaN(normalizedDeg) ? 0 : normalizedDeg;
+
             const directions = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
-            const dirIndex = Math.round(normalizedDeg / 45) % 8;
-            document.getElementById('compass-val').innerText = `${String(normalizedDeg).padStart(3, '0')}° ${directions[dirIndex]}`;
+            const dirIndex = Math.floor(((safeDeg + 22.5) % 360) / 45);
+            const safeDir = directions[dirIndex] || 'N';
+
+            const compassElem = document.getElementById('compass-val');
+            if (compassElem) {
+                compassElem.innerText = `${String(safeDeg).padStart(3, '0')}° ${safeDir}`;
+            }
 
             // Renderizar Cena
             renderer.render(scene, camera);
