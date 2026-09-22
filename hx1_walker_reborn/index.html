@@ -395,15 +395,20 @@
                     <span class="status-badge status-active" id="mech-status">Online</span>
                 </div>
                 <div class="mech-sub" id="model-desc">Escala Real 1:1 • IK Analítico Rigoroso • Zoom com a Roda do Mouse</div>
-                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <div style="display: flex; gap: 6px; margin-bottom: 10px; align-items: center;">
+                    <select id="model-select" style="flex: 1; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.73rem; font-weight: 600; padding: 5px 8px; border-radius: 6px; cursor: pointer; outline: none;">
+                        <option value="../glb/aranha_pernalonga.glb" selected>🦵 Aranha Pernalonga (Padrão)</option>
+                        <option value="../glb/aranha.glb">🕷️ Aranha HX1 (Clássica)</option>
+                        <option value="custom" disabled id="opt-custom">📂 Modelo Customizado...</option>
+                    </select>
                     <input type="file" id="glb-file-input" accept=".glb,.gltf,.json" style="display: none;">
-                    <button onclick="document.getElementById('glb-file-input').click()" 
-                        style="background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.72rem; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
-                        📂 Carregar Outro Modelo
+                    <button onclick="document.getElementById('glb-file-input').click()" title="Carregar outro arquivo .GLB / .JSON do computador"
+                        style="background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 0.72rem; padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap;">
+                        📂 Abrir
                     </button>
-                    <button id="btn-xray"
-                        style="background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.2); color: #94a3b8; font-size: 0.72rem; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
-                        🦴 Raio-X (X)
+                    <button id="btn-xray" title="Alternar modo Raio-X Biomecânico (Tecla X)"
+                        style="background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.2); color: #94a3b8; font-size: 0.72rem; padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap;">
+                        🦴 Raio-X
                     </button>
                 </div>
                 <!-- Sliders de Ajuste Fino de Postura e Câmera -->
@@ -421,8 +426,8 @@
                         <input type="range" id="slider-move-speed" min="4.0" max="24.0" step="0.5" value="16.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">10.0x</strong></span>
-                        <input type="range" id="slider-pivot-speed" min="1.0" max="15.0" step="0.5" value="10.0" style="width: 130px; cursor: pointer;">
+                        <span>Velocidade do Pivô: <strong id="lbl-pivot-speed" style="color: #38bdf8;">15.0x</strong></span>
+                        <input type="range" id="slider-pivot-speed" min="1.0" max="25.0" step="0.5" value="15.0" style="width: 130px; cursor: pointer;">
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
@@ -670,7 +675,7 @@
             // Postura Original Calibrada
             stanceSpread: 1.10, // Abertura padrão 1.10x
             bodyHeight: 1.70,   // Altura padrão do corpo (1.70m)
-            pivotSpeed: 10.0,   // Multiplicador da velocidade do pivô (slider, padrão 10.0x)
+            pivotSpeed: 15.0,   // Multiplicador da velocidade do pivô (slider, padrão 15.0x)
 
             // Controle de Marcha Tripé (Escala 1:1)
             isMoving: false,
@@ -778,10 +783,10 @@
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
 
-                // Rotação orbital do azimute e pitch da câmera
+                // Rotação orbital do azimute e pitch da câmera (Pitch corrigido / natural)
                 walkerState.camAzimuth -= deltaX * 0.006;
                 walkerState.camPitchDeg = THREE.MathUtils.clamp(
-                    walkerState.camPitchDeg - deltaY * 0.1,
+                    walkerState.camPitchDeg + deltaY * 0.1,
                     15.0,
                     80.0
                 );
@@ -969,7 +974,7 @@
             }
         }
 
-        // --- SETUP DO MODELO DA ARANHA ---
+        // --- SETUP DO MODELO DA ARANHA & MEDIÇÃO DINÂMICA DE OSSOS ---
         function setupRobotModel(gltfScene) {
             while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
             while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
@@ -977,7 +982,10 @@
             legs.length = 0;
 
             modelRoot = gltfScene;
+            bodyGroup.position.set(0, 0, 0);
+            bodyGroup.rotation.set(0, 0, 0);
             bodyGroup.add(modelRoot);
+            bodyGroup.updateMatrixWorld(true);
 
             modelRoot.traverse((child) => {
                 if (child.isMesh) {
@@ -994,6 +1002,9 @@
             // Grupo 1: FL(3), MR(1), BL(5)
             const tripodGroups = [0, 1, 0, 1, 0, 1];
 
+            let sumScale = 0;
+            let legCount = 0;
+
             legBaseNames.forEach((baseName, index) => {
                 let baseNode = null;
                 modelRoot.traverse((n) => {
@@ -1009,9 +1020,49 @@
 
                     const isRight = legSides[index] === 'D';
 
+                    // 1. MEDIÇÃO AUTOMÁTICA DOS OSSOS NA HIERARQUIA 3D
+                    const p0 = new THREE.Vector3();
+                    const p1 = new THREE.Vector3();
+                    const p2 = new THREE.Vector3();
+                    const p3 = new THREE.Vector3();
+
+                    baseNode.getWorldPosition(p0);
+                    j1Node.getWorldPosition(p1);
+                    let measuredL1 = p0.distanceTo(p1);
+                    if (measuredL1 < 0.01) measuredL1 = j1Node.position.length();
+                    if (measuredL1 < 0.01) measuredL1 = L1_M;
+
+                    let measuredL2 = L2_M;
+                    if (j2Node) {
+                        j2Node.getWorldPosition(p2);
+                        measuredL2 = p1.distanceTo(p2);
+                        if (measuredL2 < 0.01) measuredL2 = j2Node.position.length();
+                        if (measuredL2 < 0.01) measuredL2 = L2_M;
+                    }
+
+                    let measuredL3 = L3_M;
+                    if (j3Node) {
+                        j3Node.getWorldPosition(p3);
+                        measuredL3 = p2.distanceTo(p3);
+                        if (measuredL3 < 0.01) measuredL3 = j3Node.position.length();
+                        if (j3Node.children.length > 0) {
+                            const tipPos = new THREE.Vector3();
+                            j3Node.children[0].getWorldPosition(tipPos);
+                            const tipDist = p2.distanceTo(tipPos);
+                            if (tipDist > 0.05) measuredL3 = tipDist;
+                        }
+                        if (measuredL3 < 0.01) measuredL3 = L3_M;
+                    }
+
+                    const totalReach = measuredL1 + measuredL2 + measuredL3;
+                    const refReach = L1_M + L2_M + L3_M; // 7.3219m
+                    const legScale = totalReach / refReach;
+                    sumScale += legScale;
+                    legCount++;
+
                     // Âncora Visual
                     const targetMesh = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.18, 16, 16),
+                        new THREE.SphereGeometry(0.18 * legScale, 16, 16),
                         new THREE.MeshStandardMaterial({
                             color: isRight ? 0x00d2ff : 0x2ed573,
                             emissive: isRight ? 0x003366 : 0x115522,
@@ -1034,7 +1085,7 @@
                     const lineMesh = new Line2(lineGeo, lineMat);
                     skeletonLinesGroup.add(lineMesh);
 
-                    const baseOffset = defaultFootPositions[index].clone();
+                    const baseOffset = defaultFootPositions[index].clone().multiplyScalar(legScale);
                     const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
                     const initTarget = nominalWorldOffset.clone();
                     initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
@@ -1047,9 +1098,9 @@
                         j1Node,
                         j2Node,
                         j3Node,
-                        L1: L1_M,
-                        L2: L2_M,
-                        L3: L3_M,
+                        L1: measuredL1,
+                        L2: measuredL2,
+                        L3: measuredL3,
                         baseOffset: baseOffset.clone(),
                         nominalOffset: nominalWorldOffset,
                         lineMesh,
@@ -1061,6 +1112,22 @@
                     });
                 }
             });
+
+            // Recalcular proporções globais do robô com base na escala média medida
+            if (legCount > 0) {
+                const avgScale = sumScale / legCount;
+                walkerState.bodyHeight = 1.70 * avgScale;
+                walkerState.strideLength = 2.00 * avgScale;
+                walkerState.stepHeight = 0.50 * avgScale;
+
+                const sliderHeight = document.getElementById('slider-height');
+                const lblHeight = document.getElementById('lbl-height');
+                if (sliderHeight) {
+                    sliderHeight.max = (3.5 * avgScale).toFixed(2);
+                    sliderHeight.value = walkerState.bodyHeight.toFixed(2);
+                }
+                if (lblHeight) lblHeight.innerText = `${walkerState.bodyHeight.toFixed(2)}m`;
+            }
 
             resetWalker();
             const loading = document.getElementById('loading');
@@ -1143,22 +1210,54 @@
             });
         }
 
-        // --- CARREGAMENTO INICIAL DO GLB ---
+        // --- GERENCIAMENTO & CARREGAMENTO DE MODELOS (PRESETS & CUSTOM) ---
         const gltfLoader = new GLTFLoader();
-        const modelUrl = '../glb/aranha.glb';
-        gltfLoader.load(
-            modelUrl,
-            (gltf) => {
-                setupRobotModel(gltf.scene);
-            },
-            undefined,
-            (err) => {
-                console.warn('Tentando ./glb/aranha.glb...', err);
-                gltfLoader.load('./glb/aranha.glb', (gltf2) => setupRobotModel(gltf2.scene));
-            }
-        );
+        const modelSelect = document.getElementById('model-select');
+        const optCustom = document.getElementById('opt-custom');
 
-        // Suporte a Drag & Drop
+        function loadModelPreset(url, displayName) {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'flex';
+                loading.style.opacity = '1';
+            }
+
+            gltfLoader.load(
+                url,
+                (gltf) => {
+                    setupRobotModel(gltf.scene);
+                    if (displayName) {
+                        document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
+                    }
+                },
+                undefined,
+                (err) => {
+                    console.warn(`Tentando caminho alternativo para ${url}...`, err);
+                    const altUrl = url.startsWith('../') ? url.replace('../', './') : `../${url}`;
+                    gltfLoader.load(altUrl, (gltf2) => {
+                        setupRobotModel(gltf2.scene);
+                        if (displayName) {
+                            document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
+                        }
+                    });
+                }
+            );
+        }
+
+        if (modelSelect) {
+            modelSelect.addEventListener('change', (e) => {
+                const selectedVal = e.target.value;
+                const selectedText = e.target.options[e.target.selectedIndex].text;
+                if (selectedVal && selectedVal !== 'custom') {
+                    loadModelPreset(selectedVal, selectedText);
+                }
+            });
+        }
+
+        // Carregar Modelo Inicial (Aranha Pernalonga Padrão)
+        loadModelPreset('../glb/aranha_pernalonga.glb', '🦵 Aranha Pernalonga');
+
+        // Suporte a Drag & Drop de Novos Modelos
         const dropZone = document.getElementById('drop-zone');
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; });
         window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) dropZone.style.display = 'none'; });
@@ -1173,10 +1272,21 @@
         });
 
         function loadCustomFile(file) {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'flex';
+                loading.style.opacity = '1';
+            }
+
             const url = URL.createObjectURL(file);
             gltfLoader.load(url, (gltf) => {
                 setupRobotModel(gltf.scene);
-                document.getElementById('model-desc').innerText = `Modelo Customizado: ${file.name}`;
+                document.getElementById('model-desc').innerText = `Custom: ${file.name} • Escala 1:1 Auto-Calibrada`;
+                if (optCustom) {
+                    optCustom.disabled = false;
+                    optCustom.innerText = `📂 ${file.name}`;
+                    if (modelSelect) modelSelect.value = 'custom';
+                }
             });
         }
 
@@ -1275,13 +1385,14 @@
             // Recuo do corpo para trás no eixo Z local (-Z)
             const targetShiftZ = -proxLog * 0.95; // até -0.95m para trás
 
-            // Pitch dinâmico do robô acompanhando o alvo em relação ao solo
+            // Pitch dinâmico do robô acompanhando o alvo no solo em qualquer distância
             const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
             const effectiveBodyY = walkerState.bodyHeight + targetLift;
             const aimRelY = walkerState.aimWorldPoint.y - currentTerrainY;
             const heightDiff = effectiveBodyY - aimRelY;
             const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.0));
-            const targetPitch = pitchDownAngle * proxLog * 0.90;
+            const maxPitch = THREE.MathUtils.degToRad(45.0);
+            const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, -maxPitch, maxPitch);
 
             // Suavização das variáveis dinâmicas (Damp)
             walkerState.dynLift = THREE.MathUtils.damp(walkerState.dynLift || 0, targetLift, 8.0, dt);
