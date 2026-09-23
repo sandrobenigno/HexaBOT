@@ -1177,6 +1177,12 @@
         let damageReactionTimer = 0.0;
         const DAMAGE_DURATION = 0.90; // 900ms de reação cômica
 
+        // Dinâmica de Projeção do Corpo no Tiro (Fast-in, Easy-out)
+        let isActuallyFiring = false;
+        let shootingShiftZ = 0.0;
+        let shootingReleaseTime = -999.0;
+        let wasLaserShootingShift = false;
+
         function triggerDamageReaction() {
             damageReactionTimer = DAMAGE_DURATION;
         }
@@ -1956,6 +1962,7 @@
             walkerState.dynLift = 0;
             walkerState.dynShiftZ = 0;
             walkerState.dynPitch = 0;
+            shootingShiftZ = 0;
             isMouseActive = false;
             
             robotMasterGroup.position.set(0, 0, 0);
@@ -2059,7 +2066,7 @@
             const heightDiff = effectiveBodyY - walkerState.aimWorldPoint.y;
             const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.5));
             const minPitch = -THREE.MathUtils.degToRad(35.0); // Tilt para cima (até 35°)
-            const maxPitch = THREE.MathUtils.degToRad(22.0);  // Tilt para baixo (até 22°)
+            const maxPitch = THREE.MathUtils.degToRad(35.0);  // Tilt para baixo (até 35°)
             const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, minPitch, maxPitch);
 
             // Suavização das variáveis dinâmicas (Damp)
@@ -2277,13 +2284,31 @@
                 }
             }
 
+            // Dinâmica de Projeção do Corpo no Tiro (Fast-in no disparo, Easy-out no recuo em 500ms)
+            if (isActuallyFiring) {
+                shootingShiftZ = THREE.MathUtils.damp(shootingShiftZ, 1.50, 24.0, dt);
+                wasLaserShootingShift = true;
+            } else {
+                if (wasLaserShootingShift) {
+                    shootingReleaseTime = clock.getElapsedTime();
+                    wasLaserShootingShift = false;
+                }
+                const timeSinceRelease = clock.getElapsedTime() - shootingReleaseTime;
+                if (timeSinceRelease < 0.50) {
+                    const t = THREE.MathUtils.clamp(timeSinceRelease / 0.50, 0.0, 1.0);
+                    shootingShiftZ = 1.5 * (1.0 - t) * (1.0 - t);
+                } else {
+                    shootingShiftZ = 0.0;
+                }
+            }
+
             // Posicionar o Robô no Terreno em Escala 1:1 com Elevação Adaptativa e Equilíbrio de Relevo
             robotMasterGroup.position.set(walkerState.posX, walkerState.terrainElevationY, walkerState.posZ);
             robotMasterGroup.rotation.set(walkerState.terrainPitch, walkerState.baseHeading, walkerState.terrainRoll, 'YXZ');
             bodyGroup.position.set(
                 damageJoltX,
                 walkerState.bodyHeight + walkerState.dynLift + damageJoltY,
-                walkerState.dynShiftZ + damageJoltZ
+                walkerState.dynShiftZ + shootingShiftZ + damageJoltZ
             );
             bodyGroup.rotation.set(
                 walkerState.dynPitch + damageWobblePitch,
@@ -2362,7 +2387,7 @@
 
             const isLineOfSightClear = !isLineOfSightBlocked;
             const canFire = isWithinFOV && isLineOfSightClear;
-            const isActuallyFiring = isAimFiring && canFire;
+            isActuallyFiring = isAimFiring && canFire;
 
             // Vetor e Posição Média do Feixe Volumétrico
             _laserBeamVec.subVectors(contactPoint, snoutPos);
