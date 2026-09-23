@@ -471,6 +471,7 @@
                 <div class="control-item"><kbd>Mouse</kbd> <span>Mirar no Solo</span></div>
                 <div class="control-item"><kbd>Botão Meio</kbd> <span>Girar Câmera</span></div>
                 <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
+                <div class="control-item"><kbd>K</kbd> <span>Dano Cômico</span></div>
                 <div class="control-item"><kbd>P</kbd> <span>Painéis</span></div>
                 <div class="control-item"><kbd>H</kbd> <span>Ajuda</span></div>
             </div>
@@ -508,6 +509,7 @@
                     <li><kbd>Botão Meio (Drag)</kbd> — Girar Câmera / Órbita Livre</li>
                     <li><kbd>Scroll Mouse</kbd> — Zoom da Câmera (50m a 100m)</li>
                     <li><kbd>X</kbd> — Alternar Modo Raio-X Biomecânico</li>
+                    <li><kbd>K</kbd> — Simular Dano (Reação cômica dos olhos e carapaça)</li>
                     <li><kbd>H</kbd> — Abrir / Fechar esta tela de ajuda</li>
                     <li><kbd>R</kbd> — Resetar Posição na Arena</li>
                 </ul>
@@ -869,6 +871,9 @@
             metalness: 0.2
         });
 
+        // Coleção de Obstáculos Sólidos para Raycasting Otimizado (Blocos e Pilares ~300 triângulos)
+        const aimTargetableMeshes = [];
+
         steppableBoxes.forEach((b) => {
             const boxGroup = new THREE.Group();
             boxGroup.position.set(b.x, b.baseY + b.height * 0.5, b.z);
@@ -880,6 +885,7 @@
             bMesh.castShadow = true;
             bMesh.receiveShadow = true;
             boxGroup.add(bMesh);
+            aimTargetableMeshes.push(bMesh);
 
             // Borda Holográfica Neon
             const edges = new THREE.EdgesGeometry(bGeo);
@@ -893,6 +899,7 @@
             padMesh.position.y = b.height * 0.5 + 0.01;
             padMesh.receiveShadow = true;
             boxGroup.add(padMesh);
+            aimTargetableMeshes.push(padMesh);
 
             b.groupMesh = boxGroup;
             arenaGroup.add(boxGroup);
@@ -936,6 +943,7 @@
             col.receiveShadow = true;
             decorativePillars.push(col);
             pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
+            aimTargetableMeshes.push(col);
             arenaGroup.add(col);
         });
 
@@ -1061,18 +1069,61 @@
         scene.add(skeletonLinesGroup);
         skeletonLinesGroup.visible = false;
 
-        // Laser Reticle / Mira
+        // Laser Reticle / Mira & Feixe Volumétrico de Energia Laser dos Bots HX
         const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const laserMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.50 });
         const laserLine = new THREE.Line(laserGeo, laserMat);
         scene.add(laserLine);
 
+        // Geometria Cilíndrica Base para Feixes de Energia (Centro em 0, altura 1.0)
+        const beamCylGeo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);
+
+        // 1. Núcleo Super-Emitente Branco/Ciano (Inner Core)
+        const laserCoreMat = new THREE.MeshBasicMaterial({
+            color: 0xf0fdff,
+            transparent: true,
+            opacity: 0.40,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        const laserCoreMesh = new THREE.Mesh(beamCylGeo, laserCoreMat);
+        scene.add(laserCoreMesh);
+
+        // 2. Halo / Bainha de Plasma Espessa e Oscilante Ciano Neon (Outer Glow Aura)
+        const laserGlowMat = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        const laserGlowMesh = new THREE.Mesh(beamCylGeo, laserGlowMat);
+        scene.add(laserGlowMesh);
+
+        // 3. Clarão de Boca / Muzzle Flare no Focinho do HX
+        const muzzleFlareGeo = new THREE.SphereGeometry(0.24, 16, 16);
+        const muzzleFlareMat = new THREE.MeshBasicMaterial({
+            color: 0x00f7ff,
+            transparent: true,
+            opacity: 0.0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const laserMuzzleFlare = new THREE.Mesh(muzzleFlareGeo, muzzleFlareMat);
+        scene.add(laserMuzzleFlare);
+
+        // Luz de Boca no Canhão / Focinho do HX
+        const snoutMuzzleLight = new THREE.PointLight(0x00e5ff, 0.0, 10.0, 1.2);
+        scene.add(snoutMuzzleLight);
+
         // Lâmpada de Impacto da Mira / Laser dos Bots HX (Ativa em Azul/Ciano ao Clicar com o Mouse)
-        const aimTargetLight = new THREE.PointLight(0x00e5ff, 0.0, 18.0, 1.0);
+        const aimTargetLight = new THREE.PointLight(0x00e5ff, 0.0, 22.0, 0.8);
         aimTargetLight.position.set(0, 0.4, 0);
         scene.add(aimTargetLight);
 
-        // Ponto de Impacto Visual e Anel de Energia no Solo
+        // Ponto de Impacto Visual e Anel de Energia no Solo / Paredes
         const aimImpactGeo = new THREE.RingGeometry(0.10, 0.55, 32);
         aimImpactGeo.rotateX(-Math.PI / 2);
         const aimImpactMat = new THREE.MeshBasicMaterial({
@@ -1095,6 +1146,36 @@
         });
         const aimCenterDot = new THREE.Mesh(aimCenterDotGeo, aimCenterDotMat);
         scene.add(aimCenterDot);
+
+        // Math & Raycast Helpers para Projeção na Superfície, Oclusão e Feixe Volumétrico
+        const _tempSnout = new THREE.Vector3();
+        const _laserRaycaster = new THREE.Raycaster();
+        const _laserRayDir = new THREE.Vector3();
+        const _tempHitNormal = new THREE.Vector3();
+        const _tempLaserHitNormal = new THREE.Vector3();
+        const _upVec = new THREE.Vector3(0, 1, 0);
+        const _laserBeamVec = new THREE.Vector3();
+        const _laserBeamMid = new THREE.Vector3();
+        const _laserBeamDir = new THREE.Vector3();
+        const _laserBeamQuat = new THREE.Quaternion();
+
+        // ShapeKeys / Morph Targets do Bot (Íris, Carapaça e Olhos Saltando)
+        const morphTargetsMap = {
+            irisD: [],
+            irisE: [],
+            carapaca: [],
+            olhos: []
+        };
+        let irisShootingWeight = 0.0;
+        let irisReleaseTime = -999.0;
+        let wasLaserFiring = false;
+        let damageReactionTimer = 0.0;
+        const DAMAGE_DURATION = 0.90; // 900ms de reação cômica
+
+        function triggerDamageReaction() {
+            damageReactionTimer = DAMAGE_DURATION;
+        }
+        window.triggerDamageReaction = triggerDamageReaction;
 
         // Estrutura de Pernas e Calibração
         let modelRoot = null;
@@ -1124,6 +1205,7 @@
             baseHeading: 0,     // Rumo da base/passadas (radianos)
             torsoYaw: 0,        // Rotação local do chassi/tronco
             aimWorldPoint: new THREE.Vector3(0, 0, 18),
+            aimWorldNormal: new THREE.Vector3(0, 1, 0),
             
             // Postura Original Calibrada
             stanceSpread: 1.10, // Abertura padrão 1.10x
@@ -1183,6 +1265,7 @@
             if (e.key === 'x' || e.key === 'X') toggleXRay();
             if (e.key === 'h' || e.key === 'H') toggleHelpModal();
             if (e.key === 'r' || e.key === 'R') resetWalker();
+            if (e.key === 'k' || e.key === 'K') triggerDamageReaction();
         });
 
         window.addEventListener('keyup', (e) => {
@@ -1313,8 +1396,6 @@
         const _qInvBase = new THREE.Quaternion();
         const _qInv1 = new THREE.Quaternion();
         const _qInv2 = new THREE.Quaternion();
-        const _tempSnout = new THREE.Vector3();
-        const _tempLaserHit = new THREE.Vector3();
 
         function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
             const { baseNode, j1Node, j2Node, j3Node, L1, L2, L3 } = leg;
@@ -1505,12 +1586,33 @@
             bodyGroup.add(modelRoot);
             bodyGroup.updateMatrixWorld(true);
 
+            morphTargetsMap.irisD = [];
+            morphTargetsMap.irisE = [];
+            morphTargetsMap.carapaca = [];
+            morphTargetsMap.olhos = [];
+
             modelRoot.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
                     if (child.material) {
                         child.material.envMapIntensity = 1.2;
+                    }
+                    // Mapeamento Rigoroso de ShapeKeys (IRIS_D, IRIS_E, CARAPACA, OLHOS)
+                    if (child.morphTargetDictionary && child.morphTargetInfluences) {
+                        for (const name in child.morphTargetDictionary) {
+                            const upper = name.toUpperCase().replace('-', '_');
+                            const idx = child.morphTargetDictionary[name];
+                            if (upper.includes('IRIS_D')) {
+                                morphTargetsMap.irisD.push({ mesh: child, index: idx });
+                            } else if (upper.includes('IRIS_E')) {
+                                morphTargetsMap.irisE.push({ mesh: child, index: idx });
+                            } else if (upper.includes('CARAPACA')) {
+                                morphTargetsMap.carapaca.push({ mesh: child, index: idx });
+                            } else if (upper.includes('OLHO') || upper.includes('EYE')) {
+                                morphTargetsMap.olhos.push({ mesh: child, index: idx });
+                            }
+                        }
                     }
                 }
             });
@@ -1838,6 +1940,7 @@
             walkerState.torsoYaw = 0;
             walkerState.travelHeading = 0;
             walkerState.aimWorldPoint.set(0, 0, 18);
+            walkerState.aimWorldNormal.set(0, 1, 0);
             walkerState.camAzimuth = Math.PI;
             walkerState.isStepActive = false;
             walkerState.gaitProgress = 0;
@@ -1863,16 +1966,28 @@
 
             const dt = Math.min(clock.getDelta(), 0.1);
 
-            // 1. MIRA DO MOUSE NO PLANO DO TERRENO COM DETECÇÃO DE ALTURA
+            // 1. MIRA DO MOUSE PROJETADA NA SUPERFÍCIE 3D (TERRENO, BLOCOS E PILARES)
             if (isMouseActive) {
                 raycaster.setFromCamera(mouseNorm, camera);
-                const groundHit = new THREE.Vector3();
-                const hit = raycaster.ray.intersectPlane(aimPlane, groundHit);
-                if (hit) {
-                    groundHit.x = THREE.MathUtils.clamp(groundHit.x, -135.0, 135.0);
-                    groundHit.z = THREE.MathUtils.clamp(groundHit.z, -135.0, 135.0);
-                    walkerState.aimWorldPoint.copy(groundHit);
-                    walkerState.aimWorldPoint.y = getTerrainHeight(groundHit.x, groundHit.z);
+                const hits = raycaster.intersectObjects(aimTargetableMeshes, false);
+                if (hits.length > 0) {
+                    walkerState.aimWorldPoint.copy(hits[0].point);
+                    if (hits[0].face) {
+                        _tempHitNormal.copy(hits[0].face.normal).transformDirection(hits[0].object.matrixWorld).normalize();
+                        walkerState.aimWorldNormal.copy(_tempHitNormal);
+                    } else {
+                        walkerState.aimWorldNormal.set(0, 1, 0);
+                    }
+                } else {
+                    const groundHit = new THREE.Vector3();
+                    const hit = raycaster.ray.intersectPlane(aimPlane, groundHit);
+                    if (hit) {
+                        groundHit.x = THREE.MathUtils.clamp(groundHit.x, -135.0, 135.0);
+                        groundHit.z = THREE.MathUtils.clamp(groundHit.z, -135.0, 135.0);
+                        walkerState.aimWorldPoint.copy(groundHit);
+                        walkerState.aimWorldPoint.y = getTerrainHeight(groundHit.x, groundHit.z);
+                        walkerState.aimWorldNormal.set(0, 1, 0);
+                    }
                 }
             }
 
@@ -1932,14 +2047,15 @@
             const targetLift = proxLog * 0.35; // até +0.35m
             const targetShiftZ = -proxLog * 0.40; // até -0.40m para trás
 
-            // Pitch dinâmico do robô acompanhando o alvo no solo com ângulo de conforto máximo de 18°
+            // Pitch dinâmico do robô acompanhando o alvo 3D (inclina para cima em obstáculos/paredes e para baixo no chão)
             const currentTerrainY = getTerrainHeight(walkerState.posX, walkerState.posZ);
-            const effectiveBodyY = walkerState.bodyHeight + targetLift;
-            const aimRelY = walkerState.aimWorldPoint.y - currentTerrainY;
-            const heightDiff = effectiveBodyY - aimRelY;
-            const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 5.0));
-            const maxPitch = THREE.MathUtils.degToRad(18.0);
-            const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, -maxPitch, maxPitch);
+            const bodyElevation = (walkerState.terrainElevationY !== undefined) ? walkerState.terrainElevationY : currentTerrainY;
+            const effectiveBodyY = bodyElevation + walkerState.bodyHeight + targetLift;
+            const heightDiff = effectiveBodyY - walkerState.aimWorldPoint.y;
+            const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.5));
+            const minPitch = -THREE.MathUtils.degToRad(35.0); // Tilt para cima (até 35°)
+            const maxPitch = THREE.MathUtils.degToRad(22.0);  // Tilt para baixo (até 22°)
+            const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, minPitch, maxPitch);
 
             // Suavização das variáveis dinâmicas (Damp)
             walkerState.dynLift = THREE.MathUtils.damp(walkerState.dynLift || 0, targetLift, 6.0, dt);
@@ -2120,60 +2236,265 @@
             const rawTerrainRoll = Math.atan2(leftY - rightY, stanceSpanX) * 0.55;
             walkerState.terrainRoll = THREE.MathUtils.damp(walkerState.terrainRoll || 0, rawTerrainRoll, 6.0, dt);
 
+            // Dinâmica Física de Impacto & Amortecimento do Dano no Chassi (Damped Spring Shockwave)
+            let damageJoltX = 0.0;
+            let damageJoltY = 0.0;
+            let damageJoltZ = 0.0;
+            let damageWobblePitch = 0.0;
+            let damageWobbleRoll = 0.0;
+            let damageWobbleYaw = 0.0;
+            let damageIntensity = 0.0;
+
+            if (damageReactionTimer > 0) {
+                damageReactionTimer = Math.max(0.0, damageReactionTimer - dt);
+                const tImpact = DAMAGE_DURATION - damageReactionTimer; // 0.0s a 0.9s
+                const decay = Math.exp(-5.2 * tImpact); // amortecimento exponencial do chassi
+                
+                // Translação com mola e amortecimento (dumping):
+                // Recuo brusco no eixo Z com oscilação
+                damageJoltZ = -0.45 * Math.cos(tImpact * 20.0) * decay;
+                // Tremor e abalo lateral no eixo X
+                damageJoltX = 0.26 * Math.sin(tImpact * 26.0) * decay;
+                // Agachamento instantâneo do chassi absorvendo o impacto no eixo Y
+                damageJoltY = -0.18 * Math.sin(tImpact * 22.0) * decay;
+
+                // Rotação com tremor angular (Pitch, Roll, Yaw):
+                damageWobblePitch = -0.25 * Math.cos(tImpact * 18.0) * decay;
+                damageWobbleRoll = 0.16 * Math.sin(tImpact * 24.0) * decay;
+                damageWobbleYaw = 0.10 * Math.sin(tImpact * 21.0) * decay;
+
+                // Envelope para as ShapeKeys
+                if (tImpact < 0.10) {
+                    damageIntensity = tImpact / 0.10;
+                } else {
+                    const decayT = (tImpact - 0.10) / (DAMAGE_DURATION - 0.10);
+                    damageIntensity = Math.pow(1.0 - decayT, 2.0);
+                }
+            }
+
             // Posicionar o Robô no Terreno em Escala 1:1 com Elevação Adaptativa e Equilíbrio de Relevo
             robotMasterGroup.position.set(walkerState.posX, walkerState.terrainElevationY, walkerState.posZ);
             robotMasterGroup.rotation.set(walkerState.terrainPitch, walkerState.baseHeading, walkerState.terrainRoll, 'YXZ');
-            bodyGroup.position.set(0, walkerState.bodyHeight + walkerState.dynLift, walkerState.dynShiftZ);
-            bodyGroup.rotation.set(walkerState.dynPitch, walkerState.torsoYaw, 0, 'YXZ');
+            bodyGroup.position.set(
+                damageJoltX,
+                walkerState.bodyHeight + walkerState.dynLift + damageJoltY,
+                walkerState.dynShiftZ + damageJoltZ
+            );
+            bodyGroup.rotation.set(
+                walkerState.dynPitch + damageWobblePitch,
+                walkerState.torsoYaw + damageWobbleYaw,
+                damageWobbleRoll,
+                'YXZ'
+            );
 
             // Atualizar matriz de mundo antes do solver IK
             robotMasterGroup.updateMatrixWorld(true);
 
-            // Atualizar Linha Laser do Focinho/Canhão até a Mira
+            // --- SISTEMA TÁTICO DE DISPARO: REGRAS DE FOV (60°) & OCLUSÃO DE RELEVO DA AREIA ---
+            // 1. Campo de Visão (Cone de 60°: ±30° a partir da frente do tronco/focinho)
+            const currentHeadHeading = (walkerState.baseHeading || 0) + (walkerState.torsoYaw || 0);
+            let fovDelta = targetAimAngle - currentHeadHeading;
+            fovDelta = Math.atan2(Math.sin(fovDelta), Math.cos(fovDelta));
+            const isWithinFOV = Math.abs(fovDelta) <= THREE.MathUtils.degToRad(30.0); // Conforto e liberação em 60° total
+
+            // 2. Teste de Linha de Visada e Barreira do Relevo da Areia (Instantâneo / 0ms)
             const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
-            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.08, walkerState.aimWorldPoint.z);
-            const laserPosAttr = laserLine.geometry.attributes.position;
-            laserPosAttr.setXYZ(0, snoutPos.x, snoutPos.y, snoutPos.z);
-            laserPosAttr.setXYZ(1, laserHit.x, laserHit.y, laserHit.z);
-            laserPosAttr.needsUpdate = true;
+            
+            _laserRayDir.subVectors(walkerState.aimWorldPoint, snoutPos);
+            const totalLaserDist = _laserRayDir.length();
+            let contactPoint = walkerState.aimWorldPoint;
+            let contactNormal = walkerState.aimWorldNormal;
+            let isLineOfSightBlocked = false;
 
-            // Lâmpada de Impacto da Mira / Laser dos Bots HX (Ativa em Azul/Ciano ao Clicar)
-            const targetLightIntensity = isAimFiring ? 32.0 : 0.0;
-            aimTargetLight.intensity = THREE.MathUtils.damp(aimTargetLight.intensity, targetLightIntensity, 32.0, dt);
-            aimTargetLight.position.set(
-                walkerState.aimWorldPoint.x,
-                walkerState.aimWorldPoint.y + 0.45,
-                walkerState.aimWorldPoint.z
-            );
+            if (totalLaserDist > 0.05) {
+                _laserRayDir.normalize();
+                _laserRaycaster.set(snoutPos, _laserRayDir);
+                _laserRaycaster.far = totalLaserDist;
+                
+                // Testar apenas obstáculos sólidos (blocos e pilares: ~300 triângulos no total)
+                const obstacleHits = _laserRaycaster.intersectObjects(aimTargetableMeshes, false);
+                if (obstacleHits.length > 0 && obstacleHits[0].distance < totalLaserDist - 0.20) {
+                    contactPoint = obstacleHits[0].point;
+                    if (obstacleHits[0].face) {
+                        _tempLaserHitNormal.copy(obstacleHits[0].face.normal).transformDirection(obstacleHits[0].object.matrixWorld).normalize();
+                        contactNormal = _tempLaserHitNormal;
+                    } else {
+                        contactNormal = _upVec;
+                    }
+                    isLineOfSightBlocked = true;
+                }
 
-            // Ponto de Impacto Visual e Anel de Energia no Solo
-            const targetImpactOpacity = isAimFiring ? 0.90 : 0.0;
-            aimImpactMat.opacity = THREE.MathUtils.damp(aimImpactMat.opacity, targetImpactOpacity, 22.0, dt);
-            aimCenterDotMat.opacity = THREE.MathUtils.damp(aimCenterDotMat.opacity, targetImpactOpacity, 22.0, dt);
-
-            aimImpactRing.position.set(
-                walkerState.aimWorldPoint.x,
-                walkerState.aimWorldPoint.y + 0.03,
-                walkerState.aimWorldPoint.z
-            );
-            aimCenterDot.position.set(
-                walkerState.aimWorldPoint.x,
-                walkerState.aimWorldPoint.y + 0.08,
-                walkerState.aimWorldPoint.z
-            );
-
-            // Pulso e brilho do feixe de laser
-            laserMat.opacity = isAimFiring ? (0.80 + Math.sin(clock.getElapsedTime() * 30.0) * 0.20) : 0.45;
-            laserMat.color.setHex(isAimFiring ? 0x00f0ff : 0x38bdf8);
-
-            const crosshairRing = document.getElementById('crosshair-ring');
-            if (crosshairRing) {
-                crosshairRing.style.borderColor = isAimFiring ? '#00f0ff' : '#38bdf8';
-                crosshairRing.style.boxShadow = isAimFiring ? '0 0 16px #00f0ff, inset 0 0 8px #00f0ff' : '0 0 10px rgba(56, 189, 248, 0.5)';
-                crosshairRing.style.transform = isAimFiring ? 'scale(1.2)' : 'scale(1.0)';
+                // Verificação Analítica Ultrarrápida de Dunas de Areia ao longo da linha de tiro
+                const sampleSteps = 12;
+                const checkDist = isLineOfSightBlocked ? obstacleHits[0].distance : totalLaserDist;
+                for (let i = 1; i < sampleSteps; i++) {
+                    const t = (i / sampleSteps);
+                    const sampleDist = checkDist * t;
+                    const sx = snoutPos.x + _laserRayDir.x * sampleDist;
+                    const sz = snoutPos.z + _laserRayDir.z * sampleDist;
+                    const sy = snoutPos.y + _laserRayDir.y * sampleDist;
+                    const sandH = getBaseGroundMeshHeight(sx, sz);
+                    if (sy < sandH - 0.15) {
+                        // O feixe mergulha dentro de uma duna de areia antes de chegar ao alvo
+                        contactPoint = new THREE.Vector3(sx, sandH, sz);
+                        contactNormal = _upVec;
+                        isLineOfSightBlocked = true;
+                        break;
+                    }
+                }
             }
 
-            // 5. ATUALIZAR GIZMOS E SOLVER IK RIGOROSO
+            const isLineOfSightClear = !isLineOfSightBlocked;
+            const canFire = isWithinFOV && isLineOfSightClear;
+            const isActuallyFiring = isAimFiring && canFire;
+
+            // Vetor e Posição Média do Feixe Volumétrico
+            _laserBeamVec.subVectors(contactPoint, snoutPos);
+            const actualDist = Math.max(_laserBeamVec.length(), 0.01);
+            _laserBeamMid.addVectors(snoutPos, contactPoint).multiplyScalar(0.5);
+            _laserBeamDir.copy(_laserBeamVec).normalize();
+            _laserBeamQuat.setFromUnitVectors(_upVec, _laserBeamDir);
+
+            const laserPosAttr = laserLine.geometry.attributes.position;
+            laserPosAttr.setXYZ(0, snoutPos.x, snoutPos.y, snoutPos.z);
+            laserPosAttr.setXYZ(1, contactPoint.x, contactPoint.y, contactPoint.z);
+            laserPosAttr.needsUpdate = true;
+
+            const timeNow = clock.getElapsedTime();
+            const pulse1 = Math.sin(timeNow * 42.0);
+            const pulse2 = Math.cos(timeNow * 75.0);
+            const pulse3 = Math.sin(timeNow * 110.0);
+            const pulseHarmonic = (pulse1 * 0.5 + pulse2 * 0.35 + pulse3 * 0.15);
+
+            if (isActuallyFiring) {
+                // DISPARO ATIVO (FOV Alinhado + Linha de Visada Desobstruída): Feixe engrossado e super-emitente
+                const coreRadius = 0.065 + pulseHarmonic * 0.022; // ~0.045m a 0.088m de raio
+                const glowRadius = 0.220 + pulseHarmonic * 0.070; // ~0.150m a 0.290m de raio
+                
+                laserCoreMat.opacity = THREE.MathUtils.damp(laserCoreMat.opacity, 0.96 + pulse1 * 0.04, 30.0, dt);
+                laserGlowMat.opacity = THREE.MathUtils.damp(laserGlowMat.opacity, 0.88 + pulse2 * 0.10, 30.0, dt);
+                laserCoreMat.color.setHex(0xffffff);
+                laserGlowMat.color.setHex(0x00f0ff);
+
+                laserCoreMesh.visible = true;
+                laserGlowMesh.visible = true;
+                laserMuzzleFlare.visible = true;
+
+                laserCoreMesh.position.copy(_laserBeamMid);
+                laserCoreMesh.quaternion.copy(_laserBeamQuat);
+                laserCoreMesh.scale.set(coreRadius, actualDist, coreRadius);
+
+                laserGlowMesh.position.copy(_laserBeamMid);
+                laserGlowMesh.quaternion.copy(_laserBeamQuat);
+                laserGlowMesh.scale.set(glowRadius, actualDist, glowRadius);
+
+                laserMuzzleFlare.position.copy(snoutPos);
+                const muzzleScale = 1.0 + pulseHarmonic * 0.35;
+                laserMuzzleFlare.scale.set(muzzleScale, muzzleScale, muzzleScale);
+                muzzleFlareMat.opacity = 0.90 + pulse1 * 0.10;
+
+                laserMat.opacity = 0.95;
+                laserMat.color.setHex(0xffffff);
+
+                snoutMuzzleLight.intensity = THREE.MathUtils.damp(snoutMuzzleLight.intensity, 18.0 + pulseHarmonic * 8.0, 32.0, dt);
+                snoutMuzzleLight.position.copy(snoutPos);
+            } else {
+                // MODO MIRA PASSIVO OU DISPARO BLOQUEADO
+                laserCoreMat.opacity = THREE.MathUtils.damp(laserCoreMat.opacity, 0.0, 24.0, dt);
+                laserGlowMat.opacity = THREE.MathUtils.damp(laserGlowMat.opacity, 0.0, 24.0, dt);
+
+                laserCoreMesh.visible = false;
+                laserGlowMesh.visible = false;
+                laserMuzzleFlare.visible = false;
+                muzzleFlareMat.opacity = 0.0;
+
+                // Linha Guia com Codificação Tática de Cores
+                if (!isLineOfSightClear) {
+                    laserMat.opacity = 0.45;
+                    laserMat.color.setHex(0xef4444); // Vermelho: Barreira de Relevo / Bloqueado
+                } else if (!isWithinFOV) {
+                    laserMat.opacity = 0.40;
+                    laserMat.color.setHex(0xf59e0b); // Âmbar: Fora do Campo de Visão de 60° (Pivoteando)
+                } else {
+                    laserMat.opacity = 0.40;
+                    laserMat.color.setHex(0x38bdf8); // Ciano: Pronto / Liberado para Disparo
+                }
+
+                snoutMuzzleLight.intensity = THREE.MathUtils.damp(snoutMuzzleLight.intensity, 0.0, 24.0, dt);
+            }
+
+            // Lâmpada de Impacto da Mira / Laser dos Bots HX (Ativa apenas em disparo liberado)
+            const targetLightIntensity = isActuallyFiring ? (44.0 + pulseHarmonic * 16.0) : 0.0;
+            aimTargetLight.intensity = THREE.MathUtils.damp(aimTargetLight.intensity, targetLightIntensity, 32.0, dt);
+            aimTargetLight.position.copy(contactPoint).addScaledVector(contactNormal, 0.45);
+
+            // Ponto de Impacto Visual e Anel de Energia Projetados na Superfície
+            const targetImpactOpacity = isActuallyFiring ? (0.92 + pulse1 * 0.08) : 0.0;
+            aimImpactMat.opacity = THREE.MathUtils.damp(aimImpactMat.opacity, targetImpactOpacity, 24.0, dt);
+            aimCenterDotMat.opacity = THREE.MathUtils.damp(aimCenterDotMat.opacity, targetImpactOpacity, 24.0, dt);
+
+            aimImpactRing.position.copy(contactPoint).addScaledVector(contactNormal, 0.03);
+            aimImpactRing.quaternion.setFromUnitVectors(_upVec, contactNormal);
+            const ringScale = isActuallyFiring ? (1.0 + pulseHarmonic * 0.22) : 1.0;
+            aimImpactRing.scale.set(ringScale, ringScale, ringScale);
+
+            aimCenterDot.position.copy(contactPoint).addScaledVector(contactNormal, 0.06);
+            aimCenterDot.scale.set(ringScale, ringScale, ringScale);
+
+            // Retículo Tático / Crosshair com Feedback de Estado de Fogo
+            const crosshairRing = document.getElementById('crosshair-ring');
+            if (crosshairRing) {
+                if (isActuallyFiring) {
+                    crosshairRing.style.borderColor = '#00f0ff';
+                    crosshairRing.style.boxShadow = '0 0 20px #00f0ff, inset 0 0 10px #00f0ff';
+                    crosshairRing.style.transform = `scale(${1.2 + pulseHarmonic * 0.08})`;
+                } else if (!isLineOfSightClear) {
+                    crosshairRing.style.borderColor = '#ef4444';
+                    crosshairRing.style.boxShadow = '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.5)';
+                    crosshairRing.style.transform = 'scale(0.95)';
+                } else if (!isWithinFOV) {
+                    crosshairRing.style.borderColor = '#f59e0b';
+                    crosshairRing.style.boxShadow = '0 0 12px rgba(245, 158, 11, 0.7), inset 0 0 5px rgba(245, 158, 11, 0.4)';
+                    crosshairRing.style.transform = 'scale(1.0)';
+                } else {
+                    crosshairRing.style.borderColor = '#38bdf8';
+                    crosshairRing.style.boxShadow = '0 0 10px rgba(56, 189, 248, 0.5)';
+                    crosshairRing.style.transform = 'scale(1.0)';
+                }
+            }
+
+            // 5. ANIMAÇÃO DE SHAPEKEYS: TIRO (ÍRIS 100%, OLHOS 10%) & DANO CÔMICO (OLHOS 100%, CARAPAÇA 55%, ÍRIS D 30%, ÍRIS E 100%)
+            // A) Componente de Tiro (Ambas as Íris 100% e Olhos em 10%, com Easy Out em 500ms)
+            if (isActuallyFiring) {
+                irisShootingWeight = THREE.MathUtils.damp(irisShootingWeight, 1.00, 32.0, dt);
+                wasLaserFiring = true;
+            } else {
+                if (wasLaserFiring) {
+                    irisReleaseTime = clock.getElapsedTime();
+                    wasLaserFiring = false;
+                }
+                const timeSinceRelease = clock.getElapsedTime() - irisReleaseTime;
+                if (timeSinceRelease < 0.50) {
+                    const t = THREE.MathUtils.clamp(timeSinceRelease / 0.50, 0.0, 1.0);
+                    irisShootingWeight = 1.00 * (1.0 - t) * (1.0 - t);
+                } else {
+                    irisShootingWeight = 0.0;
+                }
+            }
+            const shootingOlhosWeight = irisShootingWeight * 0.10; // No tiro, os olhos mexem apenas 10%!
+
+            // B) Combinação e Aplicação das ShapeKeys (Tiro + Dano Cômico)
+            const finalIrisD = Math.max(irisShootingWeight, 0.30 * damageIntensity);
+            const finalIrisE = Math.max(irisShootingWeight, 1.00 * damageIntensity);
+            const finalCarapaca = 0.85 * damageIntensity;
+            const finalOlhos = Math.max(shootingOlhosWeight, 1.00 * damageIntensity);
+
+            morphTargetsMap.irisD.forEach(({ mesh, index }) => { mesh.morphTargetInfluences[index] = finalIrisD; });
+            morphTargetsMap.irisE.forEach(({ mesh, index }) => { mesh.morphTargetInfluences[index] = finalIrisE; });
+            morphTargetsMap.carapaca.forEach(({ mesh, index }) => { mesh.morphTargetInfluences[index] = finalCarapaca; });
+            morphTargetsMap.olhos.forEach(({ mesh, index }) => { mesh.morphTargetInfluences[index] = finalOlhos; });
+
+            // 6. ATUALIZAR GIZMOS E SOLVER IK RIGOROSO
             const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight + walkerState.dynLift);
             legs.forEach((leg) => {
                 if (leg.targetMesh) {
