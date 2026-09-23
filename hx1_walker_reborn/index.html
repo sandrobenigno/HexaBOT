@@ -950,12 +950,19 @@
         // --- SISTEMA DE RESTRIÇÃO DE ESPAÇO: LIMITES DA ARENA & COLISÃO RÍGIDA DE OBSTÁCULOS ---
         const ARENA_HALF_BOUND = 130.0; // Limite do tabuleiro (280x280m -> borda segura 130m)
 
-        // Raio Dinâmico do Polígono de Suporte das Patas (considerando abertura stanceSpread e modelo)
+        // Raio Dinâmico do Polígono de Suporte das Patas (calculado dinamicamente das pernas escaneadas)
         function getMechFootprintRadius() {
-            const isPernalonga = legs.length > 0 && legs[0].L3 > 3.5;
-            const baseSpan = isPernalonga ? 8.8 : 6.65;
+            let maxSpan = 6.65;
+            if (legs.length > 0) {
+                let m = 0;
+                for (let i = 0; i < legs.length; i++) {
+                    const span = (legs[i].baseOffset ? Math.hypot(legs[i].baseOffset.x, legs[i].baseOffset.z) : 0) || (legs[i].L1 + legs[i].L2 + legs[i].L3) * 0.85;
+                    if (span > m) m = span;
+                }
+                if (m > 0) maxSpan = m;
+            }
             const spread = (typeof walkerState !== 'undefined' && walkerState.stanceSpread) ? walkerState.stanceSpread : 1.10;
-            return baseSpan * spread + 0.9;
+            return maxSpan * spread + 0.9;
         }
 
         // Restrição de Posição do Corpo / Centro do Robô (Garante que nenhuma pata penetre nos pilares nem saia do tabuleiro)
@@ -1188,25 +1195,11 @@
         }
         window.triggerDamageReaction = triggerDamageReaction;
 
-        // Estrutura de Pernas e Calibração
+        // Estrutura de Pernas e Calibração Dinâmica
         let modelRoot = null;
         const legs = [];
         let xrayMode = false;
-
-        // Dimensões Padrão dos Ossos (100% Exatas do GLB em Escala 1:1)
-        const L1_M = 2.3608; // Coxa
-        const L2_M = 2.1611; // Fêmur
-        const L3_M = 2.8000; // Tíbia
-
-        // Posições Padrão das Patas (100% Exatas do index.html Original)
-        const defaultFootPositions = [
-            new THREE.Vector3(-5.8, 0.0,  3.2), // FR (0)
-            new THREE.Vector3(-6.4, 0.0, -0.4), // MR (1)
-            new THREE.Vector3(-5.2, 0.0, -4.0), // BR (2)
-            new THREE.Vector3( 5.8, 0.0,  3.2), // FL (3)
-            new THREE.Vector3( 6.4, 0.0, -0.4), // ML (4)
-            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL (5)
-        ];
+        let activeBotManifest = null;
 
         // Parâmetros de Locomoção & Cinemática em Escala Real
         const walkerState = {
@@ -1365,16 +1358,16 @@
 
         // --- FUNÇÃO DE CURVA ADAPTATIVA DA COXA ---
         function calculateAdaptiveElevation(yHeight) {
-            const isPernalonga = legs.length > 0 && legs[0].L3 > 3.5;
-            const maxY = isPernalonga ? 3.5 : 2.5;
-            const midY = isPernalonga ? 1.8 : 1.3;
+            const totalReach = (legs.length > 0) ? (legs[0].L1 + legs[0].L2 + legs[0].L3) : 7.32;
+            const maxY = totalReach * 0.38;
+            const midY = totalReach * 0.20;
             const y = THREE.MathUtils.clamp(yHeight, 0.0, maxY);
             if (y >= midY) {
-                const t = (y - midY) / (maxY - midY);
+                const t = (y - midY) / Math.max(maxY - midY, 0.001);
                 const s = t * t * (3 - 2 * t);
                 return 35.0 - s * (35.0 - 5.0);
             } else {
-                const t = (midY - y) / midY;
+                const t = (midY - y) / Math.max(midY, 0.001);
                 const s = t * t * (3 - 2 * t);
                 return 35.0 + s * (45.0 - 35.0);
             }
@@ -1566,37 +1559,57 @@
             }
         }
 
-        // Posições Canônicas Base de Apoio Calibradas (HX1 - Escala 1.0)
-        const defaultFootPositionsHX1 = [
-            new THREE.Vector3(-5.8, 0.0,  3.2), // FR - D0_(1)
-            new THREE.Vector3(-6.4, 0.0, -0.4), // MR - D0_(2)
-            new THREE.Vector3(-5.2, 0.0, -4.0), // BR - D0_(3)
-            new THREE.Vector3( 5.8, 0.0,  3.2), // FL - E0_(1)
-            new THREE.Vector3( 6.4, 0.0, -0.4), // ML - E0_(2)
-            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL - E0_(3)
-        ];
+        const canonicalBaseFootprints = {
+            'FR': new THREE.Vector3(-5.8, 0.0,  3.2),
+            'MR': new THREE.Vector3(-6.4, 0.0, -0.4),
+            'BR': new THREE.Vector3(-5.2, 0.0, -4.0),
+            'FL': new THREE.Vector3( 5.8, 0.0,  3.2),
+            'ML': new THREE.Vector3( 6.4, 0.0, -0.4),
+            'BL': new THREE.Vector3( 5.2, 0.0, -4.0)
+        };
 
-        // --- SETUP DO MODELO DA ARANHA & MEDIÇÃO DINÂMICA DE OSSOS ---
-        function setupRobotModel(gltfScene, modelId = '') {
+        // --- FUNÇÕES DE DETECÇÃO HIERÁRQUICA & LEITURA DE METADADOS / MANIFESTO ---
+        function findNextJointNode(parent) {
+            if (!parent || !parent.children || parent.children.length === 0) return null;
+            // 1. Procurar nós filhos que não são mesh e não são helpers X-Ray
+            const nonMesh = parent.children.find(c => !c.isMesh && c.name && !c.userData?.isXrayHelper);
+            if (nonMesh) return nonMesh;
+            // 2. Procurar nó que possui subfilhos
+            const withChildren = parent.children.find(c => c.children && c.children.length > 0 && !c.userData?.isXrayHelper);
+            if (withChildren) return withChildren;
+            // 3. Fallback para primeiro filho válido
+            return parent.children.find(c => !c.userData?.isXrayHelper) || parent.children[0] || null;
+        }
+
+        function extractBotManifest(gltf, gltfScene) {
+            if (gltf && gltf.userData && gltf.userData.botManifest) return gltf.userData.botManifest;
+            if (gltfScene && gltfScene.userData && gltfScene.userData.botManifest) return gltfScene.userData.botManifest;
+            if (gltfScene && gltfScene.children) {
+                for (let i = 0; i < gltfScene.children.length; i++) {
+                    if (gltfScene.children[i].userData && gltfScene.children[i].userData.botManifest) {
+                        return gltfScene.children[i].userData.botManifest;
+                    }
+                }
+            }
+            if (gltf && gltf.parser && gltf.parser.json) {
+                const json = gltf.parser.json;
+                if (json.userData && json.userData.botManifest) return json.userData.botManifest;
+                if (json.extras && json.extras.botManifest) return json.extras.botManifest;
+            }
+            return null;
+        }
+
+        // --- SETUP DINÂMICO DO MODELO & AUTO-SCANNER COM LEITURA DE METADADOS ---
+        function setupRobotModel(gltfScene, modelId = '', explicitManifest = null) {
             while (bodyGroup.children.length > 0) bodyGroup.remove(bodyGroup.children[0]);
             while (footTargetGroup.children.length > 0) footTargetGroup.remove(footTargetGroup.children[0]);
             while (skeletonLinesGroup.children.length > 0) skeletonLinesGroup.remove(skeletonLinesGroup.children[0]);
             legs.length = 0;
 
             modelRoot = gltfScene;
-            const isPernalonga = modelId.toLowerCase().includes('pernalonga') || Boolean(modelRoot.name && modelRoot.name.toLowerCase().includes('pernalonga'));
+            activeBotManifest = explicitManifest || extractBotManifest(null, gltfScene);
 
-            // Parâmetros de locomoção e cinemática calibrados por modelo
-            walkerState.bodyHeight = isPernalonga ? 2.40 : 1.70;
-            walkerState.strideLength = isPernalonga ? 2.80 : 2.00;
-            walkerState.stepHeight = isPernalonga ? 0.65 : 0.50;
-            walkerState.stanceSpread = 1.10;
-
-            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
-            bodyGroup.rotation.set(0, 0, 0);
-            bodyGroup.add(modelRoot);
-            bodyGroup.updateMatrixWorld(true);
-
+            // 1. Mapeamento Universal de ShapeKeys / Morph Targets
             morphTargetsMap.irisD = [];
             morphTargetsMap.irisE = [];
             morphTargetsMap.carapaca = [];
@@ -1609,18 +1622,17 @@
                     if (child.material) {
                         child.material.envMapIntensity = 1.2;
                     }
-                    // Mapeamento Rigoroso de ShapeKeys (IRIS_D, IRIS_E, CARAPACA, OLHOS)
                     if (child.morphTargetDictionary && child.morphTargetInfluences) {
                         for (const name in child.morphTargetDictionary) {
                             const upper = name.toUpperCase().replace('-', '_');
                             const idx = child.morphTargetDictionary[name];
-                            if (upper.includes('IRIS_D')) {
+                            if (/IRIS.*[_\-\s]?D|^D[_\-\s]?IRIS/i.test(upper)) {
                                 morphTargetsMap.irisD.push({ mesh: child, index: idx });
-                            } else if (upper.includes('IRIS_E')) {
+                            } else if (/IRIS.*[_\-\s]?E|^E[_\-\s]?IRIS/i.test(upper)) {
                                 morphTargetsMap.irisE.push({ mesh: child, index: idx });
-                            } else if (upper.includes('CARAPACA')) {
+                            } else if (/CARAPACA|SHELL|BODY_MORPH/i.test(upper)) {
                                 morphTargetsMap.carapaca.push({ mesh: child, index: idx });
-                            } else if (upper.includes('OLHO') || upper.includes('EYE')) {
+                            } else if (/OLHO|EYE/i.test(upper)) {
                                 morphTargetsMap.olhos.push({ mesh: child, index: idx });
                             }
                         }
@@ -1628,111 +1640,257 @@
                 }
             });
 
-            const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
-            const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
-            const legSides = ['D', 'D', 'D', 'E', 'E', 'E'];
-            const tripodGroups = [0, 1, 0, 1, 0, 1];
+            // 2. Descobrir todos os Sockets de Pernas na Hierarquia
+            const socketRegex = /^(D0|E0)[\_\-\(\s\d]|^Socket[\_\-\d]|^Hip[\_\-\d]|^LegSocket[\_\-\d]/i;
+            const detectedSockets = [];
 
-            legBaseNames.forEach((baseName, index) => {
-                let baseNode = null;
-                modelRoot.traverse((n) => {
-                    if (n.name && (n.name === baseName || n.name.includes(baseName.replace(/[()]/g, '')))) {
-                        baseNode = n;
-                    }
-                });
-
-                if (baseNode && baseNode.children.length > 0) {
-                    const j1Node = baseNode.children[0];
-                    const j2Node = j1Node.children.length > 0 ? j1Node.children[0] : null;
-                    const j3Node = j2Node && j2Node.children.length > 0 ? j2Node.children[0] : null;
-
-                    const isRight = legSides[index] === 'D';
-
-                    // Dimensões Canônicas 1:1 dos Membros (Calibradas para Cinemática Analítica sem Sobreposição)
-                    const measuredL1 = isPernalonga ? 3.3132 : 2.3608; // Coxa
-                    const measuredL2 = isPernalonga ? 2.7678 : 2.1611; // Fêmur
-                    const measuredL3 = isPernalonga ? 3.7400 : 2.8000; // Tíbia (ponto de contato da pata)
-
-                    // Âncora Visual
-                    const targetMesh = new THREE.Mesh(
-                        new THREE.SphereGeometry(isPernalonga ? 0.20 : 0.18, 16, 16),
-                        new THREE.MeshStandardMaterial({
-                            color: isRight ? 0x00d2ff : 0x2ed573,
-                            emissive: isRight ? 0x003366 : 0x115522,
-                            roughness: 0.3
-                        })
-                    );
-                    targetMesh.castShadow = true;
-                    footTargetGroup.add(targetMesh);
-
-                    // Linha de Esqueleto XRay
-                    const lineGeo = new LineGeometry();
-                    lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
-                    const lineMat = new LineMaterial({
-                        color: isRight ? 0x38bdf8 : 0x7bed9f,
-                        linewidth: 4.5,
-                        transparent: true,
-                        opacity: 0.95
-                    });
-                    lineMat.resolution.set(window.innerWidth, window.innerHeight);
-                    const lineMesh = new Line2(lineGeo, lineMat);
-                    skeletonLinesGroup.add(lineMesh);
-
-                    // Posição base canônica proporcional ao alcance dos membros
-                    const canonicalBase = defaultFootPositionsHX1[index];
-                    const legRatio = (measuredL1 + measuredL2 + measuredL3) / (2.3608 + 2.1611 + 2.8000);
-                    const baseOffset = canonicalBase.clone().multiplyScalar(legRatio);
-                    const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread);
-                    const initTarget = nominalWorldOffset.clone();
-                    const validInit = constrainFootPosition(initTarget.x, initTarget.z);
-                    initTarget.x = validInit.x;
-                    initTarget.z = validInit.z;
-                    initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
-
-                    legs.push({
-                        id: legIds[index],
-                        side: legSides[index],
-                        group: tripodGroups[index],
-                        baseNode,
-                        j1Node,
-                        j2Node,
-                        j3Node,
-                        L1: measuredL1,
-                        L2: measuredL2,
-                        L3: measuredL3,
-                        baseOffset: baseOffset.clone(),
-                        nominalOffset: nominalWorldOffset,
-                        lineMesh,
-                        targetMesh,
-                        currentTarget: initTarget.clone(),
-                        stepStartTarget: initTarget.clone(),
-                        stepEndTarget: initTarget.clone(),
-                        isStepping: false
-                    });
+            modelRoot.traverse((child) => {
+                if (child.name && socketRegex.test(child.name)) {
+                    detectedSockets.push(child);
                 }
             });
 
-            // Parâmetros de locomoção e cinemática calibrados por modelo
-            walkerState.bodyHeight = isPernalonga ? 2.40 : 1.70;
-            walkerState.strideLength = isPernalonga ? 2.80 : 2.00;
-            walkerState.stepHeight = isPernalonga ? 0.65 : 0.50;
-            walkerState.stanceSpread = 1.10;
+            // Separar sockets em Direita (D) e Esquerda (E)
+            const rightSockets = [];
+            const leftSockets = [];
 
+            detectedSockets.forEach(sock => {
+                const nameUpper = sock.name.toUpperCase();
+                const isRight = nameUpper.startsWith('D') || nameUpper.includes('RIGHT') || nameUpper.includes('DIR') || sock.position.x < 0;
+                if (isRight) {
+                    rightSockets.push(sock);
+                } else {
+                    leftSockets.push(sock);
+                }
+            });
+
+            // Função de ordenação determinística de patas: Frente (1 / +Z) -> Meio (2 / ~0) -> Trás (3 / -Z)
+            function getSocketIndex(name) {
+                // Procurar número entre parênteses (ex: D0_(1)) ou no final
+                const mParen = name.match(/\((\d+)\)/);
+                if (mParen) return parseInt(mParen[1], 10);
+                const mEnd = name.match(/[\_\-\s](\d+)$/);
+                if (mEnd) return parseInt(mEnd[1], 10);
+                const mAny = name.match(/\d+/);
+                return mAny ? parseInt(mAny[0], 10) : 999;
+            }
+
+            function sortLegsFrontToBack(arr) {
+                return arr.sort((a, b) => {
+                    const idxA = getSocketIndex(a.name);
+                    const idxB = getSocketIndex(b.name);
+                    if (idxA !== 999 && idxB !== 999 && idxA !== idxB) {
+                        return idxA - idxB;
+                    }
+                    // Fallback geométrico: Frente (+Z) até Trás (-Z)
+                    return b.position.z - a.position.z;
+                });
+            }
+
+            sortLegsFrontToBack(rightSockets);
+            sortLegsFrontToBack(leftSockets);
+
+            const sortedSockets = [...rightSockets, ...leftSockets];
+
+            // Posicionar o modelo inicialmente no corpo
+            bodyGroup.position.set(0, 0, 0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.add(modelRoot);
+            bodyGroup.updateMatrixWorld(true);
+
+            // 3. Medição Dinâmica de Juntas (L1, L2, L3) e Cálculo Procedural de Âncoras
+            let sumL1 = 0, sumL2 = 0, sumL3 = 0;
+            let validLegCount = 0;
+
+            const bodyWorldPos = new THREE.Vector3();
+            bodyGroup.getWorldPosition(bodyWorldPos);
+
+            sortedSockets.forEach((baseSocket, index) => {
+                const isRight = index < rightSockets.length;
+                const legSubIndex = isRight ? index : (index - rightSockets.length);
+                const sideChar = isRight ? 'D' : 'E';
+
+                // IDs canônicos: FR, MR, BR para Direita e FL, ML, BL para Esquerda
+                const legId = isRight 
+                    ? (['FR', 'MR', 'BR'][legSubIndex] || `DR_${legSubIndex}`)
+                    : (['FL', 'ML', 'BL'][legSubIndex] || `EL_${legSubIndex}`);
+
+                // Tripod Group alternado em X (Grupo 0: FR, ML, BR | Grupo 1: FL, MR, BL)
+                const tripodGroup = isRight
+                    ? (legSubIndex % 2 === 0 ? 0 : 1)  // FR=0, MR=1, BR=0
+                    : (legSubIndex % 2 === 0 ? 1 : 0); // FL=1, ML=0, BL=1
+
+                // Escala de mundo do socket
+                const sVec = new THREE.Vector3();
+                baseSocket.getWorldScale(sVec);
+                const socketWorldScale = sVec.x || 1.0;
+
+                // Nível 1: Coxa (J1)
+                const j1Node = findNextJointNode(baseSocket);
+                if (!j1Node) return;
+
+                // Nível 2: Fêmur (J2)
+                const j2Node = findNextJointNode(j1Node);
+                if (!j2Node) return;
+
+                // Nível 3: Tíbia (J3)
+                const j3Node = findNextJointNode(j2Node);
+                if (!j3Node) return;
+
+                // Comprimentos medidos nativamente da hierarquia
+                let l1Native = j2Node.position.length() * socketWorldScale;
+                let l2Native = j3Node.position.length() * socketWorldScale;
+
+                // Medição da extensão da tíbia até a ponta de contato da pata
+                let maxX = 0;
+                j3Node.traverse(c => {
+                    if (c.isMesh && c.geometry) {
+                        c.geometry.computeBoundingBox();
+                        if (c.geometry.boundingBox) {
+                            maxX = Math.max(maxX, c.geometry.boundingBox.max.x, Math.abs(c.geometry.boundingBox.min.x));
+                        }
+                    }
+                });
+                let l3Native = (maxX > 0) ? (maxX * socketWorldScale) : (l2Native * 1.54);
+                if (l3Native > 15.0) l3Native *= 0.01;
+                if (l3Native < 0.2) l3Native = l2Native * 1.54;
+
+                // Se houver manifesto com dados de calibração específicos para esta pata, aplicar:
+                if (activeBotManifest && activeBotManifest.anatomy && activeBotManifest.anatomy.legs) {
+                    const manifestLeg = activeBotManifest.anatomy.legs.find(
+                        ml => ml.socketName === baseSocket.name || ml.id === legId || ml.index === index
+                    );
+                    if (manifestLeg) {
+                        if (manifestLeg.L1) l1Native = manifestLeg.L1;
+                        if (manifestLeg.L2) l2Native = manifestLeg.L2;
+                        if (manifestLeg.L3) l3Native = manifestLeg.L3;
+                    }
+                }
+
+                sumL1 += l1Native;
+                sumL2 += l2Native;
+                sumL3 += l3Native;
+                validLegCount++;
+
+                // 4. Determinar baseOffset (Âncora Canônica Proporcional)
+                const legReach = l1Native + l2Native + l3Native;
+                const canonicalReach = 2.3608 + 2.1611 + 2.8000; // 7.3219m
+                const legRatio = legReach / canonicalReach;
+
+                let baseOffset;
+                if (canonicalBaseFootprints[legId]) {
+                    baseOffset = canonicalBaseFootprints[legId].clone().multiplyScalar(legRatio);
+                } else {
+                    const socketWorld = new THREE.Vector3();
+                    baseSocket.getWorldPosition(socketWorld);
+                    const relVec = new THREE.Vector3().subVectors(socketWorld, bodyWorldPos);
+                    const stanceReach = (l1Native * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (l2Native + l3Native));
+                    let dirH = new THREE.Vector2(relVec.x, relVec.z).normalize();
+                    baseOffset = new THREE.Vector3(relVec.x + dirH.x * stanceReach, 0.0, relVec.z + dirH.y * stanceReach);
+                }
+
+                // Se houver defaultFootTarget explícito no manifesto de calibração:
+                if (activeBotManifest && activeBotManifest.anatomy && activeBotManifest.anatomy.legs) {
+                    const manifestLeg = activeBotManifest.anatomy.legs.find(
+                        ml => ml.socketName === baseSocket.name || ml.id === legId || ml.index === index
+                    );
+                    if (manifestLeg && Array.isArray(manifestLeg.defaultFootTarget)) {
+                        baseOffset.set(
+                            manifestLeg.defaultFootTarget[0],
+                            manifestLeg.defaultFootTarget[1] || 0.0,
+                            manifestLeg.defaultFootTarget[2]
+                        );
+                    }
+                }
+
+                // Âncora Visual
+                const targetMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.18, 16, 16),
+                    new THREE.MeshStandardMaterial({
+                        color: isRight ? 0x00d2ff : 0x2ed573,
+                        emissive: isRight ? 0x003366 : 0x115522,
+                        roughness: 0.3
+                    })
+                );
+                targetMesh.castShadow = true;
+                footTargetGroup.add(targetMesh);
+
+                // Linha de Esqueleto XRay
+                const lineGeo = new LineGeometry();
+                lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
+                const lineMat = new LineMaterial({
+                    color: isRight ? 0x38bdf8 : 0x7bed9f,
+                    linewidth: 4.5,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                lineMat.resolution.set(window.innerWidth, window.innerHeight);
+                const lineMesh = new Line2(lineGeo, lineMat);
+                skeletonLinesGroup.add(lineMesh);
+
+                const nominalWorldOffset = baseOffset.clone().multiplyScalar(walkerState.stanceSpread || 1.10);
+                const initTarget = nominalWorldOffset.clone();
+                const validInit = constrainFootPosition(initTarget.x, initTarget.z);
+                initTarget.x = validInit.x;
+                initTarget.z = validInit.z;
+                initTarget.y = getTerrainHeight(initTarget.x, initTarget.z);
+
+                legs.push({
+                    id: legId,
+                    side: sideChar,
+                    group: tripodGroup,
+                    baseNode: baseSocket,
+                    j1Node,
+                    j2Node,
+                    j3Node,
+                    L1: l1Native,
+                    L2: l2Native,
+                    L3: l3Native,
+                    baseOffset: baseOffset.clone(),
+                    nominalOffset: nominalWorldOffset,
+                    lineMesh,
+                    targetMesh,
+                    currentTarget: initTarget.clone(),
+                    stepStartTarget: initTarget.clone(),
+                    stepEndTarget: initTarget.clone(),
+                    isStepping: false
+                });
+            });
+
+            // 5. Calibração Canônica Proporcional de Postura e Locomoção (com suporte a Manifesto)
+            const avgL1 = validLegCount > 0 ? (sumL1 / validLegCount) : 2.3608;
+            const avgL2 = validLegCount > 0 ? (sumL2 / validLegCount) : 2.1611;
+            const avgL3 = validLegCount > 0 ? (sumL3 / validLegCount) : 2.8000;
+            const totalReach = avgL1 + avgL2 + avgL3;
+            const canonicalRatio = totalReach / 7.3219;
+
+            walkerState.stanceSpread = activeBotManifest?.calibration?.stanceSpread ?? 1.10;
+            walkerState.bodyHeight = activeBotManifest?.calibration?.defaultHeight ?? +(1.70 * canonicalRatio).toFixed(2);
+            walkerState.strideLength = +(2.00 * canonicalRatio).toFixed(2);
+            walkerState.stepHeight = +(0.50 * canonicalRatio).toFixed(2);
+
+            bodyGroup.position.set(0, walkerState.bodyHeight, 0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
+            // Atualizar Sliders do HUD
             const sliderHeight = document.getElementById('slider-height');
             const lblHeight = document.getElementById('lbl-height');
             if (sliderHeight) {
-                sliderHeight.min = isPernalonga ? '0.20' : '0.10';
-                sliderHeight.max = isPernalonga ? '3.80' : '2.50';
+                sliderHeight.min = '0.10';
+                sliderHeight.max = (canonicalRatio > 1.2) ? '3.80' : '2.50';
                 sliderHeight.value = walkerState.bodyHeight.toFixed(2);
             }
             if (lblHeight) lblHeight.innerText = `${walkerState.bodyHeight.toFixed(2)}m`;
 
             const sliderSpread = document.getElementById('slider-spread');
             const lblSpread = document.getElementById('lbl-spread');
-            if (sliderSpread) sliderSpread.value = '1.10';
-            if (lblSpread) lblSpread.innerText = '1.10x';
+            if (sliderSpread) sliderSpread.value = walkerState.stanceSpread.toFixed(2);
+            if (lblSpread) lblSpread.innerText = `${walkerState.stanceSpread.toFixed(2)}x`;
 
+            updateAllLegNominalOffsets();
             resetWalker();
+
             const loading = document.getElementById('loading');
             if (loading) {
                 loading.style.opacity = '0';
@@ -1839,7 +1997,7 @@
             });
         }
 
-        // --- GERENCIAMENTO & CARREGAMENTO DE MODELOS (PRESETS & CUSTOM) ---
+        // --- GERENCIAMENTO & CARREGAMENTO DE MODELOS (PRESETS, GLB & BOT.JSON) ---
         const gltfLoader = new GLTFLoader();
         const modelSelect = document.getElementById('model-select');
         const optCustom = document.getElementById('opt-custom');
@@ -1854,9 +2012,11 @@
             gltfLoader.load(
                 url,
                 (gltf) => {
-                    setupRobotModel(gltf.scene, url);
+                    const manifest = extractBotManifest(gltf, gltf.scene);
+                    setupRobotModel(gltf.scene, url, manifest);
                     if (displayName) {
-                        document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
+                        const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
+                        document.getElementById('model-desc').innerText = `${displayName}${manifestTag} • Escala 1:1`;
                     }
                 },
                 undefined,
@@ -1864,9 +2024,11 @@
                     console.warn(`Tentando caminho alternativo para ${url}...`, err);
                     const altUrl = url.startsWith('../') ? url.replace('../', './') : `../${url}`;
                     gltfLoader.load(altUrl, (gltf2) => {
-                        setupRobotModel(gltf2.scene, altUrl);
+                        const manifest = extractBotManifest(gltf2, gltf2.scene);
+                        setupRobotModel(gltf2.scene, altUrl, manifest);
                         if (displayName) {
-                            document.getElementById('model-desc').innerText = `${displayName} • Escala 1:1 • IK Analítico`;
+                            const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
+                            document.getElementById('model-desc').innerText = `${displayName}${manifestTag} • Escala 1:1`;
                         }
                     });
                 }
@@ -1886,7 +2048,7 @@
         // Carregar Modelo Inicial Padrão: HX2 (Pernalonga)
         loadModelPreset('../glb/aranha_pernalonga.glb', 'HX2 (Pernalonga)');
 
-        // Suporte a Drag & Drop de Novos Modelos
+        // Suporte a Drag & Drop de Novos Modelos (.GLB, .GLTF e .BOT.JSON)
         const dropZone = document.getElementById('drop-zone');
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.display = 'flex'; });
         window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) dropZone.style.display = 'none'; });
@@ -1901,22 +2063,53 @@
         });
 
         function loadCustomFile(file) {
+            if (!file) return;
+
+            // Se for um arquivo de manifesto JSON (.bot.json / .json):
+            if (file.name.toLowerCase().endsWith('.json') || file.name.toLowerCase().endsWith('.bot.json')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const manifest = JSON.parse(e.target.result);
+                        if (modelRoot) {
+                            setupRobotModel(modelRoot, file.name, manifest);
+                            document.getElementById('model-desc').innerText = `Manifesto Aplicado: ${file.name} • Escala 1:1`;
+                        } else {
+                            alert('Carregue primeiro um modelo .GLB antes de aplicar o manifesto .bot.json.');
+                        }
+                    } catch(err) {
+                        alert(`Erro ao ler manifesto JSON: ${err.message}`);
+                    }
+                };
+                reader.readAsText(file);
+                return;
+            }
+
             const loading = document.getElementById('loading');
             if (loading) {
                 loading.style.display = 'flex';
                 loading.style.opacity = '1';
             }
 
-            const url = URL.createObjectURL(file);
-            gltfLoader.load(url, (gltf) => {
-                setupRobotModel(gltf.scene);
-                document.getElementById('model-desc').innerText = `Custom: ${file.name} • Escala 1:1 Auto-Calibrada`;
-                if (optCustom) {
-                    optCustom.disabled = false;
-                    optCustom.innerText = `📂 ${file.name}`;
-                    if (modelSelect) modelSelect.value = 'custom';
-                }
-            });
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const arrayBuffer = e.target.result;
+                gltfLoader.parse(arrayBuffer, '', (gltf) => {
+                    const manifest = extractBotManifest(gltf, gltf.scene);
+                    setupRobotModel(gltf.scene, file.name, manifest);
+                    const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
+                    document.getElementById('model-desc').innerText = `Custom: ${file.name}${manifestTag} • Escala 1:1`;
+                    if (optCustom) {
+                        optCustom.disabled = false;
+                        optCustom.innerText = `📂 ${file.name}`;
+                        if (modelSelect) modelSelect.value = 'custom';
+                    }
+                }, (err) => {
+                    alert(`Erro ao carregar modelo GLB: ${err.message}`);
+                    if (loading) loading.style.display = 'none';
+                });
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         function toggleXRay() {
@@ -2527,7 +2720,7 @@
             // B) Combinação e Aplicação das ShapeKeys (Tiro + Dano Cômico)
             const finalIrisD = Math.max(irisShootingWeight, 0.30 * damageIntensity);
             const finalIrisE = Math.max(irisShootingWeight, 1.00 * damageIntensity);
-            const finalCarapaca = 0.85 * damageIntensity;
+            const finalCarapaca = 0.95 * damageIntensity;
             const finalOlhos = Math.max(shootingOlhosWeight, 1.00 * damageIntensity);
 
             morphTargetsMap.irisD.forEach(({ mesh, index }) => { mesh.morphTargetInfluences[index] = finalIrisD; });
