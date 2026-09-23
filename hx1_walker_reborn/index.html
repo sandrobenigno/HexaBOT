@@ -1196,10 +1196,13 @@
         window.triggerDamageReaction = triggerDamageReaction;
 
         // Estrutura de Pernas e Calibração Dinâmica
+        const clock = new THREE.Clock();
         let modelRoot = null;
         const legs = [];
         let xrayMode = false;
         let activeBotManifest = null;
+        let swayWeight = 0.0;
+        let lastMouseMoveTime = 0.0;
 
         // Parâmetros de Locomoção & Cinemática em Escala Real
         const walkerState = {
@@ -1264,7 +1267,11 @@
         };
 
         window.addEventListener('keydown', (e) => {
-            if (e.code in keys) keys[e.code] = true;
+            if (e.code in keys) {
+                keys[e.code] = true;
+                lastMouseMoveTime = performance.now() * 0.001;
+                swayWeight = 0.0;
+            }
             if (e.key === 'p' || e.key === 'P') togglePanels();
             if (e.key === 'x' || e.key === 'X') toggleXRay();
             if (e.key === 'h' || e.key === 'H') toggleHelpModal();
@@ -1278,6 +1285,8 @@
 
         // Zoom da Câmera via Roda do Mouse (Scroll Wheel limitado entre 50m e 100m)
         window.addEventListener('wheel', (e) => {
+            lastMouseMoveTime = performance.now() * 0.001;
+            swayWeight = 0.0;
             walkerState.camDistance = THREE.MathUtils.clamp(
                 walkerState.camDistance + e.deltaY * 0.04,
                 50.0,
@@ -1296,6 +1305,8 @@
         let lastMouseY = 0;
 
         window.addEventListener('mousedown', (e) => {
+            lastMouseMoveTime = performance.now() * 0.001;
+            swayWeight = 0.0;
             if (e.button === 1) { // Botão do meio: girar câmera
                 isMiddleDragging = true;
                 lastMouseX = e.clientX;
@@ -1327,6 +1338,8 @@
 
         window.addEventListener('mousemove', (e) => {
             isMouseActive = true;
+            lastMouseMoveTime = performance.now() * 0.001;
+            swayWeight = 0.0; // Sair imediatamente no update do mouse
             if (isMiddleDragging) {
                 const deltaX = e.clientX - lastMouseX;
                 const deltaY = e.clientY - lastMouseY;
@@ -1582,19 +1595,72 @@
         }
 
         function extractBotManifest(gltf, gltfScene) {
-            if (gltf && gltf.userData && gltf.userData.botManifest) return gltf.userData.botManifest;
-            if (gltfScene && gltfScene.userData && gltfScene.userData.botManifest) return gltfScene.userData.botManifest;
-            if (gltfScene && gltfScene.children) {
-                for (let i = 0; i < gltfScene.children.length; i++) {
-                    if (gltfScene.children[i].userData && gltfScene.children[i].userData.botManifest) {
-                        return gltfScene.children[i].userData.botManifest;
-                    }
+            function parseManifest(val) {
+                if (!val) return null;
+                if (typeof val === 'string') {
+                    try { return JSON.parse(val); } catch(e) { return null; }
                 }
+                if (typeof val === 'object') return val;
+                return null;
             }
+
+            // 1. Inspecionar propriedades diretas do objeto GLTF e Scene
+            if (gltf && gltf.userData && gltf.userData.botManifest) {
+                const m = parseManifest(gltf.userData.botManifest);
+                if (m) return m;
+            }
+            if (gltfScene && gltfScene.userData && gltfScene.userData.botManifest) {
+                const m = parseManifest(gltfScene.userData.botManifest);
+                if (m) return m;
+            }
+            if (gltf && gltf.scene && gltf.scene.userData && gltf.scene.userData.botManifest) {
+                const m = parseManifest(gltf.scene.userData.botManifest);
+                if (m) return m;
+            }
+
+            // 2. Traverse completo em toda a árvore hierárquica do Three.js Scene
+            const sceneToSearch = gltfScene || (gltf ? gltf.scene : null);
+            let foundManifest = null;
+            if (sceneToSearch && sceneToSearch.traverse) {
+                sceneToSearch.traverse((child) => {
+                    if (!foundManifest && child.userData && child.userData.botManifest) {
+                        foundManifest = parseManifest(child.userData.botManifest);
+                    }
+                });
+            }
+            if (foundManifest) return foundManifest;
+
+            // 3. Inspecionar JSON raw do glTF parser (extras nos nós, nas cenas ou no asset)
             if (gltf && gltf.parser && gltf.parser.json) {
                 const json = gltf.parser.json;
-                if (json.userData && json.userData.botManifest) return json.userData.botManifest;
-                if (json.extras && json.extras.botManifest) return json.extras.botManifest;
+                if (json.userData && json.userData.botManifest) {
+                    const m = parseManifest(json.userData.botManifest);
+                    if (m) return m;
+                }
+                if (json.extras && json.extras.botManifest) {
+                    const m = parseManifest(json.extras.botManifest);
+                    if (m) return m;
+                }
+                if (json.asset && json.asset.extras && json.asset.extras.botManifest) {
+                    const m = parseManifest(json.asset.extras.botManifest);
+                    if (m) return m;
+                }
+                if (json.scenes) {
+                    for (const s of json.scenes) {
+                        if (s && s.extras && s.extras.botManifest) {
+                            const m = parseManifest(s.extras.botManifest);
+                            if (m) return m;
+                        }
+                    }
+                }
+                if (json.nodes) {
+                    for (const n of json.nodes) {
+                        if (n && n.extras && n.extras.botManifest) {
+                            const m = parseManifest(n.extras.botManifest);
+                            if (m) return m;
+                        }
+                    }
+                }
             }
             return null;
         }
@@ -2009,30 +2075,46 @@
                 loading.style.opacity = '1';
             }
 
-            gltfLoader.load(
-                url,
-                (gltf) => {
-                    const manifest = extractBotManifest(gltf, gltf.scene);
-                    setupRobotModel(gltf.scene, url, manifest);
-                    if (displayName) {
-                        const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
-                        document.getElementById('model-desc').innerText = `${displayName}${manifestTag} • Escala 1:1`;
-                    }
-                },
-                undefined,
-                (err) => {
-                    console.warn(`Tentando caminho alternativo para ${url}...`, err);
-                    const altUrl = url.startsWith('../') ? url.replace('../', './') : `../${url}`;
-                    gltfLoader.load(altUrl, (gltf2) => {
-                        const manifest = extractBotManifest(gltf2, gltf2.scene);
-                        setupRobotModel(gltf2.scene, altUrl, manifest);
+            const cleanUrl = `${url}?_cb=${Date.now()}`;
+            fetch(cleanUrl, { cache: 'no-store' })
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.arrayBuffer();
+                })
+                .then(arrayBuffer => {
+                    gltfLoader.parse(arrayBuffer, '', (gltf) => {
+                        const manifest = extractBotManifest(gltf, gltf.scene);
+                        console.log(`[Preset Load] ${displayName} parsed. Manifesto:`, manifest);
+                        setupRobotModel(gltf.scene, url, manifest);
                         if (displayName) {
                             const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
                             document.getElementById('model-desc').innerText = `${displayName}${manifestTag} • Escala 1:1`;
                         }
+                    }, (parseErr) => {
+                        console.error('Erro ao analisar buffer GLB:', parseErr);
                     });
-                }
-            );
+                })
+                .catch(err => {
+                    console.warn(`Tentando caminho alternativo para ${url}...`, err);
+                    const altUrl = url.startsWith('../') ? url.replace('../', './') : `../${url}`;
+                    fetch(`${altUrl}?_cb=${Date.now()}`, { cache: 'no-store' })
+                        .then(res => res.arrayBuffer())
+                        .then(arrayBuffer => {
+                            gltfLoader.parse(arrayBuffer, '', (gltf2) => {
+                                const manifest = extractBotManifest(gltf2, gltf2.scene);
+                                console.log(`[Preset Alt Load] ${displayName} parsed. Manifesto:`, manifest);
+                                setupRobotModel(gltf2.scene, altUrl, manifest);
+                                if (displayName) {
+                                    const manifestTag = manifest ? ' • 📋 Manifesto Ativo' : ' • 🔍 Auto-Escaneado';
+                                    document.getElementById('model-desc').innerText = `${displayName}${manifestTag} • Escala 1:1`;
+                                }
+                            });
+                        })
+                        .catch(err2 => {
+                            alert(`Erro ao carregar preset ${url}: ${err2.message}`);
+                            if (loading) loading.style.display = 'none';
+                        });
+                });
         }
 
         if (modelSelect) {
@@ -2157,6 +2239,8 @@
             walkerState.dynPitch = 0;
             shootingShiftZ = 0;
             isMouseActive = false;
+            swayWeight = 0.0;
+            lastMouseMoveTime = performance.now() * 0.001;
             
             robotMasterGroup.position.set(0, 0, 0);
             robotMasterGroup.rotation.set(0, 0, 0);
@@ -2164,12 +2248,14 @@
         }
 
         // --- LOOP PRINCIPAL: MIRA, LOCOMOÇÃO, TRIPOD GAIT & CÂMERA A 45° ---
-        const clock = new THREE.Clock();
+        let totalElapsedTime = 0;
 
         function animate() {
             requestAnimationFrame(animate);
 
             const dt = Math.min(clock.getDelta(), 0.1);
+            totalElapsedTime += dt;
+            const elapsedTime = totalElapsedTime;
 
             // 1. MIRA DO MOUSE PROJETADA NA SUPERFÍCIE 3D (TERRENO, BLOCOS E PILARES)
             if (isMouseActive) {
@@ -2285,7 +2371,7 @@
             const isGaitActive = wantsGait || walkerState.isStepActive;
             document.getElementById('gait-state-text').innerText = isGaitActive 
                 ? (wantsMove ? `AVANÇANDO (${effectiveMoveSpeed.toFixed(1)} m/s)` : 'PIVÔ NO PRÓPRIO EIXO') 
-                : 'ESTÁTICO (ZONA DE CONFORTO)';
+                : (swayWeight > 0.35 ? 'ESTÁTICO (AUTO-BALANÇO / REPOUSO)' : 'ESTÁTICO (ZONA DE CONFORTO)');
 
             if (isGaitActive) {
                 // Iniciar um novo meio-passo de tripé se não houver um em andamento
@@ -2483,10 +2569,10 @@
                 wasLaserShootingShift = true;
             } else {
                 if (wasLaserShootingShift) {
-                    shootingReleaseTime = clock.getElapsedTime();
+                    shootingReleaseTime = totalElapsedTime;
                     wasLaserShootingShift = false;
                 }
-                const timeSinceRelease = clock.getElapsedTime() - shootingReleaseTime;
+                const timeSinceRelease = totalElapsedTime - shootingReleaseTime;
                 if (timeSinceRelease < 0.50) {
                     const t = THREE.MathUtils.clamp(timeSinceRelease / 0.50, 0.0, 1.0);
                     shootingShiftZ = 1.5 * (1.0 - t) * (1.0 - t);
@@ -2495,24 +2581,69 @@
                 }
             }
 
+            // --- AUTO-BALANÇO PROCEDURAL (REBOLADO / REPOUSO) DINÂMICO DO MANIFESTO ---
+            const timeSinceMouseMove = (performance.now() * 0.001) - lastMouseMoveTime;
+            const IDLE_THRESHOLD = 0.50; // 500ms sem alteração no mouse/teclado
+            const isMouseStill = timeSinceMouseMove >= IDLE_THRESHOLD;
+            const isBotIdle = !walkerState.isMoving && 
+                              !walkerState.isTurningInPlace && 
+                              !walkerState.isStepActive && 
+                              !isActuallyFiring && 
+                              !isAimFiring && 
+                              !isMiddleDragging && 
+                              (damageReactionTimer <= 0) && 
+                              isMouseStill;
+
+            if (!isBotIdle) {
+                swayWeight = 0.0; // Sair imediatamente caso haja qualquer comando ou update do mouse
+            } else {
+                swayWeight = THREE.MathUtils.damp(swayWeight, 1.0, 2.0, dt);
+            }
+
+            let swayX = 0.0;
+            let swayY = 0.0;
+            let swayZ = 0.0;
+            let swayPitch = 0.0;
+            let swayRoll = 0.0;
+            let swayYaw = 0.0;
+
+            if (swayWeight > 0.0001) {
+                const swayDefaults = activeBotManifest?.calibration?.swayDefaults || {};
+                const swaySpeed = (swayDefaults.speed !== undefined) ? swayDefaults.speed : 1.2;
+                const defaultAmp = +(0.16 * (walkerState.bodyHeight / 1.70)).toFixed(4);
+                const swayHeightAmp = (swayDefaults.heightAmp !== undefined) ? swayDefaults.heightAmp : defaultAmp;
+                const swayPitchRoll = (swayDefaults.pitchRoll !== undefined) ? swayDefaults.pitchRoll : 6.0;
+                const swayYawDeg = (swayDefaults.yaw !== undefined) ? swayDefaults.yaw : 8.0;
+                const defaultShift = +(0.14 * (walkerState.bodyHeight / 1.70)).toFixed(4);
+                const swayShift = (swayDefaults.shift !== undefined) ? swayDefaults.shift : defaultShift;
+
+                const tSway = elapsedTime * swaySpeed;
+                swayY = Math.sin(tSway * 1.5) * swayHeightAmp * swayWeight;
+                swayPitch = THREE.MathUtils.degToRad(Math.sin(tSway) * swayPitchRoll) * swayWeight;
+                swayRoll = THREE.MathUtils.degToRad(Math.cos(tSway * 0.8) * swayPitchRoll) * swayWeight;
+                swayYaw = THREE.MathUtils.degToRad(Math.sin(tSway * 0.6) * swayYawDeg) * swayWeight;
+                swayX = Math.sin(tSway * 0.7) * swayShift * swayWeight;
+                swayZ = Math.cos(tSway * 0.5) * swayShift * swayWeight;
+            }
+
             // Posicionar o Robô no Terreno em Escala 1:1 com Elevação Adaptativa e Equilíbrio de Relevo
             robotMasterGroup.position.set(walkerState.posX, walkerState.terrainElevationY, walkerState.posZ);
             robotMasterGroup.rotation.set(walkerState.terrainPitch, walkerState.baseHeading, walkerState.terrainRoll, 'YXZ');
             bodyGroup.position.set(
-                damageJoltX,
-                walkerState.bodyHeight + walkerState.dynLift + damageJoltY,
-                walkerState.dynShiftZ + shootingShiftZ + damageJoltZ
+                damageJoltX + swayX,
+                walkerState.bodyHeight + walkerState.dynLift + damageJoltY + swayY,
+                walkerState.dynShiftZ + shootingShiftZ + damageJoltZ + swayZ
             );
             bodyGroup.rotation.set(
-                walkerState.dynPitch + damageWobblePitch,
-                walkerState.torsoYaw + damageWobbleYaw,
-                damageWobbleRoll,
+                walkerState.dynPitch + damageWobblePitch + swayPitch,
+                walkerState.torsoYaw + damageWobbleYaw + swayYaw,
+                damageWobbleRoll + swayRoll,
                 'YXZ'
             );
 
             // Luz Vermelha Intensa de Alerta de Dano sob o Bot
             const targetDamageLightIntensity = (damageIntensity > 0.01)
-                ? (52.0 * damageIntensity + Math.sin(clock.getElapsedTime() * 40.0) * 14.0 * damageIntensity)
+                ? (52.0 * damageIntensity + Math.sin(totalElapsedTime * 40.0) * 14.0 * damageIntensity)
                 : 0.0;
             damageUnderLight.intensity = THREE.MathUtils.damp(damageUnderLight.intensity, targetDamageLightIntensity, 28.0, dt);
             damageUnderLight.position.set(
@@ -2594,7 +2725,7 @@
             laserPosAttr.setXYZ(1, contactPoint.x, contactPoint.y, contactPoint.z);
             laserPosAttr.needsUpdate = true;
 
-            const timeNow = clock.getElapsedTime();
+            const timeNow = totalElapsedTime;
             const pulse1 = Math.sin(timeNow * 42.0);
             const pulse2 = Math.cos(timeNow * 75.0);
             const pulse3 = Math.sin(timeNow * 110.0);
@@ -2704,10 +2835,10 @@
                 wasLaserFiring = true;
             } else {
                 if (wasLaserFiring) {
-                    irisReleaseTime = clock.getElapsedTime();
+                    irisReleaseTime = totalElapsedTime;
                     wasLaserFiring = false;
                 }
-                const timeSinceRelease = clock.getElapsedTime() - irisReleaseTime;
+                const timeSinceRelease = totalElapsedTime - irisReleaseTime;
                 if (timeSinceRelease < 0.50) {
                     const t = THREE.MathUtils.clamp(timeSinceRelease / 0.50, 0.0, 1.0);
                     irisShootingWeight = 1.00 * (1.0 - t) * (1.0 - t);
