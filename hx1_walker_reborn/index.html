@@ -698,17 +698,34 @@
         }
         terrainGeo.computeVertexNormals();
 
+        // --- TEXTURAS NORMAL MAP DO TERRENO ---
+        const textureLoader = new THREE.TextureLoader();
+
+        // Normal Map do Piso (Piso de ladrilhos modulares, a imagem contém 2x2 tiles internos)
+        const floorNormalTex = textureLoader.load('./assets/img/normal/piso.jfif');
+        floorNormalTex.wrapS = THREE.RepeatWrapping;
+        floorNormalTex.wrapT = THREE.RepeatWrapping;
+        floorNormalTex.colorSpace = THREE.NoColorSpace;
+
+        // Normal Map da Areia / Escombros
+        const sandNormalTex = textureLoader.load('./assets/img/normal/areia_2.jfif');
+        sandNormalTex.wrapS = THREE.RepeatWrapping;
+        sandNormalTex.wrapT = THREE.RepeatWrapping;
+        sandNormalTex.colorSpace = THREE.NoColorSpace;
+
         const terrainMat = new THREE.MeshStandardMaterial({
-            roughness: 0.94,
-            metalness: 0.06,
-            envMapIntensity: 0.0, // Terreno não recebe radiação difusa do IBL: sombra fica 100% preta
+            roughness: 0.65,
+            metalness: 0.05,
+            envMapIntensity: 0.05, // Reflexos metálicos equilibrados no piso
             wireframe: false
         });
 
-        // Shader Customizado: Textura Tile no Piso (Y=0) + Escombros Terrosos nos Relevos (Y>0)
-        // - Piso Plano (Y=0): Grade de ladrilhos modulares em cinza-azulado ardósia escuro com juntas abissais
-        // - Relevos (Y>0): Escombros de terra preta, barro escuro e entulho sombrio
+        // Shader Customizado: Textura e Normal Maps combinados + PBR Dinâmico (Piso Metálico Especular vs Areia Fosca)
         terrainMat.onBeforeCompile = (shader) => {
+            shader.uniforms.uFloorNormalMap = { value: floorNormalTex };
+            shader.uniforms.uSandNormalMap = { value: sandNormalTex };
+            shader.uniforms.uNormalScale = { value: 0.30 }; // Escala suavizada para relevo elegante e sutil
+
             shader.vertexShader = `
                 varying float vWorldY;
                 varying vec2 vWorldXZ;
@@ -723,34 +740,94 @@
             );
 
             shader.fragmentShader = `
+                uniform sampler2D uFloorNormalMap;
+                uniform sampler2D uSandNormalMap;
+                uniform float uNormalScale;
                 varying float vWorldY;
                 varying vec2 vWorldXZ;
                 ${shader.fragmentShader}
             `.replace(
+                '#include <normal_fragment_maps>',
+                `
+                #include <normal_fragment_maps>
+
+                // --- NORMAL MAPPING BLEND (PISO vs AREIA) ---
+                float hNorm = max(0.0, vWorldY);
+                float rubbleBlendNorm = smoothstep(0.02, 0.35, hNorm);
+
+                // Piso com repetição de 8m x 8m (a imagem piso.jfif possui 2x2 ladrilhos internos de 4m x 4m cada)
+                vec3 nFloorMap = texture2D(uFloorNormalMap, vWorldXZ / 8.0).xyz * 2.0 - 1.0;
+
+                // Areia e escombros com escala de repetição de 3.2m
+                vec3 nSandMap = texture2D(uSandNormalMap, vWorldXZ / 3.2).xyz * 2.0 - 1.0;
+
+                // Mistura suave dos mapas normais de acordo com a elevação do relevo com relevo suave e refinado
+                vec3 mapN = mix(nFloorMap, nSandMap, rubbleBlendNorm);
+                mapN.xy *= uNormalScale;
+                mapN = normalize(mapN);
+
+                // Construção da base ortonormal TBN em View Space alinhada com o mundo XZ
+                vec3 tView = normalize((viewMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xyz);
+                vec3 bView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                tView = normalize(tView - dot(tView, normal) * normal);
+                bView = normalize(cross(normal, tView));
+
+                normal = normalize(tView * mapN.x + bView * mapN.y + normal * mapN.z);
+                `
+            ).replace(
+                '#include <roughnessmap_fragment>',
+                `
+                #include <roughnessmap_fragment>
+
+                // Rugosidade adaptativa: Placas do piso acetinadas (0.34), juntas foscas (0.80), terra/areia fosca (0.92)
+                vec2 rTileUV = vWorldXZ / 4.0;
+                vec2 rFTile = fract(rTileUV);
+                vec2 rGridLine = smoothstep(0.0, 0.025, rFTile) * smoothstep(1.0, 0.975, rFTile);
+                float rBorderMask = min(rGridLine.x, rGridLine.y);
+
+                float rH = max(0.0, vWorldY);
+                float rRubbleBlend = smoothstep(0.02, 0.30, rH);
+
+                float floorRoughness = mix(0.80, 0.34, rBorderMask);
+                roughnessFactor = mix(floorRoughness, 0.92, rRubbleBlend);
+                `
+            ).replace(
+                '#include <metalnessmap_fragment>',
+                `
+                #include <metalnessmap_fragment>
+
+                // Metalicidade adaptativa: Placas do piso metálicas (0.55), juntas oxidadas (0.12), terra/areia mineral (0.04)
+                vec2 mTileUV = vWorldXZ / 4.0;
+                vec2 mFTile = fract(mTileUV);
+                vec2 mGridLine = smoothstep(0.0, 0.025, mFTile) * smoothstep(1.0, 0.975, mFTile);
+                float mBorderMask = min(mGridLine.x, mGridLine.y);
+
+                float mH = max(0.0, vWorldY);
+                float mRubbleBlend = smoothstep(0.02, 0.30, mH);
+
+                float floorMetalness = mix(0.12, 0.55, mBorderMask);
+                metalnessFactor = mix(floorMetalness, 0.04, mRubbleBlend);
+                `
+            ).replace(
                 '#include <color_fragment>',
                 `
                 #include <color_fragment>
 
                 // --- 1. TEXTURA PROCEDURAL TILE PARA O PISO PLANO (Y = 0) ---
-                // Módulos principais de 4m x 4m
+                // Mapeamento 1:1 na escala original de 4m x 4m por ladrilho (1 tile de cor = 1 tile de normal)
                 vec2 tileUV = vWorldXZ / 4.0;
                 vec2 fTile = fract(tileUV);
-                vec2 gridLine = smoothstep(0.0, 0.04, fTile) * smoothstep(1.0, 0.96, fTile);
+                vec2 gridLine = smoothstep(0.0, 0.025, fTile) * smoothstep(1.0, 0.975, fTile);
                 float borderMask = min(gridLine.x, gridLine.y);
 
-                // Subdivisão interna de 2m x 2m
-                vec2 subTile = fract(vWorldXZ / 2.0);
-                vec2 subLine = smoothstep(0.0, 0.025, subTile) * smoothstep(1.0, 0.975, subTile);
-                float subMask = min(subLine.x, subLine.y);
-
-                // Ladrilho cinza-azulado ardósia noturna (base limpa para receber sombra projetada ultra forte)
+                // Ladrilho cinza-azulado ardósia noturna (1 tile de cor para cada 1 tile da textura de normal de 4m)
                 float tileCheck = mod(floor(tileUV.x) + floor(tileUV.y), 2.0);
                 vec3 colFloorTileA = vec3(0.11, 0.14, 0.18); // Ladrilho ardósia
                 vec3 colFloorTileB = vec3(0.085, 0.11, 0.145); // Ladrilho complementar
-                vec3 colFloorTile = mix(colFloorTileA, colFloorTileB, tileCheck * 0.4);
+                vec3 colFloorTile = mix(colFloorTileA, colFloorTileB, tileCheck * 0.45);
 
                 vec3 colFloorBorder = vec3(0.020, 0.028, 0.040); // Juntas e ranhuras
-                vec3 finalTileFloor = mix(colFloorBorder, colFloorTile, borderMask * 0.85 + subMask * 0.15);
+                vec3 finalTileFloor = mix(colFloorBorder, colFloorTile, borderMask);
 
                 // --- 2. ESCOMBROS E MONTÍCULOS TERROSOS SOMBRIOS (Y > 0) ---
                 vec3 colEarthBase = vec3(0.07, 0.045, 0.030); // Base: Terra escura / entulho
@@ -986,9 +1063,38 @@
 
         // Laser Reticle / Mira
         const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-        const laserMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65 });
+        const laserMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.50 });
         const laserLine = new THREE.Line(laserGeo, laserMat);
         scene.add(laserLine);
+
+        // Lâmpada de Impacto da Mira / Laser dos Bots HX (Ativa em Azul/Ciano ao Clicar com o Mouse)
+        const aimTargetLight = new THREE.PointLight(0x00e5ff, 0.0, 18.0, 1.0);
+        aimTargetLight.position.set(0, 0.4, 0);
+        scene.add(aimTargetLight);
+
+        // Ponto de Impacto Visual e Anel de Energia no Solo
+        const aimImpactGeo = new THREE.RingGeometry(0.10, 0.55, 32);
+        aimImpactGeo.rotateX(-Math.PI / 2);
+        const aimImpactMat = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+        });
+        const aimImpactRing = new THREE.Mesh(aimImpactGeo, aimImpactMat);
+        scene.add(aimImpactRing);
+
+        const aimCenterDotGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        const aimCenterDotMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.0,
+            blending: THREE.AdditiveBlending
+        });
+        const aimCenterDot = new THREE.Mesh(aimCenterDotGeo, aimCenterDotMat);
+        scene.add(aimCenterDot);
 
         // Estrutura de Pernas e Calibração
         let modelRoot = null;
@@ -1096,28 +1202,34 @@
             if (lblZoom) lblZoom.innerText = `${Math.round(walkerState.camDistance)}m`;
         }, { passive: true });
 
-        // Rotação Livre da Câmera com o Botão do Meio (MMB Drag)
+        // Rotação Livre da Câmera com o Botão do Meio (MMB Drag) & Ativação do Laser no Botão Esquerdo
         let isMiddleDragging = false;
+        let isAimFiring = false;
         let lastMouseX = 0;
         let lastMouseY = 0;
 
         window.addEventListener('mousedown', (e) => {
-            if (e.button === 1) { // Botão do meio
+            if (e.button === 1) { // Botão do meio: girar câmera
                 isMiddleDragging = true;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
                 e.preventDefault();
+            } else if (e.button === 0) { // Botão esquerdo: acender laser/lâmpada ciano
+                isAimFiring = true;
             }
         });
 
         window.addEventListener('mouseup', (e) => {
             if (e.button === 1) {
                 isMiddleDragging = false;
+            } else if (e.button === 0) {
+                isAimFiring = false;
             }
         });
 
         window.addEventListener('blur', () => {
             isMiddleDragging = false;
+            isAimFiring = false;
         });
 
         // Mouse Aiming via Raycaster no Plano do Terreno & Drag do Botão do Meio
@@ -2019,11 +2131,47 @@
 
             // Atualizar Linha Laser do Focinho/Canhão até a Mira
             const snoutPos = _tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
-            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.1, walkerState.aimWorldPoint.z);
+            const laserHit = _tempLaserHit.set(walkerState.aimWorldPoint.x, walkerState.aimWorldPoint.y + 0.08, walkerState.aimWorldPoint.z);
             const laserPosAttr = laserLine.geometry.attributes.position;
             laserPosAttr.setXYZ(0, snoutPos.x, snoutPos.y, snoutPos.z);
             laserPosAttr.setXYZ(1, laserHit.x, laserHit.y, laserHit.z);
             laserPosAttr.needsUpdate = true;
+
+            // Lâmpada de Impacto da Mira / Laser dos Bots HX (Ativa em Azul/Ciano ao Clicar)
+            const targetLightIntensity = isAimFiring ? 32.0 : 0.0;
+            aimTargetLight.intensity = THREE.MathUtils.damp(aimTargetLight.intensity, targetLightIntensity, 32.0, dt);
+            aimTargetLight.position.set(
+                walkerState.aimWorldPoint.x,
+                walkerState.aimWorldPoint.y + 0.45,
+                walkerState.aimWorldPoint.z
+            );
+
+            // Ponto de Impacto Visual e Anel de Energia no Solo
+            const targetImpactOpacity = isAimFiring ? 0.90 : 0.0;
+            aimImpactMat.opacity = THREE.MathUtils.damp(aimImpactMat.opacity, targetImpactOpacity, 22.0, dt);
+            aimCenterDotMat.opacity = THREE.MathUtils.damp(aimCenterDotMat.opacity, targetImpactOpacity, 22.0, dt);
+
+            aimImpactRing.position.set(
+                walkerState.aimWorldPoint.x,
+                walkerState.aimWorldPoint.y + 0.03,
+                walkerState.aimWorldPoint.z
+            );
+            aimCenterDot.position.set(
+                walkerState.aimWorldPoint.x,
+                walkerState.aimWorldPoint.y + 0.08,
+                walkerState.aimWorldPoint.z
+            );
+
+            // Pulso e brilho do feixe de laser
+            laserMat.opacity = isAimFiring ? (0.80 + Math.sin(clock.getElapsedTime() * 30.0) * 0.20) : 0.45;
+            laserMat.color.setHex(isAimFiring ? 0x00f0ff : 0x38bdf8);
+
+            const crosshairRing = document.getElementById('crosshair-ring');
+            if (crosshairRing) {
+                crosshairRing.style.borderColor = isAimFiring ? '#00f0ff' : '#38bdf8';
+                crosshairRing.style.boxShadow = isAimFiring ? '0 0 16px #00f0ff, inset 0 0 8px #00f0ff' : '0 0 10px rgba(56, 189, 248, 0.5)';
+                crosshairRing.style.transform = isAimFiring ? 'scale(1.2)' : 'scale(1.0)';
+            }
 
             // 5. ATUALIZAR GIZMOS E SOLVER IK RIGOROSO
             const currentElevation = calculateAdaptiveElevation(walkerState.bodyHeight + walkerState.dynLift);
