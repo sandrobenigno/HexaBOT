@@ -51,6 +51,7 @@ export class InputManager {
         this.raycaster = new THREE.Raycaster();
         this.aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         this.tempHitNormal = new THREE.Vector3();
+        this.tempGroundHit = new THREE.Vector3();
 
         // Elemento visual do retículo DOM
         this.crosshairElem = document.getElementById('crosshair');
@@ -242,7 +243,7 @@ export class InputManager {
                 outNormal.set(0, 1, 0);
             }
         } else {
-            const groundHit = new THREE.Vector3();
+            const groundHit = this.tempGroundHit;
             const hit = this.raycaster.ray.intersectPlane(this.aimPlane, groundHit);
             if (hit) {
                 groundHit.x = THREE.MathUtils.clamp(groundHit.x, -135.0, 135.0);

@@ -45,6 +45,7 @@ export class LaserCombat {
         this.laserBeamMid = new THREE.Vector3();
         this.laserBeamDir = new THREE.Vector3();
         this.laserBeamQuat = new THREE.Quaternion();
+        this.sandContactPoint = new THREE.Vector3();
 
         // Elemento DOM do Retículo
         this.crosshairRingElem = document.getElementById('crosshair-ring');
@@ -181,16 +182,19 @@ export class LaserCombat {
         let contactNormal = aimWorldNormal;
         let isLineOfSightBlocked = false;
 
+        let hitTargetMesh = null;
+
         // 3. Teste de Linha de Visada e Barreira do Relevo da Areia
         if (totalLaserDist > 0.05) {
             this.laserRayDir.normalize();
             this.laserRaycaster.set(snoutPos, this.laserRayDir);
-            this.laserRaycaster.far = totalLaserDist;
+            this.laserRaycaster.far = totalLaserDist + 0.50;
 
-            // Testar obstáculos sólidos
+            // Testar alvos e obstáculos sólidos
             const obstacleHits = this.laserRaycaster.intersectObjects(aimTargetableMeshes, false);
-            if (obstacleHits.length > 0 && obstacleHits[0].distance < totalLaserDist - 0.20) {
+            if (obstacleHits.length > 0) {
                 contactPoint = obstacleHits[0].point;
+                hitTargetMesh = obstacleHits[0].object;
                 if (obstacleHits[0].face) {
                     this.tempLaserHitNormal.copy(obstacleHits[0].face.normal)
                         .transformDirection(obstacleHits[0].object.matrixWorld)
@@ -199,12 +203,15 @@ export class LaserCombat {
                 } else {
                     contactNormal = this.upVec;
                 }
-                isLineOfSightBlocked = true;
+
+                if (obstacleHits[0].distance < totalLaserDist - 0.20) {
+                    isLineOfSightBlocked = true;
+                }
             }
 
             // Verificação Analítica de Dunas de Areia ao longo da linha de tiro (12 amostragens)
             const sampleSteps = 12;
-            const checkDist = isLineOfSightBlocked ? obstacleHits[0].distance : totalLaserDist;
+            const checkDist = (obstacleHits.length > 0) ? obstacleHits[0].distance : totalLaserDist;
             for (let i = 1; i < sampleSteps; i++) {
                 const t = (i / sampleSteps);
                 const sampleDist = checkDist * t;
@@ -214,9 +221,10 @@ export class LaserCombat {
                 const sandH = getBaseGroundMeshHeightFn(sx, sz);
                 if (sy < sandH - 0.15) {
                     // O feixe mergulha dentro de uma duna de areia antes de atingir o alvo
-                    contactPoint = new THREE.Vector3(sx, sandH, sz);
+                    contactPoint = this.sandContactPoint.set(sx, sandH, sz);
                     contactNormal = this.upVec;
                     isLineOfSightBlocked = true;
+                    hitTargetMesh = null;
                     break;
                 }
             }
@@ -356,7 +364,10 @@ export class LaserCombat {
 
         return {
             isActuallyFiring: this.isActuallyFiring,
-            shootingShiftZ: this.shootingShiftZ
+            shootingShiftZ: this.shootingShiftZ,
+            hitObject: this.isActuallyFiring ? hitTargetMesh : null,
+            contactPoint,
+            contactNormal
         };
     }
 }

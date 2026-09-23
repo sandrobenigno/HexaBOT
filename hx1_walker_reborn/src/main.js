@@ -19,6 +19,7 @@ import { InputManager } from './core/InputManager.js';
 import { TerrainArena } from './world/TerrainArena.js';
 import { CollisionSystem } from './world/CollisionSystem.js';
 import { HexaBot } from './bot/HexaBot.js';
+import { EnemyManager } from './combat/EnemyManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
 
@@ -45,17 +46,26 @@ function initApp() {
     // 4. Inicializar Gerenciador de Entradas (Teclado, Mouse, Zoom e Inatividade)
     const inputManager = new InputManager(window, globalEventBus);
 
-    // 5. Instanciar Controlador do Hexápode
+    // 5. Instanciar Gerenciador de Inimigos (Spawners, Joaninhas e Bombas)
+    const enemyManager = new EnemyManager(engine.scene, globalEventBus, terrainArena);
+
+    // 6. Instanciar Controlador do Hexápode
     const hexaBot = new HexaBot(engine.scene, globalEventBus);
 
-    // 6. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
+    // 7. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
     const hudController = new HUDController(globalEventBus, hexaBot, terrainArena);
     const modelLoader = new ModelLoaderUI(hexaBot, terrainArena);
 
-    // 7. Registrar Loop de Atualização no Game Loop do Engine
+    // Resetar inimigos quando o robô for resetado
+    globalEventBus.on('bot:resetPosition', () => enemyManager.reset());
+
+    // 8. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
+        // Atualizar orquestrador de inimigos, cabines e bombas
+        enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position);
+
         // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
-        hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena);
+        hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
 
         // Atualizar câmera tática orbital acompanhando o robô
         engine.updateTacticalCamera(

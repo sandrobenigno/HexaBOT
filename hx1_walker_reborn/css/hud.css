@@ -39,6 +39,230 @@ body {
     padding: 20px 24px;
 }
 
+/* ==========================================================================
+   BARRA GAMER DE STATUS SUPERIOR (VIDA E ENERGIA)
+   ========================================================================== */
+.gamer-top-hud {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+    pointer-events: none;
+    user-select: none;
+}
+
+.gamer-gauge {
+    display: flex;
+    flex-direction: column;
+    width: 250px;
+}
+
+.gauge-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 4px;
+    padding: 0 4px;
+}
+
+.gauge-tag {
+    font-size: 0.80rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.hp-tag {
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.18);
+    border: 1px solid rgba(34, 197, 94, 0.45);
+    text-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.en-tag {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+.gauge-value {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #f1f5f9;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 6px rgba(0,0,0,0.8);
+}
+
+.gauge-bar-slot {
+    position: relative;
+    height: 14px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 12px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+/* Formato chanfrado angular gamer */
+.hp-gauge .gauge-bar-slot {
+    clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    border-left: 3px solid #22c55e;
+}
+
+.en-gauge .gauge-bar-slot {
+    clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+    border-right: 3px solid #00f0ff;
+}
+
+.gauge-ghost {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(248, 113, 113, 0.65);
+    transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    z-index: 1;
+}
+
+.gauge-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    transition: width 0.15s ease-out;
+    z-index: 2;
+}
+
+/* Cores da Barra de Vida (Verde) */
+.hp-fill {
+    background: linear-gradient(90deg, #15803d, #22c55e, #4ade80);
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.8);
+}
+
+/* Vida Crítica (< 30%) - Vermelho com Alerta Pulsante */
+.hp-gauge.critical .hp-tag {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.3);
+    border-color: #ef4444;
+    text-shadow: 0 0 12px #ef4444;
+}
+
+.hp-gauge.critical .gauge-bar-slot {
+    border-color: #ef4444;
+    border-left-color: #ff0033;
+    animation: critical-pulse 0.6s infinite alternate;
+}
+
+.hp-gauge.critical .hp-fill {
+    background: linear-gradient(90deg, #991b1b, #ef4444, #f87171);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.95);
+}
+
+@keyframes critical-pulse {
+    0% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+    100% { box-shadow: 0 0 24px rgba(239, 68, 68, 0.95), inset 0 0 10px rgba(239, 68, 68, 0.5); }
+}
+
+/* Cores da Barra de Energia (Azul / Ciano) */
+.en-fill {
+    background: linear-gradient(90deg, #0284c7, #00f0ff, #7dd3fc);
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.8);
+}
+
+/* Energia Esgotada - Bloqueio até 100% de Recarga */
+.en-gauge.depleted .en-tag {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    text-shadow: 0 0 10px #f59e0b;
+    animation: critical-pulse 0.5s infinite alternate;
+}
+
+.en-gauge.depleted .gauge-bar-slot {
+    border-color: #f59e0b;
+    border-right-color: #f59e0b;
+}
+
+.en-gauge.depleted .en-fill {
+    background: linear-gradient(90deg, #d97706, #f59e0b, #fde047);
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.85);
+}
+
+/* Emblema Central */
+.gamer-emblem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 3px 14px;
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+}
+
+.emblem-core {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82rem;
+    font-weight: 900;
+    color: #38bdf8;
+    letter-spacing: 0.1em;
+}
+
+.emblem-icon {
+    color: #00f0ff;
+    font-size: 0.75rem;
+}
+
+.emblem-status {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #22c55e;
+    letter-spacing: 0.08em;
+}
+
+/* --- ALTERNÂNCIA DE PAINÉIS (INICIAM OCULTOS) --- */
+.floating-hud-btn {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #38bdf8;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 50;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.floating-hud-btn:hover {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: #38bdf8;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+    transform: translateY(-1px);
+}
+
+body.hud-panels-hidden .hud-panel {
+    display: none !important;
+}
+
 .hud-header {
     display: flex;
     justify-content: space-between;

@@ -29,6 +29,19 @@ export class HUDController {
         this.helpModalElem = document.getElementById('help-modal');
         this.btnCloseModalElem = document.getElementById('btn-close-modal');
         this.btnXrayElem = document.getElementById('btn-xray');
+        this.btnToggleHudElem = document.getElementById('btn-toggle-hud');
+
+        // Elementos da Barra Gamer de Status (HP e EN)
+        this.hpFillBar = document.getElementById('hp-fill-bar');
+        this.hpGhostBar = document.getElementById('hp-ghost-bar');
+        this.hpValueText = document.getElementById('hp-value-text');
+        this.hpGaugeElem = document.querySelector('.hp-gauge');
+        this.enFillBar = document.getElementById('en-fill-bar');
+        this.enValueText = document.getElementById('en-value-text');
+        this.tacticalStatusText = document.getElementById('tactical-status-text');
+
+        // Estado do Ghost Bar de Dano
+        this.displayedGhostHp = 1000;
 
         // Sliders e Labels
         this.sliders = {
@@ -132,6 +145,12 @@ export class HUDController {
             });
         }
 
+        if (this.btnToggleHudElem) {
+            this.btnToggleHudElem.addEventListener('click', () => {
+                this.eventBus.emit('ui:togglePanels');
+            });
+        }
+
         if (this.btnCloseModalElem && this.helpModalElem) {
             this.btnCloseModalElem.addEventListener('click', () => {
                 this.helpModalElem.classList.remove('active');
@@ -143,9 +162,9 @@ export class HUDController {
      * Vincula listeners de telemetria e notificações de estado via EventBus.
      */
     bindEventBusListeners() {
-        // Alternar modo HUD oculto
+        // Alternar modo HUD e painéis ocultos
         this.eventBus.on('ui:togglePanels', () => {
-            document.body.classList.toggle('hud-hidden');
+            document.body.classList.toggle('hud-panels-hidden');
         });
 
         // Alternar modal de ajuda
@@ -189,16 +208,76 @@ export class HUDController {
         });
 
         // Atualização contínua de telemetria a cada frame
-        this.eventBus.on('bot:telemetry', ({ walkerState, effectiveMoveSpeed, swayWeight, legs }) => {
-            this.updateTelemetry(walkerState, effectiveMoveSpeed, swayWeight, legs);
+        this.eventBus.on('bot:telemetry', (telemetry) => {
+            this.updateTelemetry(telemetry);
         });
     }
 
     /**
-     * Atualiza a bússola e os indicadores de marcha a cada frame.
+     * Atualiza a bússola, indicadores de marcha e barras gamer a cada frame.
+     * @param {Object} telemetry Dados de telemetria do HexaBot
      */
-    updateTelemetry(walkerState, effectiveMoveSpeed, swayWeight, legs) {
-        // 1. Atualizar Bússola 360°
+    updateTelemetry({ walkerState, effectiveMoveSpeed, swayWeight, legs, hp = 1000, maxHp = 1000, energy = 100, maxEnergy = 100 }) {
+        // 1. Atualizar Barra Gamer de Vida (HP)
+        const safeHp = Math.max(0, hp);
+        const hpRatio = THREE.MathUtils.clamp(safeHp / maxHp, 0.0, 1.0);
+        const hpPercent = (hpRatio * 100).toFixed(0);
+
+        if (this.hpFillBar) {
+            this.hpFillBar.style.width = `${hpPercent}%`;
+        }
+
+        // Ghost bar suave
+        if (this.hpGhostBar) {
+            this.displayedGhostHp = THREE.MathUtils.damp(this.displayedGhostHp, safeHp, 4.0, 0.016);
+            const ghostRatio = THREE.MathUtils.clamp(this.displayedGhostHp / maxHp, 0.0, 1.0);
+            this.hpGhostBar.style.width = `${(ghostRatio * 100).toFixed(1)}%`;
+        }
+
+        if (this.hpValueText) {
+            this.hpValueText.innerText = `${Math.round(safeHp)} / ${maxHp}`;
+        }
+
+        // Vida Crítica (< 30%) -> Alterna para Vermelho Alerta
+        if (this.hpGaugeElem) {
+            if (hpRatio < 0.30) {
+                this.hpGaugeElem.classList.add('critical');
+            } else {
+                this.hpGaugeElem.classList.remove('critical');
+            }
+        }
+
+        // 2. Atualizar Barra Gamer de Energia (EN)
+        const safeEnergy = Math.max(0, energy);
+        const enRatio = THREE.MathUtils.clamp(safeEnergy / maxEnergy, 0.0, 1.0);
+        const enPercent = (enRatio * 100).toFixed(0);
+
+        if (this.enFillBar) {
+            this.enFillBar.style.width = `${enPercent}%`;
+        }
+
+        if (this.enValueText) {
+            this.enValueText.innerText = `${enPercent}%`;
+        }
+
+        // 3. Atualizar Status Tático Central
+        if (this.tacticalStatusText) {
+            if (safeHp <= 0) {
+                this.tacticalStatusText.innerText = 'CRITICAL FAILURE';
+                this.tacticalStatusText.style.color = '#ef4444';
+            } else if (hpRatio < 0.30) {
+                this.tacticalStatusText.innerText = 'WARNING: LOW INTEGRITY';
+                this.tacticalStatusText.style.color = '#ef4444';
+            } else if (enRatio < 0.15) {
+                this.tacticalStatusText.innerText = 'LOW ENERGY CELL';
+                this.tacticalStatusText.style.color = '#f59e0b';
+            } else {
+                this.tacticalStatusText.innerText = 'COMBAT READY';
+                this.tacticalStatusText.style.color = '#22c55e';
+            }
+        }
+
+        // 4. Atualizar Bússola 360°
         const currentRobotHeading = walkerState.isMoving
             ? (walkerState.travelHeading || 0)
             : ((walkerState.baseHeading || 0) + (walkerState.torsoYaw || 0));
@@ -215,7 +294,7 @@ export class HUDController {
             this.compassElem.innerText = `${String(safeDeg).padStart(3, '0')}° ${safeDir}`;
         }
 
-        // 2. Atualizar Texto do Estado de Marcha
+        // 5. Atualizar Texto do Estado de Marcha
         const wantsMove = walkerState.isMoving;
         const isGaitActive = wantsMove || walkerState.isTurningInPlace || this.bot.gait.isStepActive;
 
@@ -225,7 +304,7 @@ export class HUDController {
                 : (swayWeight > 0.35 ? 'ESTÁTICO (AUTO-BALANÇO / REPOUSO)' : 'ESTÁTICO (ZONA DE CONFORTO)');
         }
 
-        // 3. Atualizar Indicadores Leds das Pernas (Stance vs Swing)
+        // 6. Atualizar Indicadores Leds das Pernas (Stance vs Swing)
         const activeGroup = this.bot.gait.activeTripodGroup;
         for (let i = 0; i < legs.length; i++) {
             const leg = legs[i];

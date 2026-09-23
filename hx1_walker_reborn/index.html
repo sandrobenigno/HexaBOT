@@ -20,7 +20,7 @@
       }
     </script>
 </head>
-<body>
+<body class="hud-panels-hidden">
 
     <!-- Overlay de Carregamento Inicial -->
     <div id="loading">
@@ -44,9 +44,49 @@
 
     <!-- Overlay Tático Superior e Inferior (HUD) -->
     <div id="hud-overlay">
+        <!-- BARRA GAMER DE STATUS SUPERIOR (VIDA E ENERGIA DA HX) -->
+        <div class="gamer-top-hud" id="gamer-top-hud">
+            <!-- Barra de Vida (HP) -->
+            <div class="gamer-gauge hp-gauge">
+                <div class="gauge-label-row">
+                    <span class="gauge-tag hp-tag">HP</span>
+                    <span class="gauge-value" id="hp-value-text">1000 / 1000</span>
+                </div>
+                <div class="gauge-bar-slot">
+                    <div class="gauge-ghost hp-ghost" id="hp-ghost-bar"></div>
+                    <div class="gauge-fill hp-fill" id="hp-fill-bar" style="width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- Emblema Central Tático -->
+            <div class="gamer-emblem">
+                <div class="emblem-core">
+                    <span class="emblem-icon">⚡</span>
+                    <span class="emblem-code">HX-PRIME</span>
+                </div>
+                <div class="emblem-status" id="tactical-status-text">COMBAT READY</div>
+            </div>
+
+            <!-- Barra de Energia (EN) -->
+            <div class="gamer-gauge en-gauge">
+                <div class="gauge-label-row">
+                    <span class="gauge-tag en-tag">EN</span>
+                    <span class="gauge-value" id="en-value-text">100%</span>
+                </div>
+                <div class="gauge-bar-slot">
+                    <div class="gauge-fill en-fill" id="en-fill-bar" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botão Flutuante Discreto de Alternância dos Painéis -->
+        <button id="btn-toggle-hud" class="floating-hud-btn" title="Exibir/Ocultar Painéis Táticos e Sliders (Tecla P)">
+            ⚙️ <span>Painéis [P]</span>
+        </button>
+
         <!-- Topo: Card de Telemetria e Bússola -->
         <div class="hud-header">
-            <div class="mech-card">
+            <div class="mech-card hud-panel">
                 <div class="mech-title-row">
                     <span class="mech-title">🤖 HexaBOT Walker</span>
                     <span class="status-badge status-active" id="mech-status">Online</span>
@@ -105,7 +145,7 @@
             </div>
 
             <!-- Card da Bússola 360° -->
-            <div class="compass-card">
+            <div class="compass-card hud-panel">
                 <div class="compass-label">Rumo de Avanço (Heading)</div>
                 <div class="compass-readout" id="compass-val">000° N</div>
             </div>
@@ -113,18 +153,18 @@
 
         <!-- Rodapé: Controles Rápidos e Ciclo de Marcha Tripé -->
         <div class="hud-footer">
-            <div class="controls-card">
+            <div class="controls-card hud-panel">
                 <div class="control-item"><kbd>W</kbd> / <kbd>S</kbd> <span>Avançar / Recuar</span></div>
                 <div class="control-item"><kbd>A</kbd> / <kbd>D</kbd> <span>Desvio Lateral</span></div>
-                <div class="control-item"><kbd>Mouse</kbd> <span>Mirar no Solo</span></div>
+                <div class="control-item"><kbd>Mouse</kbd> <span>Mirar e Disparar Laser</span></div>
                 <div class="control-item"><kbd>Botão Meio</kbd> <span>Girar Câmera</span></div>
                 <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
                 <div class="control-item"><kbd>K</kbd> <span>Dano Cômico</span></div>
-                <div class="control-item"><kbd>P</kbd> <span>Painéis</span></div>
+                <div class="control-item"><kbd>P</kbd> <span>Painéis Menu</span></div>
                 <div class="control-item"><kbd>H</kbd> <span>Ajuda</span></div>
             </div>
 
-            <div class="gait-meter-card">
+            <div class="gait-meter-card hud-panel">
                 <div class="gait-row">
                     <span>CICLO DE MARCHA TRIPÉ</span>
                     <span id="gait-state-text" style="color: #38bdf8;">ESTÁTICO</span>

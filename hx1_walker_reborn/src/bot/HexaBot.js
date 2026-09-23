@@ -44,11 +44,19 @@ export class HexaBot {
         this.robotMasterGroup.add(this.bodyGroup);
 
         this.footTargetGroup = new THREE.Group();
+        this.footTargetGroup.visible = false; // Inicia âncoras ocultas por padrão
         this.scene.add(this.footTargetGroup);
 
         this.skeletonLinesGroup = new THREE.Group();
         this.scene.add(this.skeletonLinesGroup);
         this.skeletonLinesGroup.visible = false;
+
+        // Integridade e Energia Tática do Mecha
+        this.maxHp = 1000;
+        this.hp = this.maxHp;
+        this.maxEnergy = 100;
+        this.energy = this.maxEnergy;
+        this.isEnergyDepleted = false; // Trava de disparo até recarregar 100%
 
         // Luz Vermelha de Alerta de Dano sob o Chassi
         this.damageUnderLight = new THREE.PointLight(0xff0022, 0.0, 18.0, 1.0);
@@ -124,7 +132,7 @@ export class HexaBot {
      * Registra ouvintes para controle de dano, reset e raio-x.
      */
     setupEventListeners() {
-        this.eventBus.on('bot:triggerDamage', () => this.triggerDamageReaction());
+        this.eventBus.on('bot:triggerDamage', (damage) => this.triggerDamageReaction(damage));
         this.eventBus.on('bot:resetPosition', () => this.resetWalker());
         this.eventBus.on('bot:toggleXRay', () => this.toggleXRay());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {
@@ -450,10 +458,13 @@ export class HexaBot {
     }
 
     /**
-     * Dispara a reação cômica de dano com tremor e morph targets amortecidas.
+     * Dispara a reação cômica de dano com tremor, abatimento de HP e morph targets.
+     * @param {number} [amount=250] Dano sofrido
      */
-    triggerDamageReaction() {
+    triggerDamageReaction(amount = 250) {
         this.damageReactionTimer = this.DAMAGE_DURATION;
+        const dmg = typeof amount === 'number' ? amount : 250;
+        this.hp = Math.max(0, this.hp - dmg);
     }
 
     /**
@@ -492,6 +503,11 @@ export class HexaBot {
         this.walkerState.dynPitch = 0;
         this.damageReactionTimer = 0.0;
 
+        // Restaurar integridade e energia
+        this.hp = this.maxHp;
+        this.energy = this.maxEnergy;
+        this.isEnergyDepleted = false;
+
         this.gait.reset();
         this.sway.reset();
 
@@ -507,15 +523,17 @@ export class HexaBot {
      * @param {import('../core/InputManager.js').InputManager} inputManager Gerenciador de inputs
      * @param {import('../world/CollisionSystem.js').CollisionSystem} collisionSystem Sistema de colisões
      * @param {import('../world/TerrainArena.js').TerrainArena} terrainArena Arena com terreno e obstáculos
+     * @param {import('../combat/EnemyManager.js').EnemyManager} [enemyManager] Gerenciador de inimigos
      */
-    update(dt, elapsedTime, inputManager, collisionSystem, terrainArena) {
+    update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager = null) {
         const getTerrainHeightFn = (x, z) => terrainArena.getTerrainHeight(x, z);
         const getBaseGroundMeshHeightFn = (x, z) => terrainArena.getBaseGroundMeshHeight(x, z);
+        const allAimTargetableMeshes = enemyManager ? enemyManager.getAllAimTargetableMeshes() : terrainArena.aimTargetableMeshes;
 
-        // 1. Raycast de Mira do Mouse na Arena
+        // 1. Raycast de Mira do Mouse na Arena e Inimigos
         inputManager.projectMouseToWorld(
             this.scene.parentCamera || this.scene.__camera, // Câmera referenciada
-            terrainArena.aimTargetableMeshes,
+            allAimTargetableMeshes,
             getTerrainHeightFn,
             this.walkerState.aimWorldPoint,
             this.walkerState.aimWorldNormal
@@ -533,15 +551,8 @@ export class HexaBot {
             ? Math.atan2(aimDX, aimDZ)
             : (this.walkerState.baseHeading || 0);
 
-        let footprintRadius = 0;
-        for (let i = 0; i < this.legs.length; i++) {
-            const r = Math.hypot(this.legs[i].nominalOffset.x, this.legs[i].nominalOffset.z);
-            if (r > footprintRadius) footprintRadius = r;
-        }
-        if (footprintRadius < 0.1) footprintRadius = 7.0;
-
-        const speedGradient = (footprintRadius > 0.001) ? (toAimDistH / footprintRadius) : 1.0;
-        const effectiveMoveSpeed = THREE.MathUtils.clamp(this.walkerState.moveSpeed * speedGradient, 0.0, 24.0);
+        // Velocidade integral de avanço (sem redução ao combater inimigos próximos)
+        const effectiveMoveSpeed = this.walkerState.moveSpeed;
 
         let deltaAngle = targetAimAngle - (this.walkerState.baseHeading || 0);
         deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle));
@@ -693,18 +704,40 @@ export class HexaBot {
             bodyHeight: this.walkerState.bodyHeight
         });
 
-        // 9. Atualizar Sistema de Combate Laser
+        // 9. Atualizar Sistema de Combate Laser (Bloqueia até 100% caso a energia zere)
+        const canFireLaser = !this.isEnergyDepleted && (this.energy > 0.0);
         const combatRes = this.combat.update(dt, elapsedTime, {
-            isAimFiring: inputManager.isAimFiring,
+            isAimFiring: inputManager.isAimFiring && canFireLaser,
             bodyGroup: this.bodyGroup,
             aimWorldPoint: this.walkerState.aimWorldPoint,
             aimWorldNormal: this.walkerState.aimWorldNormal,
             targetAimAngle,
             baseHeading: this.walkerState.baseHeading,
             torsoYaw: this.walkerState.torsoYaw,
-            aimTargetableMeshes: terrainArena.aimTargetableMeshes,
+            aimTargetableMeshes: allAimTargetableMeshes,
             getBaseGroundMeshHeightFn
         });
+
+        // Consumo de energia no disparo e regeneração contínua
+        if (combatRes.isActuallyFiring) {
+            this.energy = Math.max(0.0, this.energy - 24.0 * dt);
+            if (this.energy <= 0.0) {
+                this.energy = 0.0;
+                this.isEnergyDepleted = true; // Trava o canhão até atingir 100% de carga
+            }
+        } else {
+            this.energy = Math.min(this.maxEnergy, this.energy + 15.0 * dt);
+            // Destrava quando a recarga for completa (100%)
+            if (this.isEnergyDepleted && this.energy >= this.maxEnergy) {
+                this.energy = this.maxEnergy;
+                this.isEnergyDepleted = false;
+            }
+        }
+
+        // Aplicar dano do laser contínuo no alvo atingido (inimigo ou cabine)
+        if (combatRes.isActuallyFiring && combatRes.hitObject && enemyManager) {
+            enemyManager.applyLaserDamage(combatRes.hitObject, dt);
+        }
 
         // 10. Atualizar Morph Targets
         this.shapeKeys.update(dt, elapsedTime, combatRes.isActuallyFiring, damageIntensity);
@@ -754,7 +787,11 @@ export class HexaBot {
             swayWeight: swayRes.swayWeight,
             activeTripodGroup: this.gait.activeTripodGroup,
             isGaitActive: this.walkerState.isMoving || this.walkerState.isTurningInPlace || this.gait.isStepActive,
-            legs: this.legs
+            hp: this.hp,
+            maxHp: this.maxHp,
+            energy: this.energy,
+            maxEnergy: this.maxEnergy,
+            isEnergyDepleted: this.isEnergyDepleted
         });
     }
 }

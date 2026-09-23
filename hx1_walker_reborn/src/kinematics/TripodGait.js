@@ -30,6 +30,13 @@ export class TripodGait {
         this.phaseEndPos = new THREE.Vector2(0, 0);
         this.phaseStartHeading = 0.0;
         this.phaseEndHeading = 0.0;
+
+        // Vetores temporários reutilizáveis (Zero GC)
+        this.tempStepMove = new THREE.Vector2();
+        this.tempProposedEnd = new THREE.Vector2();
+        this.tempEndCenter = new THREE.Vector3();
+        this.tempNominalLanding = new THREE.Vector3();
+        this.yAxis = new THREE.Vector3(0, 1, 0);
     }
 
     /**
@@ -91,13 +98,13 @@ export class TripodGait {
                 this.phaseEndHeading = this.phaseStartHeading + deltaH;
 
                 // Calcular Posição de Fim do Passo com restrições do tabuleiro e pilares
-                const stepMove = new THREE.Vector2(0, 0);
+                const stepMove = this.tempStepMove.set(0, 0);
                 if (wantsMove) {
                     stepMove.set(moveVec.x, moveVec.z)
                         .normalize()
                         .multiplyScalar(walkerState.strideLength);
                 }
-                const proposedEnd = this.phaseStartPos.clone().add(stepMove);
+                const proposedEnd = this.tempProposedEnd.copy(this.phaseStartPos).add(stepMove);
                 const validEnd = collisionSystem.constrainPosition(
                     proposedEnd.x,
                     proposedEnd.y,
@@ -108,14 +115,16 @@ export class TripodGait {
 
                 // Inicializar Pernas que vão executar Swing (no ar)
                 const activeGroup = this.activeTripodGroup;
+                const endCenter = this.tempEndCenter.set(this.phaseEndPos.x, 0, this.phaseEndPos.y);
+                const nominalLanding = this.tempNominalLanding;
+
                 legs.forEach((leg) => {
                     if (leg.group === activeGroup) {
                         leg.isStepping = true;
                         leg.stepStartTarget.copy(leg.currentTarget);
 
-                        const endCenter = new THREE.Vector3(this.phaseEndPos.x, 0, this.phaseEndPos.y);
-                        const nominalLanding = leg.nominalOffset.clone()
-                            .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.phaseEndHeading)
+                        nominalLanding.copy(leg.nominalOffset)
+                            .applyAxisAngle(this.yAxis, this.phaseEndHeading)
                             .add(endCenter);
 
                         // Avanço preditivo na direção do deslocamento para manter passadas naturais

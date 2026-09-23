@@ -84,10 +84,20 @@ export class TerrainArena {
         this.pillarsData = [];
         this.aimTargetableMeshes = [];
 
-        // Inicializar alturas base das caixas
+        // Precomputar valores constantes dos bumps para aceleração matemática
+        this.bumps.forEach((b) => {
+            b.radiusSq = b.radius * b.radius;
+            b.invRadius = 1.0 / b.radius;
+        });
+
+        // Inicializar alturas base e constantes das caixas
         this.steppableBoxes.forEach((b) => {
             b.baseY = this.getBaseGroundMeshHeight(b.x, b.z);
             b.topY = b.baseY + b.height;
+            b.cosRotY = b.rotY ? Math.cos(-b.rotY) : 1.0;
+            b.sinRotY = b.rotY ? Math.sin(-b.rotY) : 0.0;
+            b.halfX = b.sizeX * 0.5;
+            b.halfZ = b.sizeZ * 0.5;
         });
 
         // Construir malha do terreno, shader, blocos e pilares
@@ -106,9 +116,10 @@ export class TerrainArena {
      */
     getBaseGroundMeshHeight(x, z) {
         const relief = this.currentTerrainReliefScale;
-        const d = Math.hypot(x, z);
-        if (d < 10.0) return 0.0; // Centro plano inicial
-        const centerFade = THREE.MathUtils.clamp((d - 10.0) / 6.0, 0.0, 1.0);
+        const dSq = x * x + z * z;
+        if (dSq < 100.0) return 0.0; // Centro plano inicial (d < 10)
+        const d = Math.sqrt(dSq);
+        const centerFade = (d < 16.0) ? (d - 10.0) * 0.166666 : 1.0;
 
         // Ondulações base suaves de entulho (apenas positivas)
         const wave1 = Math.max(0.0, Math.sin(x * 0.035) * Math.cos(z * 0.035)) * 0.9;
@@ -118,9 +129,12 @@ export class TerrainArena {
         for (let i = 0; i < this.bumps.length; i++) {
             const b = this.bumps[i];
             if (b.height <= 0) continue;
-            const distB = Math.hypot(x - b.x, z - b.z);
-            if (distB < b.radius) {
-                const factor = 0.5 * (1.0 + Math.cos((distB / b.radius) * Math.PI));
+            const dx = x - b.x;
+            const dz = z - b.z;
+            const distBSq = dx * dx + dz * dz;
+            if (distBSq < (b.radiusSq || (b.radius * b.radius))) {
+                const distB = Math.sqrt(distBSq);
+                const factor = 0.5 * (1.0 + Math.cos(distB * (b.invRadius || (1.0 / b.radius)) * Math.PI));
                 h += b.height * relief * factor;
             }
         }
@@ -144,16 +158,12 @@ export class TerrainArena {
             let dx = x - b.x;
             let dz = z - b.z;
             if (b.rotY) {
-                const cosA = Math.cos(-b.rotY);
-                const sinA = Math.sin(-b.rotY);
-                const lx = dx * cosA - dz * sinA;
-                const lz = dx * sinA + dz * cosA;
+                const lx = dx * b.cosRotY - dz * b.sinRotY;
+                const lz = dx * b.sinRotY + dz * b.cosRotY;
                 dx = lx;
                 dz = lz;
             }
-            const halfX = b.sizeX * 0.5;
-            const halfZ = b.sizeZ * 0.5;
-            if (Math.abs(dx) <= halfX && Math.abs(dz) <= halfZ) {
+            if (Math.abs(dx) <= b.halfX && Math.abs(dz) <= b.halfZ) {
                 if (b.topY > surfaceY) {
                     surfaceY = b.topY;
                 }
