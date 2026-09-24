@@ -38,6 +38,7 @@ export class HUDController {
         this.hpGaugeElem = document.querySelector('.hp-gauge');
         this.enFillBar = document.getElementById('en-fill-bar');
         this.enValueText = document.getElementById('en-value-text');
+        this.enGaugeElem = document.querySelector('.en-gauge');
         this.tacticalStatusText = document.getElementById('tactical-status-text');
 
         // Estado do Ghost Bar de Dano
@@ -217,7 +218,7 @@ export class HUDController {
      * Atualiza a bússola, indicadores de marcha e barras gamer a cada frame.
      * @param {Object} telemetry Dados de telemetria do HexaBot
      */
-    updateTelemetry({ walkerState, effectiveMoveSpeed, swayWeight, legs, hp = 1000, maxHp = 1000, energy = 100, maxEnergy = 100 }) {
+    updateTelemetry({ walkerState, effectiveMoveSpeed, swayWeight, legs, hp = 1000, maxHp = 1000, energy = 100, maxEnergy = 100, isEnergyDepleted = false }) {
         // 1. Atualizar Barra Gamer de Vida (HP)
         const safeHp = Math.max(0, hp);
         const hpRatio = THREE.MathUtils.clamp(safeHp / maxHp, 0.0, 1.0);
@@ -257,7 +258,20 @@ export class HUDController {
         }
 
         if (this.enValueText) {
-            this.enValueText.innerText = `${enPercent}%`;
+            if (isEnergyDepleted) {
+                this.enValueText.innerText = `${enPercent}% [RECARGA]`;
+            } else {
+                this.enValueText.innerText = `${enPercent}%`;
+            }
+        }
+
+        // Trava de Laser Esgotado: pisca em vermelho alerta durante todo o processo de recarga até 100%
+        if (this.enGaugeElem) {
+            if (isEnergyDepleted) {
+                this.enGaugeElem.classList.add('depleted');
+            } else {
+                this.enGaugeElem.classList.remove('depleted');
+            }
         }
 
         // 3. Atualizar Status Tático Central
@@ -267,6 +281,9 @@ export class HUDController {
                 this.tacticalStatusText.style.color = '#ef4444';
             } else if (hpRatio < 0.30) {
                 this.tacticalStatusText.innerText = 'WARNING: LOW INTEGRITY';
+                this.tacticalStatusText.style.color = '#ef4444';
+            } else if (isEnergyDepleted) {
+                this.tacticalStatusText.innerText = 'LASER OVERHEAT: RECHARGING';
                 this.tacticalStatusText.style.color = '#ef4444';
             } else if (enRatio < 0.15) {
                 this.tacticalStatusText.innerText = 'LOW ENERGY CELL';
