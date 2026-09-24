@@ -20,6 +20,7 @@ import { TerrainArena } from './world/TerrainArena.js';
 import { CollisionSystem } from './world/CollisionSystem.js';
 import { HexaBot } from './bot/HexaBot.js';
 import { EnemyManager } from './combat/EnemyManager.js';
+import { TribalFX } from './combat/TribalFX.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
@@ -53,23 +54,29 @@ function initApp() {
     // 6. Instanciar Gerenciador de Inimigos (Spawners, Joaninhas e Bombas)
     const enemyManager = new EnemyManager(engine.scene, globalEventBus, terrainArena);
 
-    // 6. Instanciar Controlador do Hexápode
+    // 7. Instanciar Gerador de Efeitos de Fogo, Fumaça e Iluminação Tribal
+    const tribalFX = new TribalFX(engine.scene, globalEventBus);
+
+    // 8. Instanciar Controlador do Hexápode
     const hexaBot = new HexaBot(engine.scene, globalEventBus);
 
-    // 7. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
+    // 9. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
     const hudController = new HUDController(globalEventBus, hexaBot, terrainArena);
     const modelLoader = new ModelLoaderUI(hexaBot, terrainArena);
 
     // Resetar inimigos quando o robô for resetado
     globalEventBus.on('bot:resetPosition', () => enemyManager.reset());
 
-    // 8. Registrar Loop de Atualização no Game Loop do Engine
+    // 10. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
         // Atualizar animações de sancas e painéis de luz da arena
         terrainArena.update(dt, elapsedTime);
 
         // Atualizar orquestrador de inimigos, cabines e bombas
         enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, hexaBot.isDead);
+
+        // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
+        tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
 
         // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
         hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
