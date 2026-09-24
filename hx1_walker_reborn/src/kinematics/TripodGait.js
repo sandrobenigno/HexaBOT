@@ -206,6 +206,7 @@ export class TripodGait {
             });
 
             // 5. Finalizar o Meio-Ciclo do Passo (Touchdown)
+            let didStepLand = false;
             if (this.gaitProgress >= 1.0) {
                 this.isStepActive = false;
                 this.gaitProgress = 0;
@@ -217,7 +218,10 @@ export class TripodGait {
                 });
                 // Alternar grupo de tripé ativo para o próximo ciclo
                 this.activeTripodGroup = (this.activeTripodGroup === 0) ? 1 : 0;
+                didStepLand = true;
             }
+
+            return { didStepLand, activeTripodGroup: this.activeTripodGroup };
         } else {
             // Modo Estático (Totalmente Parado): Todas as 6 patas em Stance firmes no chão (SEM LERP!)
             legs.forEach((leg) => {
@@ -233,6 +237,8 @@ export class TripodGait {
                     leg.currentTarget.z
                 );
             });
+
+            return { didStepLand: false, activeTripodGroup: this.activeTripodGroup };
         }
     }
 }

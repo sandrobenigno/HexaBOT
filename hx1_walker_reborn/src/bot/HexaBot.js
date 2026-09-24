@@ -125,6 +125,13 @@ export class HexaBot {
             comfortAngle: 25.0 * (Math.PI / 180.0)
         };
 
+        // Rastreamento de Velocidade Angular para Áudio do Motor (motor.mp3)
+        this.prevBaseHeading = 0;
+        this.prevTorsoYaw = 0;
+        this.prevDynPitch = 0;
+        this.prevTerrainPitch = 0;
+        this.prevTerrainRoll = 0;
+
         // Registrar eventos do Barramento
         this.setupEventListeners();
     }
@@ -512,6 +519,12 @@ export class HexaBot {
         this.gait.reset();
         this.sway.reset();
 
+        this.prevBaseHeading = 0;
+        this.prevTorsoYaw = 0;
+        this.prevDynPitch = 0;
+        this.prevTerrainPitch = 0;
+        this.prevTerrainRoll = 0;
+
         this.robotMasterGroup.position.set(0, 0, 0);
         this.robotMasterGroup.rotation.set(0, 0, 0);
         this.updateAllLegNominalOffsets(getTerrainHeightFn);
@@ -606,7 +619,7 @@ export class HexaBot {
         }
 
         // 5. Atualização da Marcha Tripé
-        this.gait.update(dt, {
+        const gaitResult = this.gait.update(dt, {
             wantsMove: this.walkerState.isMoving,
             wantsTurn: this.walkerState.isTurningInPlace,
             turnDir: this.walkerState.turnDir,
@@ -617,6 +630,11 @@ export class HexaBot {
             collisionSystem,
             terrainArena
         });
+
+        // Disparar som mecânico de impacto de passo (Touchdown)
+        if (gaitResult && gaitResult.didStepLand) {
+            this.eventBus.emit('sound:step', this.robotMasterGroup.position);
+        }
 
         // 6. Equilíbrio e Inclinação de Relevo (Terrain Balancing)
         let sumFootY = 0;
@@ -789,7 +807,35 @@ export class HexaBot {
             IKSolver.solveLegIK(leg, leg.currentTarget, currentElevation, this.xrayMode);
         });
 
-        // 13. Emitir Telemetria para a UI
+        // 13. Cálculo da Velocidade Angular Instantânea e Modulação dos Servos (motor.mp3)
+        if (dt > 0.0001) {
+            let dHeading = this.walkerState.baseHeading - this.prevBaseHeading;
+            dHeading = Math.atan2(Math.sin(dHeading), Math.cos(dHeading));
+
+            const dTorso = this.walkerState.torsoYaw - this.prevTorsoYaw;
+            const dPitch = (this.walkerState.dynPitch + this.walkerState.terrainPitch) - (this.prevDynPitch + this.prevTerrainPitch);
+            const dRoll = this.walkerState.terrainRoll - this.prevTerrainRoll;
+
+            const angSpeedYaw = Math.abs(dHeading + dTorso) / dt;
+            const angSpeedPitch = Math.abs(dPitch) / dt;
+            const angSpeedRoll = Math.abs(dRoll) / dt;
+
+            const totalAngularSpeed = angSpeedYaw + (angSpeedPitch * 0.75) + (angSpeedRoll * 0.60);
+
+            this.prevBaseHeading = this.walkerState.baseHeading;
+            this.prevTorsoYaw = this.walkerState.torsoYaw;
+            this.prevDynPitch = this.walkerState.dynPitch;
+            this.prevTerrainPitch = this.walkerState.terrainPitch;
+            this.prevTerrainRoll = this.walkerState.terrainRoll;
+
+            this.eventBus.emit('bot:motorUpdate', {
+                angularSpeed: totalAngularSpeed,
+                isMoving: this.walkerState.isMoving,
+                moveSpeed: effectiveMoveSpeed
+            });
+        }
+
+        // 14. Emitir Telemetria para a UI
         this.eventBus.emit('bot:telemetry', {
             walkerState: this.walkerState,
             effectiveMoveSpeed,

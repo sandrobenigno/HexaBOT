@@ -43,12 +43,18 @@ export class SoundManager {
         this.loadSound('glitch_2', './assets/mp3/glitch_2.mp3');
         this.loadSound('ambient_loop', './assets/mp3/ambient_loop.mp3');
         this.loadSound('intro', './assets/mp3/intro.mp3');
+        this.loadSound('step_1', './assets/mp3/step_1.mp3');
+        this.loadSound('motor', './assets/mp3/motor.mp3');
 
         // Estado do Som Ambiente e Intro
         this.ambientSound = null;
         this.hasStartedAmbient = false;
         this.hasPlayedInitialIntro = false;
         this.pendingIntroPlay = false;
+
+        // Estado do Servomotor de Rotação/Torção Contínuo (motor.mp3)
+        this.motorSound = null;
+        this.isMotorPlaying = false;
 
         // Estado do Laser Contínuo (Envelope ADSR)
         this.laserSound = null;
@@ -108,7 +114,12 @@ export class SoundManager {
             this.startAmbientLoop();
         }
 
-        // 2. Tocar som de intro na primeira interação / start
+        // 2. Iniciar trilha de servomotores em silêncio (aguardando movimento)
+        if (!this.motorSound) {
+            this.initMotorSound();
+        }
+
+        // 3. Tocar som de intro na primeira interação / start
         if (!this.hasPlayedInitialIntro) {
             this.playIntro();
         }
@@ -129,6 +140,11 @@ export class SoundManager {
                 // Se o som ambiente carregou após o desbloqueio do áudio, inicia imediatamente
                 if (name === 'ambient_loop' && this.isAudioUnlocked && !this.hasStartedAmbient) {
                     this.startAmbientLoop();
+                }
+
+                // Se o motor carregou após o desbloqueio, inicializa o canal
+                if (name === 'motor' && this.isAudioUnlocked && !this.motorSound) {
+                    this.initMotorSound();
                 }
 
                 // Se a intro carregou após desbloqueio ou estava pendente, dispara
@@ -175,6 +191,20 @@ export class SoundManager {
         // Som de explosão/pop ao morrer
         this.eventBus.on('sound:pop', (position) => {
             this.playPop(position);
+        });
+
+        // Passos da Aranha (Impacto no Solo / Touchdown)
+        this.eventBus.on('sound:step', (position) => {
+            this.playStep(position);
+        });
+
+        this.eventBus.on('bot:step', (position) => {
+            this.playStep(position);
+        });
+
+        // Modulação Dinâmica dos Servomotores de Rotação e Torção do Tronco (motor.mp3)
+        this.eventBus.on('bot:motorUpdate', (data) => {
+            this.updateMotorSound(data);
         });
 
         // Laser contínuo com envelope ADSR
@@ -455,6 +485,104 @@ export class SoundManager {
             this.pendingIntroPlay = false;
         } catch (e) {
             console.warn('[SoundManager] Erro ao reproduzir intro:', e);
+        }
+    }
+
+    /**
+     * Reproduz o impacto mecânico da pata no solo ("step_1") com áudio posicional e micro-variação de pitch/volume.
+     * @param {THREE.Vector3} [position] Posição 3D do impacto
+     * @param {number} [volume=0.75] Volume base do passo
+     */
+    playStep(position = null, volume = 0.75) {
+        // Micro-variação de volume orgânico para naturalidade
+        const organicVol = volume * (0.88 + Math.random() * 0.24);
+
+        this.playSound('step_1', position, {
+            volume: organicVol,
+            refDistance: 20.0,
+            maxDistance: 95.0,
+            rolloffFactor: 0.75,
+            pitchMin: 0.93,
+            pitchMax: 1.07
+        });
+    }
+
+    /**
+     * Inicializa a trilha contínua do servomotor em loop (motor.mp3) com ganho silencioso inicial.
+     */
+    initMotorSound() {
+        const buffer = this.audioBuffers.get('motor');
+        if (!buffer || this.motorSound) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        try {
+            this.motorSound = new THREE.Audio(this.listener);
+            this.motorSound.setBuffer(buffer);
+            this.motorSound.setLoop(true);
+            this.motorSound.setVolume(0.0001);
+            this.motorSound.setPlaybackRate(0.50);
+            this.motorSound.play();
+            this.isMotorPlaying = true;
+            console.log('[SoundManager] Canal contínuo do servomotor (motor.mp3) inicializado.');
+        } catch (e) {
+            console.warn('[SoundManager] Erro ao inicializar motorSound:', e);
+        }
+    }
+
+    /**
+     * Modula dinamicamente em tempo real o volume e o pitch do servomotor com base na física da aranha.
+     * @param {Object} params Parâmetros de movimento
+     * @param {number} params.angularSpeed Velocidade angular em rad/s (Yaw, Pitch e Roll combinados)
+     * @param {boolean} params.isMoving Se o robô está se deslocando
+     * @param {number} params.moveSpeed Velocidade linear de avanço
+     */
+    updateMotorSound({ angularSpeed = 0, isMoving = false, moveSpeed = 16.0 } = {}) {
+        if (!this.motorSound) {
+            if (this.isAudioUnlocked && this.audioBuffers.has('motor')) {
+                this.initMotorSound();
+            }
+            return;
+        }
+
+        if (!this.motorSound.isPlaying) {
+            try { this.motorSound.play(); } catch (_) {}
+        }
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            return;
+        }
+
+        const now = this.listener.context.currentTime;
+        const gainParam = this.motorSound.gain.gain;
+
+        // Normalização da rotação/torção (0 a 1) com saturação em ~2.2 rad/s (~126°/s)
+        const angNorm = THREE.MathUtils.clamp(angularSpeed / 2.2, 0.0, 1.0);
+
+        // Contribuição sutil do deslocamento linear
+        const linNorm = isMoving ? THREE.MathUtils.clamp(moveSpeed / 16.0, 0.0, 1.0) * 0.35 : 0.0;
+
+        // Intensidade combinada do esforço mecânico
+        const combinedIntensity = Math.max(angNorm, linNorm);
+
+        if (combinedIntensity > 0.02) {
+            // Volume suave e atenuado em 50%: de 0.03 até 0.22
+            const targetVol = 0.03 + Math.pow(combinedIntensity, 0.9) * 0.19;
+
+            // Pitch dinâmico deslocado para metade da frequência: de 0.35x (sub-grave) até 0.95x (aceleração)
+            const targetPitch = 0.35 + Math.pow(combinedIntensity, 0.85) * 0.60;
+
+            gainParam.cancelScheduledValues(now);
+            gainParam.setTargetAtTime(targetVol, now, 0.04);
+
+            this.motorSound.setPlaybackRate(targetPitch);
+        } else {
+            // Desaceleração rápida e suave para silêncio em 70ms
+            gainParam.cancelScheduledValues(now);
+            gainParam.setTargetAtTime(0.0001, now, 0.07);
+            this.motorSound.setPlaybackRate(0.35);
         }
     }
 }
