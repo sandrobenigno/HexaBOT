@@ -55,6 +55,8 @@ export class SoundManager {
         // Estado do Servomotor de Rotação/Torção Contínuo (motor.mp3)
         this.motorSound = null;
         this.isMotorPlaying = false;
+        this.currentMotorPitch = 0.35;
+        this.currentMotorIntensity = 0.0;
 
         // Estado do Laser Contínuo (Envelope ADSR)
         this.laserSound = null;
@@ -238,7 +240,7 @@ export class SoundManager {
      * @param {number} [targetVolume=1.6] Volume de sustentação
      * @param {number} [attackTime=0.08] Tempo de subida do ataque em segundos
      */
-    startLaser(position = null, targetVolume = 1.6, attackTime = 0.08) {
+    startLaser(position = null, targetVolume = 2.6, attackTime = 0.08) {
         const buffer = this.audioBuffers.get('laser');
         if (!buffer) return;
 
@@ -537,9 +539,11 @@ export class SoundManager {
      * @param {Object} params Parâmetros de movimento
      * @param {number} params.angularSpeed Velocidade angular em rad/s (Yaw, Pitch e Roll combinados)
      * @param {boolean} params.isMoving Se o robô está se deslocando
+     * @param {boolean} params.isTurningInPlace Se está executando pivô
      * @param {number} params.moveSpeed Velocidade linear de avanço
+     * @param {number} [params.dt=0.016] Delta time em segundos para amortecimento
      */
-    updateMotorSound({ angularSpeed = 0, isMoving = false, moveSpeed = 16.0 } = {}) {
+    updateMotorSound({ angularSpeed = 0, isMoving = false, isTurningInPlace = false, moveSpeed = 16.0, dt = 0.016 } = {}) {
         if (!this.motorSound) {
             if (this.isAudioUnlocked && this.audioBuffers.has('motor')) {
                 this.initMotorSound();
@@ -564,25 +568,31 @@ export class SoundManager {
         // Contribuição sutil do deslocamento linear
         const linNorm = isMoving ? THREE.MathUtils.clamp(moveSpeed / 16.0, 0.0, 1.0) * 0.35 : 0.0;
 
-        // Intensidade combinada do esforço mecânico
-        const combinedIntensity = Math.max(angNorm, linNorm);
+        // Intensidade alvo do esforço mecânico
+        const targetIntensity = Math.max(angNorm, linNorm);
 
-        if (combinedIntensity > 0.02) {
-            // Volume suave e atenuado em 50%: de 0.03 até 0.22
-            const targetVol = 0.03 + Math.pow(combinedIntensity, 0.9) * 0.19;
+        // Amortecimento (Damping) na intensidade para eliminar saltos bruscos entre passos de pivô
+        const dampFactor = isTurningInPlace ? 10.0 : 15.0;
+        this.currentMotorIntensity = THREE.MathUtils.damp(this.currentMotorIntensity, targetIntensity, dampFactor, dt);
 
-            // Pitch dinâmico deslocado para metade da frequência: de 0.35x (sub-grave) até 0.95x (aceleração)
-            const targetPitch = 0.35 + Math.pow(combinedIntensity, 0.85) * 0.60;
+        if (this.currentMotorIntensity > 0.02) {
+            // Volume suave e atenuado: de 0.03 até 0.22
+            const targetVol = 0.03 + Math.pow(this.currentMotorIntensity, 0.9) * 0.19;
+
+            // Pitch dinâmico com amortecimento (Damping) suave: de 0.35x (sub-grave) até 0.95x (alta rotação)
+            const targetPitch = 0.15 + Math.pow(this.currentMotorIntensity, 3.50) * 0.50;
+            this.currentMotorPitch = THREE.MathUtils.damp(this.currentMotorPitch, targetPitch, dampFactor, dt);
 
             gainParam.cancelScheduledValues(now);
-            gainParam.setTargetAtTime(targetVol, now, 0.04);
+            gainParam.setTargetAtTime(targetVol, now, 0.06);
 
-            this.motorSound.setPlaybackRate(targetPitch);
+            this.motorSound.setPlaybackRate(this.currentMotorPitch);
         } else {
-            // Desaceleração rápida e suave para silêncio em 70ms
+            // Desaceleração suave e amortecida para silêncio
+            this.currentMotorPitch = THREE.MathUtils.damp(this.currentMotorPitch, 0.35, dampFactor, dt);
             gainParam.cancelScheduledValues(now);
-            gainParam.setTargetAtTime(0.0001, now, 0.07);
-            this.motorSound.setPlaybackRate(0.35);
+            gainParam.setTargetAtTime(0.0001, now, 0.09);
+            this.motorSound.setPlaybackRate(this.currentMotorPitch);
         }
     }
 }

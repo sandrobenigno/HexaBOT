@@ -524,6 +524,7 @@ export class HexaBot {
         this.prevDynPitch = 0;
         this.prevTerrainPitch = 0;
         this.prevTerrainRoll = 0;
+        this.smoothedAngularSpeed = 0;
 
         this.robotMasterGroup.position.set(0, 0, 0);
         this.robotMasterGroup.rotation.set(0, 0, 0);
@@ -819,8 +820,10 @@ export class HexaBot {
             const angSpeedYaw = Math.abs(dHeading + dTorso) / dt;
             const angSpeedPitch = Math.abs(dPitch) / dt;
             const angSpeedRoll = Math.abs(dRoll) / dt;
+            const rawAngularSpeed = angSpeedYaw + (angSpeedPitch * 0.75) + (angSpeedRoll * 0.60);
 
-            const totalAngularSpeed = angSpeedYaw + (angSpeedPitch * 0.75) + (angSpeedRoll * 0.60);
+            // Amortecimento prévio na velocidade angular para atenuar pulsos entre passadas de pivô
+            this.smoothedAngularSpeed = THREE.MathUtils.damp(this.smoothedAngularSpeed || 0, rawAngularSpeed, 7.5, dt);
 
             this.prevBaseHeading = this.walkerState.baseHeading;
             this.prevTorsoYaw = this.walkerState.torsoYaw;
@@ -829,9 +832,11 @@ export class HexaBot {
             this.prevTerrainRoll = this.walkerState.terrainRoll;
 
             this.eventBus.emit('bot:motorUpdate', {
-                angularSpeed: totalAngularSpeed,
+                angularSpeed: this.smoothedAngularSpeed,
                 isMoving: this.walkerState.isMoving,
-                moveSpeed: effectiveMoveSpeed
+                isTurningInPlace: this.walkerState.isTurningInPlace,
+                moveSpeed: effectiveMoveSpeed,
+                dt
             });
         }
 
