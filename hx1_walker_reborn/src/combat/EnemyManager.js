@@ -43,6 +43,11 @@ export class EnemyManager {
         this.scene.add(this.sharedExplosionLight);
         this.explosionFlashTimer = 0.0;
 
+        // Ouvir quando um inimigo finaliza o carregamento do modelo GLB
+        this.eventBus.on('enemy:modelReady', () => {
+            this.updateTargetableCache();
+        });
+
         // Criar cabines iniciais
         this.setupInitialSpawners();
     }

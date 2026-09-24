@@ -1,28 +1,61 @@
 /**
  * ============================================================================
  * HEXABOT TACTICAL ENGINE — LADYBUGENEMY.JS
- * Inimigo Joaninha Procedural (Esfera Metálica Vermelha de 1m) — Otimizada
+ * Inimigo Joaninha com Modelo 3D GLTF/GLB e ShapeKey 'DROP' Otimizado
  * ============================================================================
- * - Geometrias e materiais compartilhados
- * - Zero alocações dinâmicas de PointLight
- * - Altíssima performance e estabilidade de FPS
+ * - Carregamento assíncrono e cache global do modelo LadyBUG.glb
+ * - Suporte nativo ao Morph Target / ShapeKey 'DROP' para elevação de patas ao plantar bomba
+ * - Instanciação leve com compartilhamento de geometrias e buffers
+ * - Hit flash dinâmico em PBR sem recompilação de shaders
  */
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// Geometrias e Materiais compartilhados (Escala de 2m de diâmetro / raio 1.0m)
-const SHARED_SPHERE_GEO = new THREE.SphereGeometry(1.0, 24, 24);
-const SHARED_SEAM_GEO = new THREE.CylinderGeometry(1.008, 1.008, 0.05, 24);
-SHARED_SEAM_GEO.rotateX(Math.PI / 2);
-const SHARED_EYE_GEO = new THREE.SphereGeometry(0.15, 12, 12);
+// Cache Global do Modelo 3D da Joaninha
+let cachedLadybugGltf = null;
+let isLoadingLadybug = false;
+const pendingInstances = [];
 
-const SHARED_SEAM_MAT = new THREE.MeshStandardMaterial({
-    color: 0x0a0e17,
-    metalness: 0.90,
-    roughness: 0.40
+// Iniciar pré-carregamento imediato do modelo GLB
+function preloadLadybugModel() {
+    if (cachedLadybugGltf || isLoadingLadybug) return;
+    isLoadingLadybug = true;
+
+    const loader = new GLTFLoader();
+    loader.load(
+        'assets/glb/LadyBUG.glb',
+        (gltf) => {
+            cachedLadybugGltf = gltf;
+            isLoadingLadybug = false;
+            console.log('[LadybugEnemy] Modelo LadyBUG.glb carregado e cacheado com sucesso.');
+
+            // Inicializar instâncias que foram spawnadas enquanto o download ocorria
+            while (pendingInstances.length > 0) {
+                const enemy = pendingInstances.shift();
+                if (!enemy.isDead && !enemy.isFinished) {
+                    enemy.applyLoadedModel();
+                }
+            }
+        },
+        undefined,
+        (err) => {
+            console.warn('[LadybugEnemy] Falha ao carregar assets/glb/LadyBUG.glb:', err);
+            isLoadingLadybug = false;
+        }
+    );
+}
+
+// Disparar o pré-carregamento logo no módulo
+preloadLadybugModel();
+
+// Geometria e Material de fallback temporário (caso spawne antes do GLB carregar)
+const FALLBACK_SPHERE_GEO = new THREE.SphereGeometry(1.2, 16, 16);
+const FALLBACK_MAT = new THREE.MeshStandardMaterial({
+    color: 0xd80020,
+    metalness: 0.88,
+    roughness: 0.22
 });
-
-const SHARED_EYE_MAT = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
 
 export class LadybugEnemy {
     /**
@@ -38,7 +71,7 @@ export class LadybugEnemy {
         this.position = spawnPosition.clone();
         this.heading = initialHeading ? Math.atan2(initialHeading.x, initialHeading.z) : 0.0;
         this.speed = 5.8;
-        this.radius = 1.0; // Raio 1.0m -> Esfera de 2.0m de diâmetro
+        this.radius = 1.2; // Raio 1.2m -> Modelo de 2.4m de diâmetro (Escala 1.2x)
 
         // Estados: 'SPAWNING', 'HUNTING', 'PLANTING', 'RETREATING', 'DEAD'
         this.state = 'SPAWNING';
@@ -52,15 +85,24 @@ export class LadybugEnemy {
         this.isFinished = false;
         this.hitFlashTimer = 0.0;
 
-        // Controle de Bombas
+        // Controle de Bombas e Animação ShapeKey 'DROP'
         this.hasBombReady = true;
         this.bombCooldown = 0.0;
+        this.currentDropWeight = 0.0;
+        this.targetDropWeight = 0.0;
 
         // Efeito de Morte / Destruição
         this.deathProgress = 0.0;
         this.deathDuration = 0.35;
 
-        // Construir hierarquia 3D
+        // Coleções do Modelo 3D
+        this.modelContainer = null;
+        this.morphMeshes = [];
+        this.dropMorphIndex = -1;
+        this.materials = [];
+        this.originalColors = [];
+
+        // Construir hierarquia 3D na cena
         this.group = new THREE.Group();
         this.group.position.copy(this.position);
         this.scene.add(this.group);
@@ -69,35 +111,91 @@ export class LadybugEnemy {
     }
 
     /**
-     * Cria a geometria da joaninha usando geometrias compartilhadas.
+     * Constrói o modelo 3D utilizando o GLB cacheado ou agenda a aplicação quando terminar de carregar.
      */
     buildMesh() {
-        // Carapaça Vermelha Metálica
-        this.bodyMat = new THREE.MeshStandardMaterial({
-            color: 0xd80020,
-            metalness: 0.88,
-            roughness: 0.22,
-            envMapIntensity: 0.90
+        if (cachedLadybugGltf) {
+            this.applyLoadedModel();
+        } else {
+            // Fallback provisório enquanto o GLB finaliza o download
+            this.targetMesh = new THREE.Mesh(FALLBACK_SPHERE_GEO, FALLBACK_MAT);
+            this.targetMesh.userData = { entity: this, type: 'enemy' };
+            this.group.add(this.targetMesh);
+
+            pendingInstances.push(this);
+            preloadLadybugModel();
+        }
+    }
+
+    /**
+     * Clona a hierarquia do GLB, mapeia Morph Targets (ShapeKey DROP) e isola materiais.
+     */
+    applyLoadedModel() {
+        if (!cachedLadybugGltf) return;
+
+        // Remover fallback se existente
+        if (this.targetMesh && this.targetMesh.parent === this.group) {
+            this.group.remove(this.targetMesh);
+            this.targetMesh = null;
+        }
+
+        this.modelContainer = new THREE.Group();
+        // O modelo original no Blender tem a frente virada para -Z.
+        // Giramos 180° (Math.PI) para alinhar a frente aos movimentos em +Z da física.
+        this.modelContainer.rotation.y = Math.PI;
+        // Escala 1.2x
+        this.modelContainer.scale.set(1.2, 1.2, 1.2);
+
+        const clonedScene = cachedLadybugGltf.scene.clone(true);
+        this.modelContainer.add(clonedScene);
+        this.group.add(this.modelContainer);
+
+        this.morphMeshes = [];
+        this.materials = [];
+        this.originalColors = [];
+
+        clonedScene.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = false; // Sombra dinâmica exclusiva da aranha
+                child.receiveShadow = true;
+                child.userData = { entity: this, type: 'enemy' };
+
+                if (!this.targetMesh) {
+                    this.targetMesh = child;
+                }
+
+                // Identificar ShapeKey / MorphTarget 'DROP'
+                if (child.morphTargetDictionary && child.morphTargetDictionary['DROP'] !== undefined) {
+                    this.morphMeshes.push(child);
+                    this.dropMorphIndex = child.morphTargetDictionary['DROP'];
+                }
+
+                // Clonar materiais por instância para suportar flash de dano individual
+                if (Array.isArray(child.material)) {
+                    child.material = child.material.map((mat) => {
+                        const m = mat.clone();
+                        this.materials.push(m);
+                        this.originalColors.push({
+                            color: m.color ? m.color.clone() : new THREE.Color(0xffffff),
+                            emissive: m.emissive ? m.emissive.clone() : new THREE.Color(0x000000),
+                            emissiveIntensity: m.emissiveIntensity || 0.0
+                        });
+                        return m;
+                    });
+                } else if (child.material) {
+                    const m = child.material.clone();
+                    child.material = m;
+                    this.materials.push(m);
+                    this.originalColors.push({
+                        color: m.color ? m.color.clone() : new THREE.Color(0xffffff),
+                        emissive: m.emissive ? m.emissive.clone() : new THREE.Color(0x000000),
+                        emissiveIntensity: m.emissiveIntensity || 0.0
+                    });
+                }
+            }
         });
 
-        this.targetMesh = new THREE.Mesh(SHARED_SPHERE_GEO, this.bodyMat);
-        this.targetMesh.castShadow = false; // Sombra exclusiva da HX
-        this.targetMesh.receiveShadow = true;
-        this.targetMesh.userData = { entity: this, type: 'enemy' };
-        this.group.add(this.targetMesh);
-
-        // Detalhe central
-        const seamMesh = new THREE.Mesh(SHARED_SEAM_GEO, SHARED_SEAM_MAT);
-        this.group.add(seamMesh);
-
-        // Olhos sensores ciano proporcionais
-        const leftEye = new THREE.Mesh(SHARED_EYE_GEO, SHARED_EYE_MAT);
-        leftEye.position.set(-0.36, 0.24, 0.84);
-        this.group.add(leftEye);
-
-        const rightEye = new THREE.Mesh(SHARED_EYE_GEO, SHARED_EYE_MAT);
-        rightEye.position.set(0.36, 0.24, 0.84);
-        this.group.add(rightEye);
+        this.eventBus.emit('enemy:modelReady');
     }
 
     /**
@@ -108,7 +206,7 @@ export class LadybugEnemy {
         if (this.isDead) return;
 
         this.hp -= damage;
-        this.hitFlashTimer = 0.08;
+        this.hitFlashTimer = 0.09;
 
         if (this.hp <= 0) {
             this.hp = 0;
@@ -122,12 +220,48 @@ export class LadybugEnemy {
     die() {
         this.isDead = true;
         this.state = 'DEAD';
-        this.bodyMat.color.setHex(0xffaa00);
-        this.bodyMat.emissive.setHex(0xff6600);
-        this.bodyMat.emissiveIntensity = 1.0;
+
+        // Efeito visual térmico/explosivo nos materiais
+        this.materials.forEach((m) => {
+            if (m.color) m.color.setHex(0xffaa00);
+            if (m.emissive) {
+                m.emissive.setHex(0xff5500);
+                m.emissiveIntensity = 1.2;
+            }
+        });
 
         // Disparar efeito sonoro 3D espacial de explosão/pop
         this.eventBus.emit('sound:pop', this.position.clone());
+    }
+
+    /**
+     * Atualiza a animação do ShapeKey 'DROP' e a elevação física das patinhas.
+     * @param {number} dt Delta time em segundos
+     */
+    updateMorphAnimation(dt) {
+        // Amortecimento suave na transição do ShapeKey
+        const interpSpeed = this.state === 'PLANTING' ? 9.0 : 6.0;
+        this.currentDropWeight = THREE.MathUtils.damp(
+            this.currentDropWeight,
+            this.targetDropWeight,
+            interpSpeed,
+            dt
+        );
+
+        // Aplicar influência do morph target em todas as submalhas/primitivas
+        if (this.dropMorphIndex >= 0) {
+            for (let i = 0; i < this.morphMeshes.length; i++) {
+                const mesh = this.morphMeshes[i];
+                if (mesh.morphTargetInfluences) {
+                    mesh.morphTargetInfluences[this.dropMorphIndex] = this.currentDropWeight;
+                }
+            }
+        }
+
+        // Elevação sutil adicional do corpo enquanto levanta as patinhas para dropar a bomba
+        if (this.modelContainer) {
+            this.modelContainer.position.y = this.currentDropWeight * 0.18;
+        }
     }
 
     /**
@@ -158,13 +292,26 @@ export class LadybugEnemy {
         // Flash de dano em emissivo (zero impacto no renderer)
         if (this.hitFlashTimer > 0) {
             this.hitFlashTimer -= dt;
-            this.bodyMat.color.setHex(0xffffff);
-            this.bodyMat.emissive.setHex(0xff4422);
-            this.bodyMat.emissiveIntensity = 0.8;
+            this.materials.forEach((m) => {
+                if (m.color) m.color.setHex(0xffffff);
+                if (m.emissive) {
+                    m.emissive.setHex(0xff4422);
+                    m.emissiveIntensity = 0.85;
+                }
+            });
         } else {
-            this.bodyMat.color.setHex(0xd80020);
-            this.bodyMat.emissive.setHex(0x000000);
-            this.bodyMat.emissiveIntensity = 0.0;
+            // Restaurar cores e emissivos originais
+            for (let i = 0; i < this.materials.length; i++) {
+                const m = this.materials[i];
+                const orig = this.originalColors[i];
+                if (orig) {
+                    if (m.color) m.color.copy(orig.color);
+                    if (m.emissive) {
+                        m.emissive.copy(orig.emissive);
+                        m.emissiveIntensity = orig.emissiveIntensity;
+                    }
+                }
+            }
         }
 
         // Recarga de bomba
@@ -182,6 +329,7 @@ export class LadybugEnemy {
 
         // --- MÁQUINA DE ESTADOS DA IA ---
         if (this.state === 'SPAWNING') {
+            this.targetDropWeight = 0.0;
             this.stateTimer -= dt;
             this.position.x += this.spawnDirection.x * this.speed * dt;
             this.position.z += this.spawnDirection.z * this.speed * dt;
@@ -191,6 +339,7 @@ export class LadybugEnemy {
                 this.state = 'HUNTING';
             }
         } else if (this.state === 'HUNTING') {
+            this.targetDropWeight = 0.0;
             const targetHeading = Math.atan2(dirX, dirZ);
 
             let diff = targetHeading - this.heading;
@@ -200,13 +349,16 @@ export class LadybugEnemy {
             this.position.x += Math.sin(this.heading) * this.speed * dt;
             this.position.z += Math.cos(this.heading) * this.speed * dt;
 
-            // Se chegou debaixo do chassi do HexaBOT (ajustado para bot de 2m)
-            if (distToHx < 1.85 && this.hasBombReady) {
+            // Se chegou perto / debaixo do chassi do HexaBOT
+            if (distToHx < 1.95 && this.hasBombReady) {
                 this.state = 'PLANTING';
-                this.stateTimer = 0.2;
+                this.stateTimer = 0.65; // Tempo para a animação do ShapeKey 'DROP' se elevar
+                this.targetDropWeight = 1.0; // Levanta as patas e eleva o corpo
             }
         } else if (this.state === 'PLANTING') {
+            this.targetDropWeight = 1.0;
             this.stateTimer -= dt;
+
             if (this.stateTimer <= 0) {
                 shouldDropBomb = true;
                 dropPosition = this.position.clone();
@@ -218,8 +370,10 @@ export class LadybugEnemy {
 
                 this.state = 'RETREATING';
                 this.stateTimer = 2.0;
+                this.targetDropWeight = 0.0; // Retorna patinhas ao solo
             }
         } else if (this.state === 'RETREATING') {
+            this.targetDropWeight = 0.0;
             this.stateTimer -= dt;
             const escapeHeading = Math.atan2(-dirX, -dirZ);
 
@@ -234,6 +388,9 @@ export class LadybugEnemy {
                 this.state = 'HUNTING';
             }
         }
+
+        // Atualizar ShapeKey e elevação
+        this.updateMorphAnimation(dt);
 
         // Limites da Arena
         this.position.x = THREE.MathUtils.clamp(this.position.x, -125.0, 125.0);
@@ -252,9 +409,17 @@ export class LadybugEnemy {
      * Libera recursos Three.js da cena.
      */
     dispose() {
+        const idx = pendingInstances.indexOf(this);
+        if (idx !== -1) {
+            pendingInstances.splice(idx, 1);
+        }
+
         if (this.group && this.group.parent) {
             this.group.parent.remove(this.group);
         }
-        if (this.bodyMat) this.bodyMat.dispose();
+
+        this.materials.forEach((m) => m.dispose());
+        this.materials = [];
+        this.morphMeshes = [];
     }
 }

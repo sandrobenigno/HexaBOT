@@ -59,10 +59,10 @@ export class CabinSpawner {
         this.destructionDuration = 0.50;
 
         this.doors = [
-            { normal: new THREE.Vector3(0, 0, 1), offset: new THREE.Vector3(0, 0, this.depth * 0.5 + 1.1) },  // Sul (+Z)
-            { normal: new THREE.Vector3(1, 0, 0), offset: new THREE.Vector3(this.width * 0.5 + 1.1, 0, 0) },  // Leste (+X)
-            { normal: new THREE.Vector3(0, 0, -1), offset: new THREE.Vector3(0, 0, -this.depth * 0.5 - 1.1) }, // Norte (-Z)
-            { normal: new THREE.Vector3(-1, 0, 0), offset: new THREE.Vector3(-this.width * 0.5 - 1.1, 0, 0) }  // Oeste (-X)
+            { normal: new THREE.Vector3(0, 0, 1), offset: new THREE.Vector3(0, 0, this.depth * 0.5 + 1.35) },  // Sul (+Z)
+            { normal: new THREE.Vector3(1, 0, 0), offset: new THREE.Vector3(this.width * 0.5 + 1.35, 0, 0) },  // Leste (+X)
+            { normal: new THREE.Vector3(0, 0, -1), offset: new THREE.Vector3(0, 0, -this.depth * 0.5 - 1.35) }, // Norte (-Z)
+            { normal: new THREE.Vector3(-1, 0, 0), offset: new THREE.Vector3(-this.width * 0.5 - 1.35, 0, 0) }  // Oeste (-X)
         ];
 
         this.group = new THREE.Group();
