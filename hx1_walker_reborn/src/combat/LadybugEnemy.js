@@ -65,6 +65,8 @@ const SHARED_HITBOX_MAT = new THREE.MeshBasicMaterial({
     depthWrite: false
 });
 
+let globalLadybugSequence = 0;
+
 export class LadybugEnemy {
     /**
      * @param {THREE.Scene} scene Cena Three.js
@@ -75,6 +77,10 @@ export class LadybugEnemy {
     constructor(scene, eventBus, spawnPosition, initialHeading = null) {
         this.scene = scene;
         this.eventBus = eventBus;
+
+        this.creationId = ++globalLadybugSequence; // Sequência única por ordem de criação
+        this.circleSlotIndex = null;
+        this.isInOrbit = false;
 
         this.position = spawnPosition.clone();
         this.heading = initialHeading ? Math.atan2(initialHeading.x, initialHeading.z) : 0.0;
@@ -281,9 +287,10 @@ export class LadybugEnemy {
      * @param {THREE.Vector3} hxPosition Posição central do HexaBOT
      * @param {import('../world/TerrainArena.js').TerrainArena} terrainArena
      * @param {boolean} [hxIsDead=false] Se o HexaBOT está morto/paralisado
+     * @param {{ x: number, z: number, angle: number, radius: number }} [tribalSlot=null] Slot atribuído na formação tribal
      * @returns {{ shouldDropBomb: boolean, dropPosition: THREE.Vector3 }}
      */
-    update(dt, hxPosition, terrainArena, hxIsDead = false) {
+    update(dt, hxPosition, terrainArena, hxIsDead = false, tribalSlot = null) {
         let shouldDropBomb = false;
         let dropPosition = null;
 
@@ -341,39 +348,70 @@ export class LadybugEnemy {
 
         // --- MÁQUINA DE ESTADOS DA IA ---
         if (hxIsDead) {
-            // RITUAL DE VITÓRIA: Formar um círculo e correr em volta da HX caída
+            // RITUAL DE VITÓRIA: Formar um círculo coeso encadeado ao redor da HX caída
             this.state = 'CIRCLING';
             this.targetDropWeight = 0.0;
 
-            if (this.orbitAngle === undefined) {
-                this.orbitAngle = Math.atan2(this.position.x - hxPosition.x, this.position.z - hxPosition.z);
+            if (tribalSlot) {
+                const targetX = tribalSlot.x;
+                const targetZ = tribalSlot.z;
+                const orbitAngle = tribalSlot.angle;
+                const orbitRadius = tribalSlot.radius;
+
+                const distToSlot = Math.hypot(targetX - this.position.x, targetZ - this.position.z);
+                const distToPerimeter = Math.abs(distToHx - orbitRadius);
+
+                // Determinar se já alcançou o perímetro do círculo para rodar
+                if (!this.isInOrbit) {
+                    if (distToPerimeter <= 1.20 && distToSlot <= 2.80) {
+                        this.isInOrbit = true;
+                    }
+                }
+
+                if (!this.isInOrbit) {
+                    // Navegar diretamente e rápido até o slot atribuído no círculo
+                    const steerX = targetX - this.position.x;
+                    const steerZ = targetZ - this.position.z;
+                    const desiredHeading = Math.atan2(steerX, steerZ);
+
+                    let diff = desiredHeading - this.heading;
+                    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                    this.heading += diff * Math.min(1.0, dt * 8.0);
+
+                    this.position.x += Math.sin(this.heading) * this.speed * dt;
+                    this.position.z += Math.cos(this.heading) * this.speed * dt;
+                } else {
+                    // Já está na órbita: travar suavemente na posição do slot e orientar tangencialmente
+                    this.position.x = THREE.MathUtils.damp(this.position.x, targetX, 10.0, dt);
+                    this.position.z = THREE.MathUtils.damp(this.position.z, targetZ, 10.0, dt);
+
+                    const tangentHeading = orbitAngle + Math.PI / 2;
+                    let diff = tangentHeading - this.heading;
+                    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                    this.heading += diff * Math.min(1.0, dt * 10.0);
+                }
+            } else {
+                // Fallback de órbita individual caso não haja orquestração
+                if (this.orbitAngle === undefined) {
+                    this.orbitAngle = Math.atan2(this.position.x - hxPosition.x, this.position.z - hxPosition.z);
+                }
+                this.orbitAngle += (5.5 / 8.2) * dt;
+                const targetX = hxPosition.x + Math.sin(this.orbitAngle) * 8.2;
+                const targetZ = hxPosition.z + Math.cos(this.orbitAngle) * 8.2;
+
+                this.position.x = THREE.MathUtils.damp(this.position.x, targetX, 5.0, dt);
+                this.position.z = THREE.MathUtils.damp(this.position.z, targetZ, 5.0, dt);
+
+                const tangentHeading = this.orbitAngle + Math.PI / 2;
+                let diff = tangentHeading - this.heading;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                this.heading += diff * Math.min(1.0, dt * 8.0);
             }
-            if (this.orbitRadius === undefined) {
-                this.orbitRadius = 7.5 + (Math.random() * 1.8);
-            }
-            if (this.orbitSpeed === undefined) {
-                this.orbitSpeed = 5.2 + Math.random() * 1.2;
-            }
-
-            // Progresso orbital contínuo (sentido horário)
-            this.orbitAngle += (this.orbitSpeed / this.orbitRadius) * dt;
-
-            const targetX = hxPosition.x + Math.sin(this.orbitAngle) * this.orbitRadius;
-            const targetZ = hxPosition.z + Math.cos(this.orbitAngle) * this.orbitRadius;
-
-            this.position.x = THREE.MathUtils.damp(this.position.x, targetX, 5.0, dt);
-            this.position.z = THREE.MathUtils.damp(this.position.z, targetZ, 5.0, dt);
-
-            // Orientação tangencial ao círculo da dança
-            const tangentHeading = this.orbitAngle + Math.PI / 2;
-            let diff = tangentHeading - this.heading;
-            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-            this.heading += diff * Math.min(1.0, dt * 8.0);
         } else {
             // Limpar parâmetros orbitais caso o robô seja revivido/resetado
             this.orbitAngle = undefined;
-            this.orbitRadius = undefined;
-            this.orbitSpeed = undefined;
+            this.circleSlotIndex = null;
+            this.isInOrbit = false;
 
             if (this.state === 'SPAWNING') {
                 this.targetDropWeight = 0.0;

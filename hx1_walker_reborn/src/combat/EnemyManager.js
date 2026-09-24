@@ -43,6 +43,11 @@ export class EnemyManager {
         this.scene.add(this.sharedExplosionLight);
         this.explosionFlashTimer = 0.0;
 
+        // Estado da Dança Tribal Coordenada
+        this.tribalCircleActive = false;
+        this.tribalMasterAngle = 0.0;
+        this.hasStartedTribalMusic = false;
+
         // Ouvir quando um inimigo finaliza o carregamento do modelo GLB
         this.eventBus.on('enemy:modelReady', () => {
             this.updateTargetableCache();
@@ -185,9 +190,24 @@ export class EnemyManager {
         }
 
         // 2. Atualizar Inimigos Joaninhas (comporta ritual de dança circular se a HX estiver morta)
+        let tribalSlots = null;
+        if (hxIsDead) {
+            tribalSlots = this.calculateTribalCircleSlots(hxPosition, dt);
+        } else {
+            if (this.tribalCircleActive) {
+                this.tribalCircleActive = false;
+                this.hasStartedTribalMusic = false;
+                this.enemies.forEach(e => {
+                    e.circleSlotIndex = null;
+                    e.isInOrbit = false;
+                });
+            }
+        }
+
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
-            const enemyRes = enemy.update(dt, hxPosition, this.terrainArena, hxIsDead);
+            const slot = (tribalSlots && enemy.circleSlotIndex !== null) ? tribalSlots[enemy.circleSlotIndex] : null;
+            const enemyRes = enemy.update(dt, hxPosition, this.terrainArena, hxIsDead, slot);
 
             if (enemyRes.shouldDropBomb && enemyRes.dropPosition) {
                 this.dropBomb(enemyRes.dropPosition);
@@ -196,6 +216,16 @@ export class EnemyManager {
             if (enemy.isFinished) {
                 this.enemies.splice(i, 1);
                 targetsNeedUpdate = true;
+            }
+        }
+
+        // Se houver pelo menos 1 joaninha que entrou no perímetro da órbita, inicia a música tribal
+        if (hxIsDead && !this.hasStartedTribalMusic) {
+            const anyInOrbit = this.enemies.some(e => !e.isDead && e.isInOrbit);
+            if (anyInOrbit) {
+                this.hasStartedTribalMusic = true;
+                this.eventBus.emit('music:tribalStart');
+                console.log('[EnemyManager] Primeira joaninha iniciou a dança circular -> Música tribal disparada!');
             }
         }
 
@@ -215,6 +245,67 @@ export class EnemyManager {
         if (targetsNeedUpdate) {
             this.updateTargetableCache();
         }
+    }
+
+    /**
+     * Calcula e distribui as joaninhas em fila encadeada e coesa no círculo tribal.
+     * Ordena por proximidade ao HexaBOT e por ordem de criação (ID).
+     * @param {THREE.Vector3} hxPosition
+     * @param {number} dt
+     * @returns {Array<{ x: number, z: number, angle: number, radius: number }>}
+     */
+    calculateTribalCircleSlots(hxPosition, dt) {
+        const aliveEnemies = this.enemies.filter(e => !e.isDead && !e.isFinished);
+        const count = aliveEnemies.length;
+        if (count === 0) return null;
+
+        const circleRadius = 8.2;
+        const orbitSpeed = 5.5;
+
+        // Se a formação acabou de ser acionada, ordenar e atribuir slots
+        if (!this.tribalCircleActive) {
+            this.tribalCircleActive = true;
+
+            // 1. Ordenar por proximidade ao HexaBOT; desempate por ordem de criação (creationId)
+            aliveEnemies.sort((a, b) => {
+                const distA = Math.hypot(a.position.x - hxPosition.x, a.position.z - hxPosition.z);
+                const distB = Math.hypot(b.position.x - hxPosition.x, b.position.z - hxPosition.z);
+                if (Math.abs(distA - distB) > 0.05) {
+                    return distA - distB; // Mais próximo primeiro
+                }
+                return a.creationId - b.creationId; // Ordem de criação
+            });
+
+            // 2. O primeiro da fila (líder) define o ângulo inicial da formação
+            const leader = aliveEnemies[0];
+            this.tribalMasterAngle = Math.atan2(leader.position.x - hxPosition.x, leader.position.z - hxPosition.z);
+
+            // 3. Atribuir os índices de slot em fila encadeada
+            aliveEnemies.forEach((e, idx) => {
+                e.circleSlotIndex = idx;
+            });
+        }
+
+        // Progresso do ângulo mestre da formação circular (sentido horário)
+        this.tribalMasterAngle += (orbitSpeed / circleRadius) * dt;
+
+        // Gerar coordenadas dos slots perfeitamente equidistantes no círculo (2*PI / N)
+        const slots = [];
+        const angleStep = (Math.PI * 2) / Math.max(1, count);
+
+        for (let i = 0; i < count; i++) {
+            const slotAngle = this.tribalMasterAngle - (i * angleStep);
+            const slotX = hxPosition.x + Math.sin(slotAngle) * circleRadius;
+            const slotZ = hxPosition.z + Math.cos(slotAngle) * circleRadius;
+            slots.push({
+                x: slotX,
+                z: slotZ,
+                angle: slotAngle,
+                radius: circleRadius
+            });
+        }
+
+        return slots;
     }
 
     /**
@@ -267,6 +358,10 @@ export class EnemyManager {
      * Limpa e reseta todos os inimigos, bombas e reinicia as cabines.
      */
     reset() {
+        this.tribalCircleActive = false;
+        this.tribalMasterAngle = 0.0;
+        this.hasStartedTribalMusic = false;
+
         this.spawners.forEach(s => s.dispose());
         this.enemies.forEach(e => e.dispose());
         this.bombs.forEach(b => b.dispose());

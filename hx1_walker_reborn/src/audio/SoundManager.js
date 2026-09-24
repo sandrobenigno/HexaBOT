@@ -183,8 +183,8 @@ export class SoundManager {
             this.playIntro(0.90);
         });
 
-        // Música da Dança Ritual Tribal das Joaninhas na Morte da HX
-        this.eventBus.on('bot:died', () => {
+        // Música da Dança Ritual Tribal das Joaninhas (disparada quando a 1ª joaninha entra no círculo)
+        this.eventBus.on('music:tribalStart', () => {
             this.startTribalMusic(0.85);
         });
 
