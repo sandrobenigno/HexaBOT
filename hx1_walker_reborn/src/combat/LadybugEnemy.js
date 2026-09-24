@@ -87,7 +87,7 @@ export class LadybugEnemy {
         this.spawnDirection = initialHeading ? initialHeading.clone().normalize() : new THREE.Vector3(0, 0, 1);
 
         // Combate e Vida (Resistência aumentada para combate mais tático)
-        this.maxHp = 130;
+        this.maxHp = 360;
         this.hp = this.maxHp;
         this.isDead = false;
         this.isFinished = false;
