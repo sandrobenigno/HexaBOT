@@ -125,6 +125,9 @@ export class LadybugEnemy {
         this.bodyMat.color.setHex(0xffaa00);
         this.bodyMat.emissive.setHex(0xff6600);
         this.bodyMat.emissiveIntensity = 1.0;
+
+        // Disparar efeito sonoro 3D espacial de explosão/pop
+        this.eventBus.emit('sound:pop', this.position.clone());
     }
 
     /**
@@ -209,6 +212,9 @@ export class LadybugEnemy {
                 dropPosition = this.position.clone();
                 this.hasBombReady = false;
                 this.bombCooldown = 5.0;
+
+                // Disparar fala 3D espacial da joaninha: "Kaboom! Hahahahaha!"
+                this.eventBus.emit('sound:kaboom', this.position.clone());
 
                 this.state = 'RETREATING';
                 this.stateTimer = 2.0;

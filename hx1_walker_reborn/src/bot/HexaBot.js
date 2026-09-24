@@ -74,6 +74,7 @@ export class HexaBot {
         this.legs = [];
         this.xrayMode = false;
         this.activeBotManifest = null;
+        this.wasFiringLaser = false;
 
         // Reação a Dano
         this.damageReactionTimer = 0.0;
@@ -733,6 +734,14 @@ export class HexaBot {
                 this.isEnergyDepleted = false;
             }
         }
+
+        // Áudio do Laser Contínuo com Envelope ADSR (Attack, Sustain e Decay)
+        if (combatRes.isActuallyFiring) {
+            this.eventBus.emit('sound:laserStart', combatRes.snoutPos);
+        } else if (this.wasFiringLaser) {
+            this.eventBus.emit('sound:laserStop');
+        }
+        this.wasFiringLaser = combatRes.isActuallyFiring;
 
         // Aplicar dano do laser contínuo no alvo atingido (inimigo ou cabine)
         if (combatRes.isActuallyFiring && combatRes.hitObject && enemyManager) {

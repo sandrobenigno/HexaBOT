@@ -47,11 +47,13 @@ export class CabinSpawner {
         this.height = CABIN_HEIGHT;
         this.depth = CABIN_DEPTH;
 
-        this.maxHp = 350;
+        // Resistência Reforçada Dobrada (2100 HP)
+        this.maxHp = 2100;
         this.hp = this.maxHp;
         this.isDestroyed = false;
         this.isFinished = false;
         this.hitFlashTimer = 0.0;
+        this.glitchSoundCooldown = 0.0;
 
         this.destructionProgress = 0.0;
         this.destructionDuration = 0.50;
@@ -68,6 +70,7 @@ export class CabinSpawner {
         this.scene.add(this.group);
 
         this.buildCabinMesh();
+        this.buildShieldHUD();
     }
 
     /**
@@ -120,6 +123,109 @@ export class CabinSpawner {
     }
 
     /**
+     * Constrói o Mostrador de Energia do Escudo Holográfico 3D (Billboard).
+     */
+    buildShieldHUD() {
+        this.shieldCanvas = document.createElement('canvas');
+        this.shieldCanvas.width = 512;
+        this.shieldCanvas.height = 128;
+        this.shieldCtx = this.shieldCanvas.getContext('2d');
+
+        this.shieldTexture = new THREE.CanvasTexture(this.shieldCanvas);
+        this.shieldTexture.minFilter = THREE.LinearFilter;
+
+        this.shieldMat = new THREE.SpriteMaterial({
+            map: this.shieldTexture,
+            transparent: true,
+            depthWrite: false
+        });
+
+        this.shieldSprite = new THREE.Sprite(this.shieldMat);
+        this.shieldSprite.position.set(0, this.height * 0.5 + 1.50, 0);
+        this.shieldSprite.scale.set(5.6, 1.4, 1.0);
+        this.group.add(this.shieldSprite);
+
+        this.updateShieldHUD();
+    }
+
+    /**
+     * Renderiza dinamicamente a barra de energia do escudo com porcentagem (100% a 0%).
+     */
+    updateShieldHUD() {
+        if (!this.shieldCtx) return;
+        const ctx = this.shieldCtx;
+        const w = 512, h = 128;
+        const percent = Math.max(0, Math.min(100, (this.hp / this.maxHp) * 100));
+        const pNorm = percent / 100.0;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. Painel Sci-Fi de Fundo com Cantos Chanfrados
+        ctx.fillStyle = 'rgba(10, 16, 26, 0.84)';
+        ctx.strokeStyle = percent < 30 ? '#ef4444' : (percent < 60 ? '#f59e0b' : '#00f0ff');
+        ctx.lineWidth = 4;
+
+        ctx.beginPath();
+        ctx.moveTo(28, 16);
+        ctx.lineTo(w - 28, 16);
+        ctx.lineTo(w - 14, 30);
+        ctx.lineTo(w - 14, h - 16);
+        ctx.lineTo(28, h - 16);
+        ctx.lineTo(14, h - 30);
+        ctx.lineTo(14, 30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 2. Título do Escudo e Valor em %
+        ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = percent < 30 ? '#ff4d4d' : '#38bdf8';
+        ctx.fillText('SHIELD ENERGY', 34, 46);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = percent < 30 ? '#ff0033' : (percent < 60 ? '#fbbf24' : '#00f0ff');
+        ctx.fillText(`${Math.round(percent)}%`, w - 34, 46);
+
+        // 3. Fundo do Slot da Barra
+        const barX = 34, barY = 60, barW = w - 68, barH = 34;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        // 4. Preenchimento da Barra de Energia com Gradiente Dinâmico
+        if (pNorm > 0) {
+            const fillW = barW * pNorm;
+            const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+            if (percent < 30) {
+                grad.addColorStop(0, '#990011');
+                grad.addColorStop(1, '#ff0033');
+            } else if (percent < 60) {
+                grad.addColorStop(0, '#d97706');
+                grad.addColorStop(1, '#f59e0b');
+            } else {
+                grad.addColorStop(0, '#0284c7');
+                grad.addColorStop(1, '#00f0ff');
+            }
+            ctx.fillStyle = grad;
+            ctx.fillRect(barX, barY, fillW, barH);
+        }
+
+        // 5. Divisores Segmentados Táticos
+        ctx.strokeStyle = 'rgba(10, 16, 26, 0.9)';
+        ctx.lineWidth = 3;
+        for (let i = 1; i < 10; i++) {
+            const x = barX + (barW * (i / 10));
+            ctx.beginPath();
+            ctx.moveTo(x, barY);
+            ctx.lineTo(x, barY + barH);
+            ctx.stroke();
+        }
+
+        this.shieldTexture.needsUpdate = true;
+    }
+
+    /**
      * Aplica dano à cabine.
      * @param {number} damage
      */
@@ -128,6 +234,14 @@ export class CabinSpawner {
 
         this.hp -= damage;
         this.hitFlashTimer = 0.08;
+
+        // Disparar efeito sonoro de Tilt / Glitch eletrônico com cadência confortável
+        if (this.glitchSoundCooldown <= 0) {
+            this.eventBus.emit('sound:glitch', this.position.clone());
+            this.glitchSoundCooldown = 0.42; // Cooldown de 420ms para ritmo de sobrecarga
+        }
+
+        this.updateShieldHUD();
 
         if (this.hp <= 0) {
             this.hp = 0;
@@ -141,6 +255,9 @@ export class CabinSpawner {
     destroy() {
         this.isDestroyed = true;
         this.beaconMat.color.setHex(0xffaa00);
+        this.updateShieldHUD();
+        // Efeito sonoro terminal de destruição da cabine (glitch_2.mp3)
+        this.eventBus.emit('sound:cabinDestroyed', this.position.clone());
     }
 
     /**
@@ -151,6 +268,11 @@ export class CabinSpawner {
      * @returns {{ shouldSpawn: boolean, spawnPos: THREE.Vector3, spawnDir: THREE.Vector3 }}
      */
     update(dt, activeEnemyCount = 0, maxAllowedEnemies = 6) {
+        // Reduzir cooldown do som de glitch
+        if (this.glitchSoundCooldown > 0) {
+            this.glitchSoundCooldown -= dt;
+        }
+
         if (this.isDestroyed) {
             this.destructionProgress += dt / this.destructionDuration;
             const p = THREE.MathUtils.clamp(this.destructionProgress, 0.0, 1.0);
@@ -158,6 +280,10 @@ export class CabinSpawner {
             const s = (1.0 - p);
             this.group.scale.set(1.0 + p * 0.3, s, 1.0 + p * 0.3);
             this.group.position.y = this.position.y + (this.height * 0.5) * (1.0 - p);
+
+            if (this.shieldSprite) {
+                this.shieldSprite.scale.set(5.6 * s, 1.4 * s, 1.0);
+            }
 
             if (this.destructionProgress >= 1.0) {
                 this.dispose();
@@ -218,5 +344,7 @@ export class CabinSpawner {
         }
         if (this.cabinMat) this.cabinMat.dispose();
         if (this.beaconMat) this.beaconMat.dispose();
+        if (this.shieldTexture) this.shieldTexture.dispose();
+        if (this.shieldMat) this.shieldMat.dispose();
     }
 }

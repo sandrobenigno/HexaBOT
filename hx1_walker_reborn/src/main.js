@@ -20,6 +20,7 @@ import { TerrainArena } from './world/TerrainArena.js';
 import { CollisionSystem } from './world/CollisionSystem.js';
 import { HexaBot } from './bot/HexaBot.js';
 import { EnemyManager } from './combat/EnemyManager.js';
+import { SoundManager } from './audio/SoundManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
 
@@ -46,7 +47,10 @@ function initApp() {
     // 4. Inicializar Gerenciador de Entradas (Teclado, Mouse, Zoom e Inatividade)
     const inputManager = new InputManager(window, globalEventBus);
 
-    // 5. Instanciar Gerenciador de Inimigos (Spawners, Joaninhas e Bombas)
+    // 5. Inicializar Gerenciador de Áudio Espacial e Efeitos Sonoros
+    const soundManager = new SoundManager(engine.camera, engine.scene, globalEventBus);
+
+    // 6. Instanciar Gerenciador de Inimigos (Spawners, Joaninhas e Bombas)
     const enemyManager = new EnemyManager(engine.scene, globalEventBus, terrainArena);
 
     // 6. Instanciar Controlador do Hexápode

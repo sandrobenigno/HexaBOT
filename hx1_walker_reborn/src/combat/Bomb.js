@@ -169,6 +169,9 @@ export class Bomb {
             this.enemyManager.triggerExplosionFlash(this.position);
         }
 
+        // Disparar efeito sonoro 3D espacial da explosão ("Booom!")
+        this.eventBus.emit('sound:bombExplosion', this.position.clone());
+
         // 1. Verificar dano no HexaBOT
         if (hxPosition) {
             const dx = this.position.x - hxPosition.x;

@@ -367,7 +367,8 @@ export class LaserCombat {
             shootingShiftZ: this.shootingShiftZ,
             hitObject: this.isActuallyFiring ? hitTargetMesh : null,
             contactPoint,
-            contactNormal
+            contactNormal,
+            snoutPos: this.tempSnout
         };
     }
 }
