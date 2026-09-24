@@ -42,7 +42,7 @@ export class Bomb {
         this.isFinished = false;
 
         this.explosionRadius = 4.5;
-        this.damageAmount = 50;
+        this.damageAmount = 100;
 
         this.explosionProgress = 0.0;
         this.explosionDuration = 0.40;
