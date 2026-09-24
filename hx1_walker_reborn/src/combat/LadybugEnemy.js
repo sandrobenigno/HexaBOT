@@ -57,6 +57,14 @@ const FALLBACK_MAT = new THREE.MeshStandardMaterial({
     roughness: 0.22
 });
 
+// Hitbox Esférico Proxy Compartilhado (Invisível, Leve e Ultra Preciso para Raycast)
+const SHARED_HITBOX_GEO = new THREE.SphereGeometry(1.40, 12, 10);
+const SHARED_HITBOX_MAT = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false
+});
+
 export class LadybugEnemy {
     /**
      * @param {THREE.Scene} scene Cena Three.js
@@ -78,8 +86,8 @@ export class LadybugEnemy {
         this.stateTimer = 0.8;
         this.spawnDirection = initialHeading ? initialHeading.clone().normalize() : new THREE.Vector3(0, 0, 1);
 
-        // Combate e Vida
-        this.maxHp = 80;
+        // Combate e Vida (Resistência aumentada para combate mais tático)
+        this.maxHp = 130;
         this.hp = this.maxHp;
         this.isDead = false;
         this.isFinished = false;
@@ -101,11 +109,19 @@ export class LadybugEnemy {
         this.dropMorphIndex = -1;
         this.materials = [];
         this.originalColors = [];
+        this.fallbackVisualMesh = null;
 
         // Construir hierarquia 3D na cena
         this.group = new THREE.Group();
         this.group.position.copy(this.position);
         this.scene.add(this.group);
+
+        // Hitbox esférico proxy calibrado (invisível, leve e com 100% de precisão para raycast)
+        this.hitboxMesh = new THREE.Mesh(SHARED_HITBOX_GEO, SHARED_HITBOX_MAT);
+        this.hitboxMesh.position.set(0, 0.70, 0);
+        this.hitboxMesh.userData = { entity: this, type: 'enemy' };
+        this.group.add(this.hitboxMesh);
+        this.targetMesh = this.hitboxMesh;
 
         this.buildMesh();
     }
@@ -117,10 +133,9 @@ export class LadybugEnemy {
         if (cachedLadybugGltf) {
             this.applyLoadedModel();
         } else {
-            // Fallback provisório enquanto o GLB finaliza o download
-            this.targetMesh = new THREE.Mesh(FALLBACK_SPHERE_GEO, FALLBACK_MAT);
-            this.targetMesh.userData = { entity: this, type: 'enemy' };
-            this.group.add(this.targetMesh);
+            // Visual provisório enquanto o GLB finaliza o download
+            this.fallbackVisualMesh = new THREE.Mesh(FALLBACK_SPHERE_GEO, FALLBACK_MAT);
+            this.group.add(this.fallbackVisualMesh);
 
             pendingInstances.push(this);
             preloadLadybugModel();
@@ -133,10 +148,10 @@ export class LadybugEnemy {
     applyLoadedModel() {
         if (!cachedLadybugGltf) return;
 
-        // Remover fallback se existente
-        if (this.targetMesh && this.targetMesh.parent === this.group) {
-            this.group.remove(this.targetMesh);
-            this.targetMesh = null;
+        // Remover fallback visual se existente
+        if (this.fallbackVisualMesh && this.fallbackVisualMesh.parent === this.group) {
+            this.group.remove(this.fallbackVisualMesh);
+            this.fallbackVisualMesh = null;
         }
 
         this.modelContainer = new THREE.Group();
@@ -159,10 +174,6 @@ export class LadybugEnemy {
                 child.castShadow = false; // Sombra dinâmica exclusiva da aranha
                 child.receiveShadow = true;
                 child.userData = { entity: this, type: 'enemy' };
-
-                if (!this.targetMesh) {
-                    this.targetMesh = child;
-                }
 
                 // Identificar ShapeKey / MorphTarget 'DROP'
                 if (child.morphTargetDictionary && child.morphTargetDictionary['DROP'] !== undefined) {

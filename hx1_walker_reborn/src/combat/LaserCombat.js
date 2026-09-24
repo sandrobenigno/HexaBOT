@@ -204,7 +204,12 @@ export class LaserCombat {
                     contactNormal = this.upVec;
                 }
 
-                if (obstacleHits[0].distance < totalLaserDist - 0.20) {
+                const hitType = obstacleHits[0].object?.userData?.type;
+                const isTargetEntity = (hitType === 'enemy' || hitType === 'cabin');
+
+                // Só bloqueia a linha de visada se o obstáculo interceptado for um elemento de cenário (pilar/bloco),
+                // e não uma entidade alvo (inimigo ou cabine) que o jogador está atacando.
+                if (!isTargetEntity && obstacleHits[0].distance < totalLaserDist - 0.20) {
                     isLineOfSightBlocked = true;
                 }
             }
