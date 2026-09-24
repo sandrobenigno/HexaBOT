@@ -5,7 +5,7 @@
  * ============================================================================
  * Centraliza:
  * - Leitura das teclas de locomoção (WASD, Setas)
- * - Atalhos táticos (<kbd>P</kbd> Painéis, <kbd>X</kbd> Raio-X, <kbd>H</kbd> Ajuda, <kbd>R</kbd> Reset, <kbd>K</kbd> Dano)
+ * - Atalhos táticos (<kbd>P</kbd> Painéis, <kbd>H</kbd> Ajuda, <kbd>R</kbd> Reset)
  * - Raycasting de mira na arena 3D (terreno, cubos pisáveis, colunas)
  * - Órbita da câmera tática via arrasto com o botão do meio (MMB Drag)
  * - Zoom suave via roda do mouse (Scroll Wheel de 50m a 100m)
@@ -102,14 +102,8 @@ export class InputManager {
         // Atalhos do Sistema
         const keyLower = e.key ? e.key.toLowerCase() : '';
         if (keyLower === 'p' || e.code === 'KeyP') this.eventBus.emit('ui:togglePanels');
-        if (keyLower === 'x' || e.code === 'KeyX') this.eventBus.emit('bot:toggleXRay');
         if (keyLower === 'h' || e.code === 'KeyH') this.eventBus.emit('ui:toggleHelp');
         if (keyLower === 'r' || e.code === 'KeyR') this.eventBus.emit('bot:resetPosition');
-        if (keyLower === 'k' || e.code === 'KeyK') this.eventBus.emit('bot:triggerDamage');
-        if (keyLower === 'l' || e.code === 'KeyL') {
-            console.log('[InputManager] Tecla L acionada -> Disparando bot:triggerDeath');
-            this.eventBus.emit('bot:triggerDeath');
-        }
     }
 
     /**
