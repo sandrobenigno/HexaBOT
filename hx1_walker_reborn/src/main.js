@@ -69,7 +69,7 @@ function initApp() {
         terrainArena.update(dt, elapsedTime);
 
         // Atualizar orquestrador de inimigos, cabines e bombas
-        enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position);
+        enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, hexaBot.isDead);
 
         // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
         hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);

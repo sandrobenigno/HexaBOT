@@ -269,9 +269,10 @@ export class LadybugEnemy {
      * @param {number} dt Delta time em segundos
      * @param {THREE.Vector3} hxPosition Posição central do HexaBOT
      * @param {import('../world/TerrainArena.js').TerrainArena} terrainArena
+     * @param {boolean} [hxIsDead=false] Se o HexaBOT está morto/paralisado
      * @returns {{ shouldDropBomb: boolean, dropPosition: THREE.Vector3 }}
      */
-    update(dt, hxPosition, terrainArena) {
+    update(dt, hxPosition, terrainArena, hxIsDead = false) {
         let shouldDropBomb = false;
         let dropPosition = null;
 
@@ -328,64 +329,100 @@ export class LadybugEnemy {
         const distToHx = Math.sqrt(dirX * dirX + dirZ * dirZ);
 
         // --- MÁQUINA DE ESTADOS DA IA ---
-        if (this.state === 'SPAWNING') {
+        if (hxIsDead) {
+            // RITUAL DE VITÓRIA: Formar um círculo e correr em volta da HX caída
+            this.state = 'CIRCLING';
             this.targetDropWeight = 0.0;
-            this.stateTimer -= dt;
-            this.position.x += this.spawnDirection.x * this.speed * dt;
-            this.position.z += this.spawnDirection.z * this.speed * dt;
-            this.heading = Math.atan2(this.spawnDirection.x, this.spawnDirection.z);
 
-            if (this.stateTimer <= 0) {
-                this.state = 'HUNTING';
+            if (this.orbitAngle === undefined) {
+                this.orbitAngle = Math.atan2(this.position.x - hxPosition.x, this.position.z - hxPosition.z);
             }
-        } else if (this.state === 'HUNTING') {
-            this.targetDropWeight = 0.0;
-            const targetHeading = Math.atan2(dirX, dirZ);
+            if (this.orbitRadius === undefined) {
+                this.orbitRadius = 7.5 + (Math.random() * 1.8);
+            }
+            if (this.orbitSpeed === undefined) {
+                this.orbitSpeed = 5.2 + Math.random() * 1.2;
+            }
 
-            let diff = targetHeading - this.heading;
+            // Progresso orbital contínuo (sentido horário)
+            this.orbitAngle += (this.orbitSpeed / this.orbitRadius) * dt;
+
+            const targetX = hxPosition.x + Math.sin(this.orbitAngle) * this.orbitRadius;
+            const targetZ = hxPosition.z + Math.cos(this.orbitAngle) * this.orbitRadius;
+
+            this.position.x = THREE.MathUtils.damp(this.position.x, targetX, 5.0, dt);
+            this.position.z = THREE.MathUtils.damp(this.position.z, targetZ, 5.0, dt);
+
+            // Orientação tangencial ao círculo da dança
+            const tangentHeading = this.orbitAngle + Math.PI / 2;
+            let diff = tangentHeading - this.heading;
             diff = Math.atan2(Math.sin(diff), Math.cos(diff));
             this.heading += diff * Math.min(1.0, dt * 8.0);
+        } else {
+            // Limpar parâmetros orbitais caso o robô seja revivido/resetado
+            this.orbitAngle = undefined;
+            this.orbitRadius = undefined;
+            this.orbitSpeed = undefined;
 
-            this.position.x += Math.sin(this.heading) * this.speed * dt;
-            this.position.z += Math.cos(this.heading) * this.speed * dt;
+            if (this.state === 'SPAWNING') {
+                this.targetDropWeight = 0.0;
+                this.stateTimer -= dt;
+                this.position.x += this.spawnDirection.x * this.speed * dt;
+                this.position.z += this.spawnDirection.z * this.speed * dt;
+                this.heading = Math.atan2(this.spawnDirection.x, this.spawnDirection.z);
 
-            // Se chegou perto / debaixo do chassi do HexaBOT
-            if (distToHx < 1.95 && this.hasBombReady) {
-                this.state = 'PLANTING';
-                this.stateTimer = 0.65; // Tempo para a animação do ShapeKey 'DROP' se elevar
-                this.targetDropWeight = 1.0; // Levanta as patas e eleva o corpo
-            }
-        } else if (this.state === 'PLANTING') {
-            this.targetDropWeight = 1.0;
-            this.stateTimer -= dt;
+                if (this.stateTimer <= 0) {
+                    this.state = 'HUNTING';
+                }
+            } else if (this.state === 'HUNTING' || this.state === 'CIRCLING') {
+                this.targetDropWeight = 0.0;
+                const targetHeading = Math.atan2(dirX, dirZ);
 
-            if (this.stateTimer <= 0) {
-                shouldDropBomb = true;
-                dropPosition = this.position.clone();
-                this.hasBombReady = false;
-                this.bombCooldown = 5.0;
+                let diff = targetHeading - this.heading;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                this.heading += diff * Math.min(1.0, dt * 8.0);
 
-                // Disparar fala 3D espacial da joaninha: "Kaboom! Hahahahaha!"
-                this.eventBus.emit('sound:kaboom', this.position.clone());
+                this.position.x += Math.sin(this.heading) * this.speed * dt;
+                this.position.z += Math.cos(this.heading) * this.speed * dt;
 
-                this.state = 'RETREATING';
-                this.stateTimer = 2.0;
-                this.targetDropWeight = 0.0; // Retorna patinhas ao solo
-            }
-        } else if (this.state === 'RETREATING') {
-            this.targetDropWeight = 0.0;
-            this.stateTimer -= dt;
-            const escapeHeading = Math.atan2(-dirX, -dirZ);
+                // Se chegou perto / debaixo do chassi do HexaBOT
+                if (distToHx < 1.95 && this.hasBombReady) {
+                    this.state = 'PLANTING';
+                    this.stateTimer = 0.65; // Tempo para a animação do ShapeKey 'DROP' se elevar
+                    this.targetDropWeight = 1.0; // Levanta as patas e eleva o corpo
+                }
+            } else if (this.state === 'PLANTING') {
+                this.targetDropWeight = 1.0;
+                this.stateTimer -= dt;
 
-            let diff = escapeHeading - this.heading;
-            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-            this.heading += diff * Math.min(1.0, dt * 6.0);
+                if (this.stateTimer <= 0) {
+                    shouldDropBomb = true;
+                    dropPosition = this.position.clone();
+                    this.hasBombReady = false;
+                    this.bombCooldown = 5.0;
 
-            this.position.x += Math.sin(this.heading) * (this.speed * 0.9) * dt;
-            this.position.z += Math.cos(this.heading) * (this.speed * 0.9) * dt;
+                    // Disparar fala 3D espacial da joaninha: "Kaboom! Hahahahaha!"
+                    this.eventBus.emit('sound:kaboom', this.position.clone());
 
-            if (this.stateTimer <= 0) {
-                this.state = 'HUNTING';
+                    this.state = 'RETREATING';
+                    this.stateTimer = 2.0;
+                    this.targetDropWeight = 0.0; // Retorna patinhas ao solo
+                }
+            } else if (this.state === 'RETREATING') {
+                this.targetDropWeight = 0.0;
+                this.stateTimer -= dt;
+                const escapeHeading = Math.atan2(-dirX, -dirZ);
+
+                let diff = escapeHeading - this.heading;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                this.heading += diff * Math.min(1.0, dt * 6.0);
+
+                this.position.x += Math.sin(this.heading) * (this.speed * 0.9) * dt;
+                this.position.z += Math.cos(this.heading) * (this.speed * 0.9) * dt;
+
+                if (this.stateTimer <= 0) {
+                    this.state = 'HUNTING';
+                }
             }
         }
 

@@ -45,9 +45,11 @@ export class SoundManager {
         this.loadSound('intro', './assets/mp3/intro.mp3');
         this.loadSound('step_1', './assets/mp3/step_1.mp3');
         this.loadSound('motor', './assets/mp3/motor.mp3');
+        this.loadSound('tribal', './assets/mp3/tribal.mp3');
 
         // Estado do Som Ambiente e Intro
         this.ambientSound = null;
+        this.tribalSound = null;
         this.hasStartedAmbient = false;
         this.hasPlayedInitialIntro = false;
         this.pendingIntroPlay = false;
@@ -177,7 +179,13 @@ export class SoundManager {
         });
 
         this.eventBus.on('bot:resetPosition', () => {
+            this.stopTribalMusic();
             this.playIntro(0.90);
+        });
+
+        // Música da Dança Ritual Tribal das Joaninhas na Morte da HX
+        this.eventBus.on('bot:died', () => {
+            this.startTribalMusic(0.85);
         });
 
         // Controle do som ambiente
@@ -593,6 +601,54 @@ export class SoundManager {
             gainParam.cancelScheduledValues(now);
             gainParam.setTargetAtTime(0.0001, now, 0.09);
             this.motorSound.setPlaybackRate(this.currentMotorPitch);
+        }
+    }
+
+    /**
+     * Inicia a música tema da dança ritual/tribal de comemoração das joaninhas (tribal.mp3).
+     * @param {number} [volume=0.85] Volume de reprodução
+     */
+    startTribalMusic(volume = 0.85) {
+        const buffer = this.audioBuffers.get('tribal');
+        if (!buffer) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        // Atenuar a trilha ambiente padrão enquanto o tribal toca
+        if (this.ambientSound && this.ambientSound.isPlaying) {
+            this.ambientSound.setVolume(0.06);
+        }
+
+        try {
+            if (!this.tribalSound) {
+                this.tribalSound = new THREE.Audio(this.listener);
+                this.tribalSound.setBuffer(buffer);
+                this.tribalSound.setLoop(true);
+                this.tribalSound.setVolume(volume);
+                this.tribalSound.play();
+                console.log('[SoundManager] Trilha tribal das joaninhas (tribal.mp3) iniciada.');
+            } else if (!this.tribalSound.isPlaying) {
+                this.tribalSound.setVolume(volume);
+                this.tribalSound.play();
+            }
+        } catch (e) {
+            console.warn('[SoundManager] Erro ao reproduzir trilha tribal:', e);
+        }
+    }
+
+    /**
+     * Interrompe a música tribal e restaura o volume da trilha ambiente padrão.
+     */
+    stopTribalMusic() {
+        if (this.tribalSound && this.tribalSound.isPlaying) {
+            this.tribalSound.stop();
+        }
+
+        // Restaurar volume normal do ambiente de fundo
+        if (this.ambientSound && this.ambientSound.isPlaying) {
+            this.ambientSound.setVolume(0.35);
         }
     }
 }

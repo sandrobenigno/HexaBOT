@@ -80,6 +80,15 @@ export class HexaBot {
         this.damageReactionTimer = 0.0;
         this.DAMAGE_DURATION = 0.90; // 900ms de reação cômica
 
+        // Coreografia e Estado de Morte da HX
+        this.isDead = false;
+        this.deathState = 'ALIVE'; // 'ALIVE', 'COLLAPSING', 'SPLAYING', 'PARALYZED'
+        this.deathTimer = 0.0;
+        this.deathStartBodyHeight = 1.70;
+        this.deathJolt1Done = false;
+        this.deathJolt2Done = false;
+        this.deathJolt3Done = false;
+
         // Estado Cinemático & Postura
         this.walkerState = {
             // Posição no mundo
@@ -131,6 +140,7 @@ export class HexaBot {
         this.prevDynPitch = 0;
         this.prevTerrainPitch = 0;
         this.prevTerrainRoll = 0;
+        this.smoothedAngularSpeed = 0;
 
         // Registrar eventos do Barramento
         this.setupEventListeners();
@@ -141,6 +151,7 @@ export class HexaBot {
      */
     setupEventListeners() {
         this.eventBus.on('bot:triggerDamage', (damage) => this.triggerDamageReaction(damage));
+        this.eventBus.on('bot:triggerDeath', () => this.triggerDeath());
         this.eventBus.on('bot:resetPosition', () => this.resetWalker());
         this.eventBus.on('bot:toggleXRay', () => this.toggleXRay());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {
@@ -466,13 +477,134 @@ export class HexaBot {
     }
 
     /**
+     * Inicia a sequência coreografada de colapso e morte da HX.
+     */
+    triggerDeath() {
+        if (this.isDead) return;
+        this.isDead = true;
+        this.deathState = 'COLLAPSING';
+        this.deathTimer = 0.0;
+        this.deathStartBodyHeight = this.walkerState.bodyHeight;
+        this.deathJolt1Done = false;
+        this.deathJolt2Done = false;
+        this.deathJolt3Done = false;
+        this.hp = 0;
+
+        // Parar locomoção e passadas
+        this.walkerState.isMoving = false;
+        this.walkerState.isTurningInPlace = false;
+        this.gait.reset();
+
+        // Calcular posições iniciais e alvos de abertura máxima radial (95% do alcance)
+        const hipWorld = new THREE.Vector3();
+        this.legs.forEach((leg) => {
+            leg.deathStartFootPos = leg.currentTarget.clone();
+
+            if (leg.baseNode) {
+                leg.baseNode.getWorldPosition(hipWorld);
+            } else {
+                hipWorld.set(this.walkerState.posX, this.walkerState.bodyHeight, this.walkerState.posZ);
+            }
+
+            // Direção horizontal do quadril até a pata
+            const dirX = leg.currentTarget.x - hipWorld.x;
+            const dirZ = leg.currentTarget.z - hipWorld.z;
+            const hDist = Math.hypot(dirX, dirZ) || 1.0;
+            const normX = dirX / hDist;
+            const normZ = dirZ / hDist;
+
+            // 95% do comprimento total calibrado da perna (L1 + L2 + L3)
+            const totalReach = (leg.L1 + leg.L2 + leg.L3) || 7.32;
+            const maxSplayDist = totalReach * 0.95;
+
+            leg.deathMaxSplayPos = new THREE.Vector3(
+                hipWorld.x + normX * maxSplayDist,
+                leg.currentTarget.y,
+                hipWorld.z + normZ * maxSplayDist
+            );
+        });
+
+        this.eventBus.emit('bot:died');
+    }
+
+    /**
+     * Atualiza os estágios da coreografia de morte da HX a cada quadro.
+     * @param {number} dt Delta time em segundos
+     * @param {Function} getTerrainHeightFn Função de altitude do solo
+     */
+    updateDeathSequence(dt, getTerrainHeightFn) {
+        this.deathTimer += dt;
+        const tCollapse = 0.40; // 400ms para despencar a altura do corpo (0.10, Fast-In)
+        const tSplay = 0.70;    // 700ms para abrir as patas até 95% do alcance (Easy-Out, Fast-In)
+
+        // 1. Descer a altura do corpo (0.10, Fast-In)
+        if (this.deathTimer < tCollapse) {
+            const p = THREE.MathUtils.clamp(this.deathTimer / tCollapse, 0.0, 1.0);
+            // Fast-In (Aceleração rápida para despencar no solo): p^3
+            const easeFastIn = p * p * p;
+            this.walkerState.bodyHeight = THREE.MathUtils.lerp(this.deathStartBodyHeight, 0.10, easeFastIn);
+        } else {
+            this.walkerState.bodyHeight = 0.10;
+
+            // 2. Acionar o primeiro tranco de dano cômico ao tocar o chão
+            if (!this.deathJolt1Done) {
+                this.deathJolt1Done = true;
+                this.triggerDamageReaction(0);
+                this.deathState = 'SPLAYING';
+            }
+        }
+
+        // 3. Aumentar a abertura da pata até 95% do comprimento total dela (Easy-Out / Fast-In)
+        if (this.deathTimer >= tCollapse) {
+            const splayElapsed = this.deathTimer - tCollapse;
+            const pSplay = THREE.MathUtils.clamp(splayElapsed / tSplay, 0.0, 1.0);
+
+            // Curva Easy-Out / Fast-In: 1 - (1 - p)^3
+            const easeSplay = 1.0 - Math.pow(1.0 - pSplay, 3.0);
+
+            this.legs.forEach((leg) => {
+                if (leg.deathStartFootPos && leg.deathMaxSplayPos) {
+                    const groundY = getTerrainHeightFn(leg.deathMaxSplayPos.x, leg.deathMaxSplayPos.z);
+                    leg.deathMaxSplayPos.y = groundY;
+
+                    leg.currentTarget.lerpVectors(leg.deathStartFootPos, leg.deathMaxSplayPos, easeSplay);
+                }
+            });
+
+            // 4. Acionar o dano cômico 2x durante e ao final da abertura total
+            // Jolt 2 (Meio do deslizamento das patas):
+            if (pSplay >= 0.50 && !this.deathJolt2Done) {
+                this.deathJolt2Done = true;
+                this.triggerDamageReaction(0);
+            }
+
+            // Jolt 3 (Ao travar na abertura de 95%):
+            if (pSplay >= 1.0 && !this.deathJolt3Done) {
+                this.deathJolt3Done = true;
+                this.triggerDamageReaction(0);
+                this.deathState = 'PARALYZED';
+            }
+        }
+    }
+
+    /**
      * Dispara a reação cômica de dano com tremor, abatimento de HP e morph targets.
      * @param {number} [amount=250] Dano sofrido
      */
     triggerDamageReaction(amount = 250) {
+        // Se a HX já estiver paralisada em estado de morte, não aciona mais tremor nem reseta animação
+        if (this.isDead && (this.deathState === 'PARALYZED' || this.deathTimer >= 1.10)) {
+            return;
+        }
+
         this.damageReactionTimer = this.DAMAGE_DURATION;
         const dmg = typeof amount === 'number' ? amount : 250;
         this.hp = Math.max(0, this.hp - dmg);
+
+        // Se a vida zerou por dano de combate e ainda não morreu, inicia a morte
+        if (this.hp <= 0 && !this.isDead) {
+            this.triggerDeath();
+        }
     }
 
     /**
@@ -495,6 +627,14 @@ export class HexaBot {
      * @param {Function} [getTerrainHeightFn=null]
      */
     resetWalker(getTerrainHeightFn = null) {
+        // Restaurar estado de vida
+        this.isDead = false;
+        this.deathState = 'ALIVE';
+        this.deathTimer = 0.0;
+        this.deathJolt1Done = false;
+        this.deathJolt2Done = false;
+        this.deathJolt3Done = false;
+
         this.walkerState.posX = 0;
         this.walkerState.posZ = 0;
         this.walkerState.baseHeading = 0;
@@ -509,6 +649,7 @@ export class HexaBot {
         this.walkerState.dynLift = 0;
         this.walkerState.dynShiftZ = 0;
         this.walkerState.dynPitch = 0;
+        this.walkerState.bodyHeight = this.activeBotManifest?.calibration?.defaultHeight || 1.70;
         this.damageReactionTimer = 0.0;
 
         // Restaurar integridade e energia
@@ -555,7 +696,10 @@ export class HexaBot {
         );
 
         // 2. Leitura de Movimentação WASD
-        const { moveFwd, moveSide, isMoving } = inputManager.getMovementVector();
+        const { moveFwd: rawMoveFwd, moveSide: rawMoveSide, isMoving: rawIsMoving } = inputManager.getMovementVector();
+        const moveFwd = this.isDead ? 0 : rawMoveFwd;
+        const moveSide = this.isDead ? 0 : rawMoveSide;
+        const isMoving = this.isDead ? false : rawIsMoving;
         this.walkerState.isMoving = isMoving;
 
         // 3. Mira em Dois Níveis (Dual-Tier Aiming) & Proximidade
@@ -567,7 +711,7 @@ export class HexaBot {
             : (this.walkerState.baseHeading || 0);
 
         // Velocidade integral de avanço (sem redução ao combater inimigos próximos)
-        const effectiveMoveSpeed = this.walkerState.moveSpeed;
+        const effectiveMoveSpeed = this.isDead ? 0 : this.walkerState.moveSpeed;
 
         let deltaAngle = targetAimAngle - (this.walkerState.baseHeading || 0);
         deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle));
@@ -575,7 +719,12 @@ export class HexaBot {
 
         const comfortLimit = this.walkerState.comfortAngle; // 25 graus
 
-        if (Math.abs(deltaAngle) <= comfortLimit) {
+        if (this.isDead) {
+            // Se estiver morto ou em colapso, reseta a torção do tronco suavemente
+            this.walkerState.torsoYaw = THREE.MathUtils.damp(this.walkerState.torsoYaw || 0, 0, 8.0, dt);
+            this.walkerState.isTurningInPlace = false;
+            this.walkerState.turnDir = 0;
+        } else if (Math.abs(deltaAngle) <= comfortLimit) {
             // Zona de conforto: Apenas torce o tronco, patas firmes no chão
             this.walkerState.torsoYaw = THREE.MathUtils.damp(this.walkerState.torsoYaw || 0, deltaAngle, 10.0, dt);
             this.walkerState.isTurningInPlace = false;
@@ -593,8 +742,8 @@ export class HexaBot {
         const proxLinear = THREE.MathUtils.clamp((proxThreshold - toAimDistH) / proxThreshold, 0.0, 1.0);
         const proxLog = Math.log(1.0 + 4.0 * proxLinear) / Math.log(5.0);
 
-        const targetLift = proxLog * 0.35;
-        const targetShiftZ = -proxLog * 0.40;
+        const targetLift = this.isDead ? 0 : proxLog * 0.35;
+        const targetShiftZ = this.isDead ? 0 : -proxLog * 0.40;
 
         const currentTerrainY = getTerrainHeightFn(this.walkerState.posX, this.walkerState.posZ);
         const bodyElevation = (this.walkerState.terrainElevationY !== undefined) ? this.walkerState.terrainElevationY : currentTerrainY;
@@ -603,7 +752,7 @@ export class HexaBot {
         const pitchDownAngle = Math.atan2(heightDiff, Math.max(toAimDistH, 2.5));
         const minPitch = -THREE.MathUtils.degToRad(35.0);
         const maxPitch = THREE.MathUtils.degToRad(35.0);
-        const targetPitch = THREE.MathUtils.clamp(pitchDownAngle, minPitch, maxPitch);
+        const targetPitch = this.isDead ? 0 : THREE.MathUtils.clamp(pitchDownAngle, minPitch, maxPitch);
 
         this.walkerState.dynLift = THREE.MathUtils.damp(this.walkerState.dynLift || 0, targetLift, 6.0, dt);
         this.walkerState.dynShiftZ = THREE.MathUtils.damp(this.walkerState.dynShiftZ || 0, targetShiftZ, 6.0, dt);
@@ -619,22 +768,27 @@ export class HexaBot {
             this.walkerState.travelHeading = this.walkerState.baseHeading;
         }
 
-        // 5. Atualização da Marcha Tripé
-        const gaitResult = this.gait.update(dt, {
-            wantsMove: this.walkerState.isMoving,
-            wantsTurn: this.walkerState.isTurningInPlace,
-            turnDir: this.walkerState.turnDir,
-            moveVec,
-            effectiveMoveSpeed,
-            walkerState: this.walkerState,
-            legs: this.legs,
-            collisionSystem,
-            terrainArena
-        });
+        // 5. Atualização da Marcha Tripé ou Sequência de Morte
+        let gaitResult = null;
+        if (!this.isDead) {
+            gaitResult = this.gait.update(dt, {
+                wantsMove: this.walkerState.isMoving,
+                wantsTurn: this.walkerState.isTurningInPlace,
+                turnDir: this.walkerState.turnDir,
+                moveVec,
+                effectiveMoveSpeed,
+                walkerState: this.walkerState,
+                legs: this.legs,
+                collisionSystem,
+                terrainArena
+            });
 
-        // Disparar som mecânico de impacto de passo (Touchdown)
-        if (gaitResult && gaitResult.didStepLand) {
-            this.eventBus.emit('sound:step', this.robotMasterGroup.position);
+            // Disparar som mecânico de impacto de passo (Touchdown)
+            if (gaitResult && gaitResult.didStepLand) {
+                this.eventBus.emit('sound:step', this.robotMasterGroup.position);
+            }
+        } else {
+            this.updateDeathSequence(dt, getTerrainHeightFn);
         }
 
         // 6. Equilíbrio e Inclinação de Relevo (Terrain Balancing)
@@ -677,14 +831,21 @@ export class HexaBot {
         let damageWobbleYaw = 0.0;
         let damageIntensity = 0.0;
 
+        if (this.isDead && (this.deathState === 'PARALYZED' || this.deathTimer >= 1.10)) {
+            this.damageReactionTimer = 0.0;
+        }
+
         if (this.damageReactionTimer > 0) {
             this.damageReactionTimer = Math.max(0.0, this.damageReactionTimer - dt);
             const tImpact = this.DAMAGE_DURATION - this.damageReactionTimer;
             const decay = Math.exp(-5.2 * tImpact);
 
+            // Durante o colapso e morte, não puxa o chassi para cima em Y
+            const joltYScale = this.isDead ? 0.0 : 1.0;
+
             damageJoltZ = -0.45 * Math.cos(tImpact * 20.0) * decay;
             damageJoltX = 0.26 * Math.sin(tImpact * 26.0) * decay;
-            damageJoltY = -0.18 * Math.sin(tImpact * 22.0) * decay;
+            damageJoltY = -0.18 * Math.sin(tImpact * 22.0) * decay * joltYScale;
 
             damageWobblePitch = -0.25 * Math.cos(tImpact * 18.0) * decay;
             damageWobbleRoll = 0.16 * Math.sin(tImpact * 24.0) * decay;
@@ -710,7 +871,8 @@ export class HexaBot {
         );
 
         // 8. Auto-Sway / Idle Breathing
-        const isBotIdle = !this.walkerState.isMoving &&
+        const isBotIdle = !this.isDead &&
+                          !this.walkerState.isMoving &&
                           !this.walkerState.isTurningInPlace &&
                           !this.gait.isStepActive &&
                           !inputManager.isAimFiring &&
@@ -724,8 +886,8 @@ export class HexaBot {
             bodyHeight: this.walkerState.bodyHeight
         });
 
-        // 9. Atualizar Sistema de Combate Laser (Bloqueia até 100% caso a energia zere)
-        const canFireLaser = !this.isEnergyDepleted && (this.energy > 0.0);
+        // 9. Atualizar Sistema de Combate Laser (Bloqueia até 100% caso a energia zere ou se estiver morto)
+        const canFireLaser = !this.isDead && !this.isEnergyDepleted && (this.energy > 0.0);
         const combatRes = this.combat.update(dt, elapsedTime, {
             isAimFiring: inputManager.isAimFiring && canFireLaser,
             bodyGroup: this.bodyGroup,
@@ -768,7 +930,7 @@ export class HexaBot {
         }
 
         // 10. Atualizar Morph Targets
-        this.shapeKeys.update(dt, elapsedTime, combatRes.isActuallyFiring, damageIntensity);
+        this.shapeKeys.update(dt, elapsedTime, combatRes.isActuallyFiring, damageIntensity, this.isDead);
 
         // 11. Posicionamento do Chassi no Mundo
         this.robotMasterGroup.position.set(
@@ -832,10 +994,10 @@ export class HexaBot {
             this.prevTerrainRoll = this.walkerState.terrainRoll;
 
             this.eventBus.emit('bot:motorUpdate', {
-                angularSpeed: this.smoothedAngularSpeed,
-                isMoving: this.walkerState.isMoving,
-                isTurningInPlace: this.walkerState.isTurningInPlace,
-                moveSpeed: effectiveMoveSpeed,
+                angularSpeed: this.isDead ? 0 : this.smoothedAngularSpeed,
+                isMoving: !this.isDead && this.walkerState.isMoving,
+                isTurningInPlace: !this.isDead && this.walkerState.isTurningInPlace,
+                moveSpeed: this.isDead ? 0 : effectiveMoveSpeed,
                 dt
             });
         }

@@ -71,10 +71,11 @@ export class ShapeKeyAnimator {
      * @param {number} elapsedTime Tempo total de execução
      * @param {boolean} isActuallyFiring Se o laser está efetivamente disparando
      * @param {number} damageIntensity Intensidade atual do envelope de dano (0.0 a 1.0)
+     * @param {boolean} [isDead=false] Se o robô está em estado de morte/paralisia
      */
-    update(dt, elapsedTime, isActuallyFiring, damageIntensity) {
+    update(dt, elapsedTime, isActuallyFiring, damageIntensity, isDead = false) {
         // 1. Componente de Tiro (Dilatação da Íris com Easy-Out de 500ms)
-        if (isActuallyFiring) {
+        if (isActuallyFiring && !isDead) {
             this.irisShootingWeight = THREE.MathUtils.damp(this.irisShootingWeight, 1.00, 32.0, dt);
             this.wasLaserFiring = true;
         } else {
@@ -83,7 +84,7 @@ export class ShapeKeyAnimator {
                 this.wasLaserFiring = false;
             }
             const timeSinceRelease = elapsedTime - this.irisReleaseTime;
-            if (timeSinceRelease < 0.50) {
+            if (timeSinceRelease < 0.50 && !isDead) {
                 const t = THREE.MathUtils.clamp(timeSinceRelease / 0.50, 0.0, 1.0);
                 this.irisShootingWeight = 1.00 * (1.0 - t) * (1.0 - t);
             } else {
@@ -94,11 +95,19 @@ export class ShapeKeyAnimator {
         // No tiro, os olhos saltam apenas 10%
         const shootingOlhosWeight = this.irisShootingWeight * 0.10;
 
-        // 2. Combinação e Ponderação Final (Tiro + Dano)
-        const finalIrisD = Math.max(this.irisShootingWeight, 0.30 * damageIntensity);
-        const finalIrisE = Math.max(this.irisShootingWeight, 1.00 * damageIntensity);
-        const finalCarapaca = 0.95 * damageIntensity;
-        const finalOlhos = Math.max(shootingOlhosWeight, 1.00 * damageIntensity);
+        // 2. Combinação e Ponderação Final (Tiro + Dano + Morte Paralisada)
+        let finalIrisD = Math.max(this.irisShootingWeight, 0.30 * damageIntensity);
+        let finalIrisE = Math.max(this.irisShootingWeight, 1.00 * damageIntensity);
+        let finalCarapaca = 0.95 * damageIntensity;
+        let finalOlhos = Math.max(shootingOlhosWeight, 1.00 * damageIntensity);
+
+        // Quando a HX morre: carapaça travada aberta, olhos saltados pra fora, olho D meio aberto (50%) e olho E fechado (0%)
+        if (isDead) {
+            finalCarapaca = Math.max(0.95, finalCarapaca);
+            finalOlhos = Math.max(1.00, finalOlhos);
+            finalIrisD = Math.max(0.50, 0.50 + 0.50 * damageIntensity); // Meio aberto (0.50) com tremor cômico nos jolts
+            finalIrisE = 0.00; // Totalmente fechado (0.00)
+        }
 
         // 3. Aplicação nas malhas
         for (let i = 0; i < this.morphTargetsMap.irisD.length; i++) {

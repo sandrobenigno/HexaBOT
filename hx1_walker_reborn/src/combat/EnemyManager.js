@@ -152,8 +152,9 @@ export class EnemyManager {
      * @param {number} dt Delta time
      * @param {number} elapsedTime Tempo decorrido
      * @param {THREE.Vector3} hxPosition Posição central do HexaBOT
+     * @param {boolean} [hxIsDead=false] Se o HexaBOT está morto/paralisado
      */
-    update(dt, elapsedTime, hxPosition) {
+    update(dt, elapsedTime, hxPosition, hxIsDead = false) {
         let targetsNeedUpdate = false;
 
         // Decaimento do flash da luz de explosão
@@ -165,26 +166,28 @@ export class EnemyManager {
             this.sharedExplosionLight.intensity = 0.0;
         }
 
-        // 1. Atualizar Cabines Spawners
-        for (let i = this.spawners.length - 1; i >= 0; i--) {
-            const spawner = this.spawners[i];
-            const spawnInfo = spawner.update(dt, this.enemies.length, this.maxGlobalEnemies);
+        // 1. Atualizar Cabines Spawners (Pausa geração de novos inimigos se a HX estiver morta)
+        if (!hxIsDead) {
+            for (let i = this.spawners.length - 1; i >= 0; i--) {
+                const spawner = this.spawners[i];
+                const spawnInfo = spawner.update(dt, this.enemies.length, this.maxGlobalEnemies);
 
-            if (spawnInfo.shouldSpawn && spawnInfo.spawnPos) {
-                this.spawnEnemy(spawnInfo.spawnPos, spawnInfo.spawnDir);
-                targetsNeedUpdate = true;
-            }
+                if (spawnInfo.shouldSpawn && spawnInfo.spawnPos) {
+                    this.spawnEnemy(spawnInfo.spawnPos, spawnInfo.spawnDir);
+                    targetsNeedUpdate = true;
+                }
 
-            if (spawner.isFinished) {
-                this.spawners.splice(i, 1);
-                targetsNeedUpdate = true;
+                if (spawner.isFinished) {
+                    this.spawners.splice(i, 1);
+                    targetsNeedUpdate = true;
+                }
             }
         }
 
-        // 2. Atualizar Inimigos Joaninhas
+        // 2. Atualizar Inimigos Joaninhas (comporta ritual de dança circular se a HX estiver morta)
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
-            const enemyRes = enemy.update(dt, hxPosition, this.terrainArena);
+            const enemyRes = enemy.update(dt, hxPosition, this.terrainArena, hxIsDead);
 
             if (enemyRes.shouldDropBomb && enemyRes.dropPosition) {
                 this.dropBomb(enemyRes.dropPosition);

@@ -100,11 +100,16 @@ export class InputManager {
         }
 
         // Atalhos do Sistema
-        if (e.key === 'p' || e.key === 'P') this.eventBus.emit('ui:togglePanels');
-        if (e.key === 'x' || e.key === 'X') this.eventBus.emit('bot:toggleXRay');
-        if (e.key === 'h' || e.key === 'H') this.eventBus.emit('ui:toggleHelp');
-        if (e.key === 'r' || e.key === 'R') this.eventBus.emit('bot:resetPosition');
-        if (e.key === 'k' || e.key === 'K') this.eventBus.emit('bot:triggerDamage');
+        const keyLower = e.key ? e.key.toLowerCase() : '';
+        if (keyLower === 'p' || e.code === 'KeyP') this.eventBus.emit('ui:togglePanels');
+        if (keyLower === 'x' || e.code === 'KeyX') this.eventBus.emit('bot:toggleXRay');
+        if (keyLower === 'h' || e.code === 'KeyH') this.eventBus.emit('ui:toggleHelp');
+        if (keyLower === 'r' || e.code === 'KeyR') this.eventBus.emit('bot:resetPosition');
+        if (keyLower === 'k' || e.code === 'KeyK') this.eventBus.emit('bot:triggerDamage');
+        if (keyLower === 'l' || e.code === 'KeyL') {
+            console.log('[InputManager] Tecla L acionada -> Disparando bot:triggerDeath');
+            this.eventBus.emit('bot:triggerDeath');
+        }
     }
 
     /**
