@@ -41,6 +41,14 @@ export class SoundManager {
         this.loadSound('booom_1', './assets/mp3/booom_1.mp3');
         this.loadSound('glitch_1', './assets/mp3/glitch_1.mp3');
         this.loadSound('glitch_2', './assets/mp3/glitch_2.mp3');
+        this.loadSound('ambient_loop', './assets/mp3/ambient_loop.mp3');
+        this.loadSound('intro', './assets/mp3/intro.mp3');
+
+        // Estado do Som Ambiente e Intro
+        this.ambientSound = null;
+        this.hasStartedAmbient = false;
+        this.hasPlayedInitialIntro = false;
+        this.pendingIntroPlay = false;
 
         // Estado do Laser Contínuo (Envelope ADSR)
         this.laserSound = null;
@@ -56,15 +64,7 @@ export class SoundManager {
      */
     setupAutoplayUnlock() {
         const unlock = () => {
-            if (this.listener && this.listener.context) {
-                if (this.listener.context.state === 'suspended') {
-                    this.listener.context.resume().then(() => {
-                        this.isAudioUnlocked = true;
-                    });
-                } else {
-                    this.isAudioUnlocked = true;
-                }
-            }
+            this.unlockAudio();
             window.removeEventListener('click', unlock);
             window.removeEventListener('keydown', unlock);
             window.removeEventListener('touchstart', unlock);
@@ -73,6 +73,45 @@ export class SoundManager {
         window.addEventListener('click', unlock, { once: true });
         window.addEventListener('keydown', unlock, { once: true });
         window.addEventListener('touchstart', unlock, { once: true });
+    }
+
+    /**
+     * Desbloqueia ativamente o Web Audio Context.
+     */
+    unlockAudio() {
+        if (this.listener && this.listener.context) {
+            if (this.listener.context.state === 'suspended') {
+                this.listener.context.resume().then(() => {
+                    this.isAudioUnlocked = true;
+                    this.onAudioUnlocked();
+                }).catch((e) => {
+                    console.warn('[SoundManager] Erro ao retomar AudioContext:', e);
+                });
+            } else {
+                this.isAudioUnlocked = true;
+                this.onAudioUnlocked();
+            }
+        } else {
+            this.isAudioUnlocked = true;
+            this.onAudioUnlocked();
+        }
+    }
+
+    /**
+     * Ações disparadas no primeiro gesto do usuário ou no botão de Iniciar.
+     */
+    onAudioUnlocked() {
+        this.isAudioUnlocked = true;
+
+        // 1. Iniciar áudio ambiente sutil de fundo
+        if (!this.hasStartedAmbient) {
+            this.startAmbientLoop();
+        }
+
+        // 2. Tocar som de intro na primeira interação / start
+        if (!this.hasPlayedInitialIntro) {
+            this.playIntro();
+        }
     }
 
     /**
@@ -86,6 +125,16 @@ export class SoundManager {
             (buffer) => {
                 this.audioBuffers.set(name, buffer);
                 console.log(`[SoundManager] Áudio carregado: '${name}'`);
+
+                // Se o som ambiente carregou após o desbloqueio do áudio, inicia imediatamente
+                if (name === 'ambient_loop' && this.isAudioUnlocked && !this.hasStartedAmbient) {
+                    this.startAmbientLoop();
+                }
+
+                // Se a intro carregou após desbloqueio ou estava pendente, dispara
+                if (name === 'intro' && (this.isAudioUnlocked || this.pendingIntroPlay) && !this.hasPlayedInitialIntro) {
+                    this.playIntro();
+                }
             },
             undefined,
             (err) => {
@@ -98,6 +147,26 @@ export class SoundManager {
      * Registra ouvintes do barramento de eventos.
      */
     setupEventListeners() {
+        // Inicialização do Jogo / Start Mission
+        this.eventBus.on('game:start', () => {
+            this.unlockAudio();
+            this.playIntro(0.90);
+        });
+
+        // Som de Intro e Restauração da HX (Boot / Reset / Nova Fase)
+        this.eventBus.on('sound:intro', (volume) => {
+            this.playIntro(volume || 0.90);
+        });
+
+        this.eventBus.on('bot:resetPosition', () => {
+            this.playIntro(0.90);
+        });
+
+        // Controle do som ambiente
+        this.eventBus.on('sound:ambientStart', (volume) => {
+            this.startAmbientLoop(volume);
+        });
+
         // Fala da joaninha ao plantar bomba
         this.eventBus.on('sound:kaboom', (position) => {
             this.playKaboom(position);
@@ -336,5 +405,56 @@ export class SoundManager {
             pitchMin: 0.94,
             pitchMax: 1.06
         });
+    }
+
+    /**
+     * Inicia o áudio ambiente contínuo de fundo (loop global sutil).
+     * @param {number} [volume=0.35] Volume sutil de fundo
+     */
+    startAmbientLoop(volume = 0.35) {
+        const buffer = this.audioBuffers.get('ambient_loop');
+        if (!buffer) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        if (!this.ambientSound) {
+            this.ambientSound = new THREE.Audio(this.listener);
+            this.ambientSound.setBuffer(buffer);
+            this.ambientSound.setLoop(true);
+            this.ambientSound.setVolume(volume);
+            this.ambientSound.play();
+            this.hasStartedAmbient = true;
+        } else if (!this.ambientSound.isPlaying) {
+            this.ambientSound.play();
+        }
+    }
+
+    /**
+     * Toca o áudio de inicialização / restauração da HX / início de partida ("intro").
+     * @param {number} [volume=0.90] Volume de reprodução
+     */
+    playIntro(volume = 0.90) {
+        const buffer = this.audioBuffers.get('intro');
+        if (!buffer) {
+            this.pendingIntroPlay = true;
+            return;
+        }
+
+        if (this.listener && this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        try {
+            const sound = new THREE.Audio(this.listener);
+            sound.setBuffer(buffer);
+            sound.setVolume(volume);
+            sound.play();
+            this.hasPlayedInitialIntro = true;
+            this.pendingIntroPlay = false;
+        } catch (e) {
+            console.warn('[SoundManager] Erro ao reproduzir intro:', e);
+        }
     }
 }

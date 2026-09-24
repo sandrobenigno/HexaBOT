@@ -30,6 +30,8 @@ export class HUDController {
         this.btnCloseModalElem = document.getElementById('btn-close-modal');
         this.btnXrayElem = document.getElementById('btn-xray');
         this.btnToggleHudElem = document.getElementById('btn-toggle-hud');
+        this.startOverlayElem = document.getElementById('start-overlay');
+        this.btnStartGameElem = document.getElementById('btn-start-game');
 
         // Elementos da Barra Gamer de Status (HP e EN)
         this.hpFillBar = document.getElementById('hp-fill-bar');
@@ -156,6 +158,38 @@ export class HUDController {
             this.btnCloseModalElem.addEventListener('click', () => {
                 this.helpModalElem.classList.remove('active');
             });
+        }
+
+        // Overlay de Início de Missão / Start Game
+        if (this.btnStartGameElem || this.startOverlayElem) {
+            const startGame = () => {
+                if (this.startOverlayElem && !this.startOverlayElem.classList.contains('hidden')) {
+                    this.startOverlayElem.classList.add('hidden');
+                    this.eventBus.emit('game:start');
+                }
+            };
+
+            if (this.btnStartGameElem) {
+                this.btnStartGameElem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    startGame();
+                });
+            }
+
+            if (this.startOverlayElem) {
+                this.startOverlayElem.addEventListener('click', startGame);
+            }
+
+            // Teclado também inicia a partida ao pressionar qualquer tecla de ação
+            const onKeyStart = (e) => {
+                if (this.startOverlayElem && !this.startOverlayElem.classList.contains('hidden')) {
+                    // Ignora teclas de sistema/F-keys
+                    if (!e.key.startsWith('F')) {
+                        startGame();
+                    }
+                }
+            };
+            window.addEventListener('keydown', onKeyStart);
         }
     }
 
