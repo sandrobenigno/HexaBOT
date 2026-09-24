@@ -81,7 +81,7 @@ export class LadybugEnemy {
         });
 
         this.targetMesh = new THREE.Mesh(SHARED_SPHERE_GEO, this.bodyMat);
-        this.targetMesh.castShadow = true;
+        this.targetMesh.castShadow = false; // Sombra exclusiva da HX
         this.targetMesh.receiveShadow = true;
         this.targetMesh.userData = { entity: this, type: 'enemy' };
         this.group.add(this.targetMesh);

@@ -339,7 +339,7 @@ export class TerrainArena {
     }
 
     /**
-     * Constrói os monólitos e cubos escaláveis com bordas neon ciano.
+     * Constrói os monólitos e cubos escaláveis com bordas neon, sancas e rodapés iluminados.
      */
     buildSteppableBoxes() {
         const boxMat = new THREE.MeshStandardMaterial({
@@ -355,25 +355,54 @@ export class TerrainArena {
             metalness: 0.2
         });
 
-        this.steppableBoxes.forEach((b) => {
+        // Materiais Emissivos para Sancas e Rodapés (Quake III / Sci-Fi Cove Lights)
+        this.coveCyanMat = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending
+        });
+
+        this.coveAmberMat = new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.75,
+            blending: THREE.AdditiveBlending
+        });
+
+        this.blinkingPanelMatA = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.90,
+            blending: THREE.AdditiveBlending
+        });
+
+        this.blinkingPanelMatB = new THREE.MeshBasicMaterial({
+            color: 0xff8800,
+            transparent: true,
+            opacity: 0.80,
+            blending: THREE.AdditiveBlending
+        });
+
+        this.steppableBoxes.forEach((b, idx) => {
             const boxGroup = new THREE.Group();
             boxGroup.position.set(b.x, b.baseY + b.height * 0.5, b.z);
             if (b.rotY) boxGroup.rotation.y = b.rotY;
 
-            // Bloco principal
+            // 1. Bloco principal
             const bGeo = new THREE.BoxGeometry(b.sizeX, b.height, b.sizeZ);
             const bMesh = new THREE.Mesh(bGeo, boxMat);
-            bMesh.castShadow = true;
+            bMesh.castShadow = false; // Sombra exclusiva da HX
             bMesh.receiveShadow = true;
             boxGroup.add(bMesh);
             this.aimTargetableMeshes.push(bMesh);
 
-            // Borda Holográfica Neon
+            // 2. Borda Holográfica Neon
             const edges = new THREE.EdgesGeometry(bGeo);
             const line = new THREE.LineSegments(edges, edgeMat);
             boxGroup.add(line);
 
-            // Pad tático no topo
+            // 3. Pad tático no topo
             const padGeo = new THREE.PlaneGeometry(b.sizeX * 0.85, b.sizeZ * 0.85);
             padGeo.rotateX(-Math.PI / 2);
             const padMesh = new THREE.Mesh(padGeo, padMat);
@@ -382,13 +411,53 @@ export class TerrainArena {
             boxGroup.add(padMesh);
             this.aimTargetableMeshes.push(padMesh);
 
+            // 4. Luz de Rodapé / Sanca de Base (Contorno luminoso rente ao chão)
+            const baseCoveGeo = new THREE.BoxGeometry(b.sizeX + 0.08, 0.06, b.sizeZ + 0.08);
+            const coveMat = (idx % 2 === 0) ? this.coveCyanMat : this.coveAmberMat;
+            const baseCoveMesh = new THREE.Mesh(baseCoveGeo, coveMat);
+            baseCoveMesh.position.y = -b.height * 0.5 + 0.03;
+            boxGroup.add(baseCoveMesh);
+
+            // 5. Sanca Oculta Sub-borda Superior
+            const topCoveGeo = new THREE.BoxGeometry(b.sizeX + 0.06, 0.04, b.sizeZ + 0.06);
+            const topCoveMesh = new THREE.Mesh(topCoveGeo, (idx % 2 === 0) ? this.coveAmberMat : this.coveCyanMat);
+            topCoveMesh.position.y = b.height * 0.5 - 0.04;
+            boxGroup.add(topCoveMesh);
+
+            // 6. Luzes de Canto / Balizadores de Piso
+            const cornerSize = 0.22;
+            const cornerGeo = new THREE.BoxGeometry(cornerSize, 0.08, cornerSize);
+            const hx = b.sizeX * 0.44;
+            const hz = b.sizeZ * 0.44;
+            const corners = [
+                { cx: -hx, cz: -hz }, { cx: hx, cz: -hz },
+                { cx: -hx, cz: hz }, { cx: hx, cz: hz }
+            ];
+            corners.forEach((c) => {
+                const cornerMesh = new THREE.Mesh(cornerGeo, this.coveCyanMat);
+                cornerMesh.position.set(c.cx, b.height * 0.5 + 0.04, c.cz);
+                boxGroup.add(cornerMesh);
+            });
+
+            // 7. Luz de apoio suave nas plataformas centrais (sem sombra, zero travamento)
+            if (idx < 5) {
+                const coveLight = new THREE.PointLight(
+                    (idx % 2 === 0) ? 0x00d2ff : 0xff9900,
+                    1.6,
+                    16.0
+                );
+                coveLight.position.set(0, 0.3, 0);
+                coveLight.castShadow = false;
+                boxGroup.add(coveLight);
+            }
+
             b.groupMesh = boxGroup;
             this.arenaGroup.add(boxGroup);
         });
     }
 
     /**
-     * Constrói os pilares decorativos e cilindros de colisão rígida.
+     * Constrói os pilares decorativos com anéis de energia e painéis piscantes de Quake III.
      */
     buildPillars() {
         const colGeo = new THREE.CylinderGeometry(2.5, 3.2, 10.0, 16);
@@ -398,16 +467,71 @@ export class TerrainArena {
             metalness: 0.15
         });
 
-        this.pillarLayout.forEach((p) => {
+        // Geometrias compartilhadas dos anéis de sanca e painéis piscantes
+        const ringGeoLower = new THREE.CylinderGeometry(3.08, 3.12, 0.12, 16, 1, true);
+        const ringGeoMid = new THREE.CylinderGeometry(2.82, 2.85, 0.14, 16, 1, true);
+        const ringGeoUpper = new THREE.CylinderGeometry(2.55, 2.58, 0.12, 16, 1, true);
+
+        const verticalPanelGeo = new THREE.BoxGeometry(0.18, 4.2, 0.04);
+        const baseSkirtGeo = new THREE.TorusGeometry(3.3, 0.08, 8, 24);
+        baseSkirtGeo.rotateX(Math.PI / 2);
+
+        this.pillarLayout.forEach((p, idx) => {
             const oy = this.getBaseGroundMeshHeight(p.x, p.z);
+            const pGroup = new THREE.Group();
+            pGroup.position.set(p.x, oy + 5.0, p.z);
+
+            // 1. Corpo principal do pilar
             const col = new THREE.Mesh(colGeo, colMat);
-            col.position.set(p.x, oy + 5.0, p.z);
-            col.castShadow = true;
+            col.castShadow = false; // Sombra exclusiva da HX
             col.receiveShadow = true;
-            this.decorativePillars.push(col);
-            this.pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
+            pGroup.add(col);
             this.aimTargetableMeshes.push(col);
-            this.arenaGroup.add(col);
+
+            // 2. Anel de Rodapé no Solo (Sanca de Piso Circular)
+            const baseSkirt = new THREE.Mesh(baseSkirtGeo, this.coveCyanMat);
+            baseSkirt.position.y = -4.92;
+            pGroup.add(baseSkirt);
+
+            // 3. Anéis de Energia Horizontais Emissivos
+            const ring1 = new THREE.Mesh(ringGeoLower, this.coveCyanMat);
+            ring1.position.y = -3.2;
+            pGroup.add(ring1);
+
+            const ring2 = new THREE.Mesh(ringGeoMid, this.coveAmberMat);
+            ring2.position.y = 0.4;
+            pGroup.add(ring2);
+
+            const ring3 = new THREE.Mesh(ringGeoUpper, this.coveCyanMat);
+            ring3.position.y = 3.6;
+            pGroup.add(ring3);
+
+            // 4. Painéis Verticais Piscantes de Status (Estilo Consoles / Luzes Quake III)
+            const panelRadius = 2.84;
+            for (let a = 0; a < 4; a++) {
+                const angle = (a * Math.PI * 0.5) + 0.35;
+                const panelMat = (a % 2 === 0) ? this.blinkingPanelMatA : this.blinkingPanelMatB;
+                const panelMesh = new THREE.Mesh(verticalPanelGeo, panelMat);
+                panelMesh.position.set(Math.cos(angle) * panelRadius, 0.2, Math.sin(angle) * panelRadius);
+                panelMesh.rotation.y = -angle + Math.PI / 2;
+                pGroup.add(panelMesh);
+            }
+
+            // 5. Luz suave em pilares selecionados
+            if (idx % 3 === 0) {
+                const pLight = new THREE.PointLight(
+                    (idx % 2 === 0) ? 0x00f0ff : 0xff9900,
+                    1.4,
+                    18.0
+                );
+                pLight.position.set(0, -2.5, 0);
+                pLight.castShadow = false;
+                pGroup.add(pLight);
+            }
+
+            this.decorativePillars.push(pGroup);
+            this.pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
+            this.arenaGroup.add(pGroup);
         });
     }
 
@@ -418,6 +542,33 @@ export class TerrainArena {
         this.gridHelper = new THREE.GridHelper(280, 70, 0x0a101d, 0x04070d);
         this.gridHelper.position.y = 0.04;
         this.arenaGroup.add(this.gridHelper);
+    }
+
+    /**
+     * Atualiza as animações de pulso das sancas, rodapés e painéis piscantes de Quake 3.
+     * @param {number} dt Delta time em segundos
+     * @param {number} elapsedTime Tempo total decorrido em segundos
+     */
+    update(dt, elapsedTime) {
+        if (!this.coveCyanMat) return;
+
+        // 1. Pulso suave das Sancas Ciano (Onda contínua)
+        const pulseCyan = 0.70 + Math.sin(elapsedTime * 2.8) * 0.30;
+        this.coveCyanMat.opacity = pulseCyan;
+
+        // 2. Pulso das Sancas Âmbar (Frequência alternada)
+        const pulseAmber = 0.65 + Math.cos(elapsedTime * 3.4) * 0.25;
+        this.coveAmberMat.opacity = pulseAmber;
+
+        // 3. Painéis Piscantes Quake III — Tipo A (Strobe tático)
+        const strobe = Math.sin(elapsedTime * 7.5);
+        const blinkA = (strobe > 0.15) ? 0.95 : (strobe > -0.4 ? 0.35 : 0.08);
+        this.blinkingPanelMatA.opacity = blinkA;
+
+        // 4. Painéis Piscantes Quake III — Tipo B (Flicker digital e pulso rápido)
+        const flicker = (Math.sin(elapsedTime * 12.0) * 0.5 + Math.cos(elapsedTime * 19.0) * 0.5);
+        const blinkB = THREE.MathUtils.clamp(0.50 + flicker * 0.45, 0.12, 0.95);
+        this.blinkingPanelMatB.opacity = blinkB;
     }
 
     /**
@@ -447,9 +598,9 @@ export class TerrainArena {
         this.terrainGeo.computeVertexNormals();
 
         // Recalcular colunas
-        this.decorativePillars.forEach((col, idx) => {
+        this.decorativePillars.forEach((colGroup, idx) => {
             const p = this.pillarLayout[idx];
-            if (p) col.position.y = this.getBaseGroundMeshHeight(p.x, p.z) + 5.0;
+            if (p) colGroup.position.y = this.getBaseGroundMeshHeight(p.x, p.z) + 5.0;
         });
     }
 }

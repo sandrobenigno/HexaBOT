@@ -65,6 +65,9 @@ function initApp() {
 
     // 8. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
+        // Atualizar animações de sancas e painéis de luz da arena
+        terrainArena.update(dt, elapsedTime);
+
         // Atualizar orquestrador de inimigos, cabines e bombas
         enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position);
 

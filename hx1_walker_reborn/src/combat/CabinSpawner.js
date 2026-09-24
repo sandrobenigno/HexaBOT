@@ -86,7 +86,7 @@ export class CabinSpawner {
         });
 
         this.targetMesh = new THREE.Mesh(SHARED_CABIN_GEO, this.cabinMat);
-        this.targetMesh.castShadow = true;
+        this.targetMesh.castShadow = false; // Sombra exclusiva da HX
         this.targetMesh.receiveShadow = true;
         this.targetMesh.userData = { entity: this, type: 'cabin' };
         this.group.add(this.targetMesh);
