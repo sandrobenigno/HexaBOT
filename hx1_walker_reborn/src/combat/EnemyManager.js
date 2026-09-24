@@ -199,6 +199,9 @@ export class EnemyManager {
             }
         }
 
+        // 2.1 Aplicar separação física e desvio mútuo entre joaninhas (Anti-Nesting / Flocking Separation)
+        this.applyEnemySeparation();
+
         // 3. Atualizar Bombas
         for (let i = this.bombs.length - 1; i >= 0; i--) {
             const bomb = this.bombs[i];
@@ -211,6 +214,52 @@ export class EnemyManager {
 
         if (targetsNeedUpdate) {
             this.updateTargetableCache();
+        }
+    }
+
+    /**
+     * Aplica separação elástica suave (Anti-Nesting / Flocking Separation) para impedir que as joaninhas se aninhem.
+     * Custo computacional: N*(N-1)/2 para N <= 8 (no máximo 28 comparações 2D por frame, < 0.001ms / Zero GC).
+     */
+    applyEnemySeparation() {
+        const count = this.enemies.length;
+        if (count < 2) return;
+
+        const minDistance = 2.40; // Diâmetro de colisão (1.2m de raio * 2)
+        const minDistanceSq = minDistance * minDistance;
+
+        for (let i = 0; i < count; i++) {
+            const e1 = this.enemies[i];
+            if (e1.isDead || e1.isFinished) continue;
+
+            for (let j = i + 1; j < count; j++) {
+                const e2 = this.enemies[j];
+                if (e2.isDead || e2.isFinished) continue;
+
+                let dx = e2.position.x - e1.position.x;
+                let dz = e2.position.z - e1.position.z;
+                let distSq = dx * dx + dz * dz;
+
+                if (distSq < minDistanceSq && distSq > 0.00001) {
+                    const dist = Math.sqrt(distSq);
+                    const overlap = (minDistance - dist) * 0.5;
+                    const nx = dx / dist;
+                    const nz = dz / dist;
+
+                    // Empurrar suavemente em direções opostas
+                    e1.position.x -= nx * overlap;
+                    e1.position.z -= nz * overlap;
+                    e2.position.x += nx * overlap;
+                    e2.position.z += nz * overlap;
+
+                    // Atualizar elevação no relevo e matriz de transformação Three.js
+                    e1.position.y = this.terrainArena.getTerrainHeight(e1.position.x, e1.position.z);
+                    e1.group.position.copy(e1.position);
+
+                    e2.position.y = this.terrainArena.getTerrainHeight(e2.position.x, e2.position.z);
+                    e2.group.position.copy(e2.position);
+                }
+            }
         }
     }
 

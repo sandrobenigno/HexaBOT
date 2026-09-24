@@ -196,13 +196,13 @@ export class TerrainArena {
         floorNormalTex.wrapT = THREE.RepeatWrapping;
         floorNormalTex.colorSpace = THREE.NoColorSpace;
 
-        const sandNormalTex = textureLoader.load('./assets/img/normal/areia_2.jfif');
+        const sandNormalTex = textureLoader.load('./assets/img/normal/rocha.jpg');
         sandNormalTex.wrapS = THREE.RepeatWrapping;
         sandNormalTex.wrapT = THREE.RepeatWrapping;
         sandNormalTex.colorSpace = THREE.NoColorSpace;
 
         this.terrainMat = new THREE.MeshStandardMaterial({
-            roughness: 0.65,
+            roughness: 0.5,
             metalness: 0.05,
             envMapIntensity: 0.05,
             wireframe: false
@@ -212,7 +212,7 @@ export class TerrainArena {
         this.terrainMat.onBeforeCompile = (shader) => {
             shader.uniforms.uFloorNormalMap = { value: floorNormalTex };
             shader.uniforms.uSandNormalMap = { value: sandNormalTex };
-            shader.uniforms.uNormalScale = { value: 0.30 };
+            shader.uniforms.uNormalScale = { value: 0.10 };
 
             shader.vertexShader = `
                 varying float vWorldY;
