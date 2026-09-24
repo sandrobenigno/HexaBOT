@@ -67,6 +67,11 @@ function initApp() {
     // Resetar inimigos quando o robô for resetado
     globalEventBus.on('bot:resetPosition', () => enemyManager.reset());
 
+    // Alternar restrição de colisão com pilares/obstáculos
+    globalEventBus.on('collision:toggleObstacles', (enabled) => {
+        collisionSystem.enableObstacles = enabled;
+    });
+
     // 10. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
         // Atualizar animações de sancas e painéis de luz da arena

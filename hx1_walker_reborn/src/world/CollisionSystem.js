@@ -19,6 +19,7 @@ export class CollisionSystem {
     constructor(pillarsData = [], arenaHalfBound = 130.0) {
         this.pillarsData = pillarsData;
         this.arenaHalfBound = arenaHalfBound;
+        this.enableObstacles = true; // Flag para ligar/desligar restrição de obstáculos (Padrão: Ativada)
     }
 
     /**
@@ -66,6 +67,11 @@ export class CollisionSystem {
         let nx = THREE.MathUtils.clamp(targetX, -safeBound, safeBound);
         let nz = THREE.MathUtils.clamp(targetZ, -safeBound, safeBound);
 
+        // Se a restrição de obstáculos estiver desligada, respeita apenas os limites externos da arena
+        if (!this.enableObstacles) {
+            return { x: nx, z: nz };
+        }
+
         // Resolução de colisão circular com cada pilar considerando o raio de sustentação
         for (let i = 0; i < this.pillarsData.length; i++) {
             const p = this.pillarsData[i];
@@ -101,8 +107,12 @@ export class CollisionSystem {
     constrainFootPosition(footX, footZ) {
         let fx = THREE.MathUtils.clamp(footX, -this.arenaHalfBound, this.arenaHalfBound);
         let fz = THREE.MathUtils.clamp(footZ, -this.arenaHalfBound, this.arenaHalfBound);
-        const footMargin = 0.5; // Margem física de segurança ao redor do pilar
 
+        if (!this.enableObstacles) {
+            return { x: fx, z: fz };
+        }
+
+        const footMargin = 0.5; // Margem física de segurança ao redor do pilar
         for (let i = 0; i < this.pillarsData.length; i++) {
             const p = this.pillarsData[i];
             const minClearance = p.radius + footMargin;

@@ -159,6 +159,13 @@
                         <span>Distância da Câmera: <strong id="lbl-zoom" style="color: #38bdf8;">50m</strong></span>
                         <input type="range" id="slider-zoom" min="50" max="100" step="1" value="50" style="width: 130px; cursor: pointer;">
                     </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 5px; border-top: 1px solid rgba(255,255,200,0.08);">
+                        <span>Colisão com Pilares:</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" id="chk-obstacles" checked style="cursor: pointer; accent-color: #38bdf8;">
+                            <span id="lbl-obstacles" style="font-weight: 600; color: #38bdf8;">Ativada</span>
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -175,6 +182,7 @@
                 <div class="control-item"><kbd>W</kbd> / <kbd>S</kbd> <span>Avançar / Recuar</span></div>
                 <div class="control-item"><kbd>A</kbd> / <kbd>D</kbd> <span>Desvio Lateral</span></div>
                 <div class="control-item"><kbd>Mouse</kbd> <span>Mirar e Disparar Laser</span></div>
+                <div class="control-item"><kbd>Espaço</kbd> <span>Travar Mira</span></div>
                 <div class="control-item"><kbd>Botão Meio</kbd> <span>Girar Câmera</span></div>
                 <div class="control-item"><kbd>Scroll</kbd> <span>Zoom In / Out</span></div>
                 <div class="control-item"><kbd>P</kbd> <span>Painéis Menu</span></div>
@@ -208,10 +216,12 @@
             </div>
             <div class="modal-body">
                 <p><strong>🎯 Mira em Dois Níveis:</strong> Ao mover o mouse próximo da frente da criatura (&le; 25°), o tronco se torce com as patas firmes no solo (IK puro). Ao mirar além de 25°, o robô executa passos de pivô para girar a base.</p>
+                <p><strong>🔒 Trava de Mira (Lock-On):</strong> Aponte a mira para um inimigo ou cabine e pressione a <strong>Barra de Espaço</strong> para travar a mira com um cone holográfico azul. Pressione Espaço novamente para destravar.</p>
                 <p><strong>🎥 Câmera Tática Livre:</strong> A câmera acompanha o robô mantendo seu ângulo. Clique e arraste com o <strong>botão do meio do mouse (scroll click)</strong> para girar o ângulo do cenário e ajustar a inclinação. Use a <strong>roda do mouse (scroll)</strong> para zoom.</p>
                 <p><strong>🎮 Teclas:</strong></p>
                 <ul style="padding-left: 20px;">
                     <li><kbd>W</kbd>, <kbd>A</kbd>, <kbd>S</kbd>, <kbd>D</kbd> — Locomoção no terreno</li>
+                    <li><kbd>Espaço</kbd> — Travar / Destravar Mira no Inimigo</li>
                     <li><kbd>Botão Meio (Drag)</kbd> — Girar Câmera / Órbita Livre</li>
                     <li><kbd>Scroll Mouse</kbd> — Zoom da Câmera (50m a 100m)</li>
                     <li><kbd>P</kbd> — Alternar exibição dos painéis de calibração</li>

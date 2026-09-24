@@ -142,6 +142,11 @@ export class HexaBot {
         this.prevTerrainRoll = 0;
         this.smoothedAngularSpeed = 0;
 
+        // Trava de Mira (Lock-On) com Barra de Espaço
+        this.lockedTarget = null;
+        this.currentInputManager = null;
+        this.buildLockCone();
+
         // Registrar eventos do Barramento
         this.setupEventListeners();
     }
@@ -154,6 +159,7 @@ export class HexaBot {
         this.eventBus.on('bot:triggerDeath', () => this.triggerDeath());
         this.eventBus.on('bot:resetPosition', () => this.resetWalker());
         this.eventBus.on('bot:toggleXRay', () => this.toggleXRay());
+        this.eventBus.on('combat:toggleLock', () => this.toggleTargetLock());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {
             this.walkerState.camAzimuth += deltaAzimuth;
             this.walkerState.camPitchDeg = THREE.MathUtils.clamp(
@@ -656,6 +662,8 @@ export class HexaBot {
         this.hp = this.maxHp;
         this.energy = this.maxEnergy;
         this.isEnergyDepleted = false;
+        this.lockedTarget = null;
+        if (this.lockConeMesh) this.lockConeMesh.visible = false;
 
         this.gait.reset();
         this.sway.reset();
@@ -673,6 +681,81 @@ export class HexaBot {
     }
 
     /**
+     * Alterna a trava de mira (Lock-On) no alvo atualmente sob o cursor.
+     */
+    toggleTargetLock() {
+        if (this.lockedTarget) {
+            this.lockedTarget = null;
+            if (this.lockConeMesh) this.lockConeMesh.visible = false;
+            console.log('[HexaBot] Trava de mira desativada.');
+        } else if (this.currentInputManager && this.currentInputManager.hoveredEntity) {
+            const entity = this.currentInputManager.hoveredEntity;
+            if (!entity.isDead && !entity.isFinished && !entity.isDestroyed) {
+                this.lockedTarget = entity;
+                console.log('[HexaBot] Trava de mira ativada no alvo:', entity);
+            }
+        }
+    }
+
+    /**
+     * Constrói o indicador visual 3D do cone azul holográfico invertido de mira travada.
+     */
+    buildLockCone() {
+        const coneGeo = new THREE.ConeGeometry(0.38, 0.85, 16);
+        coneGeo.rotateX(Math.PI); // Inverter para a ponta apontar para BAIXO
+
+        const coneMat = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.90,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        this.lockConeMesh = new THREE.Mesh(coneGeo, coneMat);
+        this.lockConeMesh.visible = false;
+        this.scene.add(this.lockConeMesh);
+
+        // Anel tecnológico sci-fi acima do cone
+        const ringGeo = new THREE.RingGeometry(0.42, 0.52, 24);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x38bdf8,
+            transparent: true,
+            opacity: 0.80,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        this.lockRingMesh = new THREE.Mesh(ringGeo, ringMat);
+        this.lockConeMesh.add(this.lockRingMesh);
+        this.lockRingMesh.position.y = 0.52;
+    }
+
+    /**
+     * Atualiza a posição e animação flutuante/rotatória do cone azul sobre o alvo travado.
+     * @param {number} dt
+     * @param {number} elapsedTime
+     */
+    updateLockCone(dt, elapsedTime) {
+        if (!this.lockedTarget || !this.lockConeMesh) {
+            if (this.lockConeMesh) this.lockConeMesh.visible = false;
+            return;
+        }
+
+        this.lockConeMesh.visible = true;
+
+        const tPos = this.lockedTarget.position;
+        const baseHeight = (this.lockedTarget.height ? this.lockedTarget.height + 0.8 : 2.0);
+        const bobbing = Math.sin(elapsedTime * 6.5) * 0.16;
+
+        this.lockConeMesh.position.set(tPos.x, tPos.y + baseHeight + bobbing, tPos.z);
+        this.lockConeMesh.rotation.y = elapsedTime * 3.5;
+        this.lockRingMesh.rotation.z = -elapsedTime * 4.0;
+    }
+
+    /**
      * Ciclo principal de atualização da criatura.
      * @param {number} dt Delta time em segundos
      * @param {number} elapsedTime Tempo total
@@ -682,6 +765,8 @@ export class HexaBot {
      * @param {import('../combat/EnemyManager.js').EnemyManager} [enemyManager] Gerenciador de inimigos
      */
     update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager = null) {
+        this.currentInputManager = inputManager;
+
         const getTerrainHeightFn = (x, z) => terrainArena.getTerrainHeight(x, z);
         const getBaseGroundMeshHeightFn = (x, z) => terrainArena.getBaseGroundMeshHeight(x, z);
         const allAimTargetableMeshes = enemyManager ? enemyManager.getAllAimTargetableMeshes() : terrainArena.aimTargetableMeshes;
@@ -694,6 +779,21 @@ export class HexaBot {
             this.walkerState.aimWorldPoint,
             this.walkerState.aimWorldNormal
         );
+
+        // Se houver um alvo travado pela barra de espaço, sobrescreve o ponto de mira para focar no alvo
+        if (this.lockedTarget) {
+            if (this.lockedTarget.isDead || this.lockedTarget.isFinished || this.lockedTarget.isDestroyed) {
+                this.lockedTarget = null;
+            } else {
+                const tPos = this.lockedTarget.position;
+                const heightOffset = (this.lockedTarget.height ? this.lockedTarget.height * 0.5 : 0.65);
+                this.walkerState.aimWorldPoint.set(tPos.x, tPos.y + heightOffset, tPos.z);
+                this.walkerState.aimWorldNormal.set(0, 1, 0);
+            }
+        }
+
+        // Atualizar indicador visual da trava de mira (Cone Azul)
+        this.updateLockCone(dt, elapsedTime);
 
         // 2. Leitura de Movimentação WASD
         const { moveFwd: rawMoveFwd, moveSide: rawMoveSide, isMoving: rawIsMoving } = inputManager.getMovementVector();
@@ -924,7 +1024,7 @@ export class HexaBot {
         }
         this.wasFiringLaser = combatRes.isActuallyFiring;
 
-        // Aplicar dano do laser contínuo no alvo atingido (inimigo ou cabine)
+        // Aplicar dano do laser contínuo no alvo que o raio realmente atinge
         if (combatRes.isActuallyFiring && combatRes.hitObject && enemyManager) {
             enemyManager.applyLaserDamage(combatRes.hitObject, dt);
         }

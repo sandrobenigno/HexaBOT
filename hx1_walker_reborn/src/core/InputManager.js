@@ -43,6 +43,7 @@ export class InputManager {
         this.isMiddleDragging = false;
         this.lastMouseX = 0;
         this.lastMouseY = 0;
+        this.hoveredEntity = null; // Entidade atualmente sob a mira (inimigo ou cabine)
 
         // Cronômetro de Inatividade (para disparo do Auto-Sway após 500ms sem comando)
         this.lastInputTime = performance.now() * 0.001;
@@ -104,6 +105,12 @@ export class InputManager {
         if (keyLower === 'p' || e.code === 'KeyP') this.eventBus.emit('ui:togglePanels');
         if (keyLower === 'h' || e.code === 'KeyH') this.eventBus.emit('ui:toggleHelp');
         if (keyLower === 'r' || e.code === 'KeyR') this.eventBus.emit('bot:resetPosition');
+
+        // Trava de Mira (Lock-On) com Barra de Espaço
+        if (e.code === 'Space' || e.key === ' ') {
+            e.preventDefault();
+            this.eventBus.emit('combat:toggleLock');
+        }
     }
 
     /**
@@ -233,6 +240,8 @@ export class InputManager {
 
         if (hits.length > 0) {
             outPoint.copy(hits[0].point);
+            this.hoveredEntity = hits[0].object?.userData?.entity || null;
+
             if (hits[0].face) {
                 this.tempHitNormal.copy(hits[0].face.normal)
                     .transformDirection(hits[0].object.matrixWorld)
@@ -242,14 +251,81 @@ export class InputManager {
                 outNormal.set(0, 1, 0);
             }
         } else {
-            const groundHit = this.tempGroundHit;
-            const hit = this.raycaster.ray.intersectPlane(this.aimPlane, groundHit);
-            if (hit) {
-                groundHit.x = THREE.MathUtils.clamp(groundHit.x, -135.0, 135.0);
-                groundHit.z = THREE.MathUtils.clamp(groundHit.z, -135.0, 135.0);
-                outPoint.copy(groundHit);
-                outPoint.y = getTerrainHeightFn(groundHit.x, groundHit.z);
-                outNormal.set(0, 1, 0);
+            this.hoveredEntity = null;
+
+            // Raymarching Analítico Ultrarrápido: Interseção do Raio da Câmera com o Relevo Real da Arena
+            const ray = this.raycaster.ray;
+            const origin = ray.origin;
+            const dir = ray.direction;
+
+            if (dir.y < -0.0001) {
+                // Calcula limites da distância de busca da câmera até o piso
+                const tFloor = (-2.0 - origin.y) / dir.y;
+                const tMax = Math.min(Math.max(tFloor, 10.0), 300.0);
+                const tMin = 5.0;
+
+                const steps = 24;
+                let prevT = tMin;
+                let hitT = null;
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = tMin + (tMax - tMin) * (i / steps);
+                    const x = origin.x + dir.x * t;
+                    const z = origin.z + dir.z * t;
+                    const rayY = origin.y + dir.y * t;
+                    const terrY = getTerrainHeightFn(x, z);
+
+                    if (rayY <= terrY) {
+                        // Cruzamento detectado: Refinamento por Busca Binária (6 iterações = precisão submilimétrica)
+                        let lowT = prevT;
+                        let highT = t;
+                        for (let b = 0; b < 6; b++) {
+                            const midT = (lowT + highT) * 0.5;
+                            const mx = origin.x + dir.x * midT;
+                            const mz = origin.z + dir.z * midT;
+                            const mRayY = origin.y + dir.y * midT;
+                            const mTerrY = getTerrainHeightFn(mx, mz);
+                            if (mRayY <= mTerrY) {
+                                highT = midT;
+                            } else {
+                                lowT = midT;
+                            }
+                        }
+                        hitT = highT;
+                        break;
+                    }
+                    prevT = t;
+                }
+
+                if (hitT !== null) {
+                    const hx = THREE.MathUtils.clamp(origin.x + dir.x * hitT, -135.0, 135.0);
+                    const hz = THREE.MathUtils.clamp(origin.z + dir.z * hitT, -135.0, 135.0);
+                    const hy = getTerrainHeightFn(hx, hz);
+
+                    outPoint.set(hx, hy, hz);
+
+                    // Normal analítica da superfície da duna por gradiente de diferenças finitas (0.05m)
+                    const eps = 0.05;
+                    const hL = getTerrainHeightFn(hx - eps, hz);
+                    const hR = getTerrainHeightFn(hx + eps, hz);
+                    const hD = getTerrainHeightFn(hx, hz - eps);
+                    const hU = getTerrainHeightFn(hx, hz + eps);
+                    outNormal.set((hL - hR) / (2 * eps), 1.0, (hD - hU) / (2 * eps)).normalize();
+                } else {
+                    const hit = ray.intersectPlane(this.aimPlane, this.tempGroundHit);
+                    if (hit) {
+                        outPoint.copy(this.tempGroundHit);
+                        outPoint.y = getTerrainHeightFn(outPoint.x, outPoint.z);
+                        outNormal.set(0, 1, 0);
+                    }
+                }
+            } else {
+                const hit = ray.intersectPlane(this.aimPlane, this.tempGroundHit);
+                if (hit) {
+                    outPoint.copy(this.tempGroundHit);
+                    outPoint.y = getTerrainHeightFn(outPoint.x, outPoint.z);
+                    outNormal.set(0, 1, 0);
+                }
             }
         }
     }

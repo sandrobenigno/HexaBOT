@@ -184,13 +184,13 @@ export class LaserCombat {
 
         let hitTargetMesh = null;
 
-        // 3. Teste de Linha de Visada e Barreira do Relevo da Areia
+        // 3. Teste Físico de Colisão do Raio Laser (Disparo Livre / Físico)
         if (totalLaserDist > 0.05) {
             this.laserRayDir.normalize();
             this.laserRaycaster.set(snoutPos, this.laserRayDir);
-            this.laserRaycaster.far = totalLaserDist + 0.50;
+            this.laserRaycaster.far = Math.max(totalLaserDist + 20.0, 150.0);
 
-            // Testar alvos e obstáculos sólidos
+            // Testar primeiro objeto interceptado pelo raio (inimigo, cabine, pilar ou bloco)
             const obstacleHits = this.laserRaycaster.intersectObjects(aimTargetableMeshes, false);
             if (obstacleHits.length > 0) {
                 contactPoint = obstacleHits[0].point;
@@ -203,40 +203,33 @@ export class LaserCombat {
                 } else {
                     contactNormal = this.upVec;
                 }
-
-                const hitType = obstacleHits[0].object?.userData?.type;
-                const isTargetEntity = (hitType === 'enemy' || hitType === 'cabin');
-
-                // Só bloqueia a linha de visada se o obstáculo interceptado for um elemento de cenário (pilar/bloco),
-                // e não uma entidade alvo (inimigo ou cabine) que o jogador está atacando.
-                if (!isTargetEntity && obstacleHits[0].distance < totalLaserDist - 0.20) {
-                    isLineOfSightBlocked = true;
-                }
+            } else {
+                // Sem malhas no caminho: atinge diretamente o ponto do terreno mirado
+                contactPoint = aimWorldPoint;
+                contactNormal = aimWorldNormal;
             }
 
-            // Verificação Analítica de Dunas de Areia ao longo da linha de tiro (12 amostragens)
+            // Testar se o feixe mergulha em alguma duna de areia antes do ponto de impacto
+            const rayContactDist = snoutPos.distanceTo(contactPoint);
             const sampleSteps = 12;
-            const checkDist = (obstacleHits.length > 0) ? obstacleHits[0].distance : totalLaserDist;
             for (let i = 1; i < sampleSteps; i++) {
                 const t = (i / sampleSteps);
-                const sampleDist = checkDist * t;
+                const sampleDist = rayContactDist * t;
                 const sx = snoutPos.x + this.laserRayDir.x * sampleDist;
                 const sz = snoutPos.z + this.laserRayDir.z * sampleDist;
                 const sy = snoutPos.y + this.laserRayDir.y * sampleDist;
                 const sandH = getBaseGroundMeshHeightFn(sx, sz);
                 if (sy < sandH - 0.15) {
-                    // O feixe mergulha dentro de uma duna de areia antes de atingir o alvo
                     contactPoint = this.sandContactPoint.set(sx, sandH, sz);
                     contactNormal = this.upVec;
-                    isLineOfSightBlocked = true;
                     hitTargetMesh = null;
                     break;
                 }
             }
         }
 
-        const isLineOfSightClear = !isLineOfSightBlocked;
-        const canFire = isWithinFOV && isLineOfSightClear;
+        // O laser sempre dispara se estiver dentro do FOV de 60° (sem travas artificiais de gatilho)
+        const canFire = isWithinFOV;
         this.isActuallyFiring = isAimFiring && canFire;
 
         // 4. Projeção Dinâmica do Recuo do Corpo (Fast-in, Easy-out em 500ms)
@@ -315,12 +308,9 @@ export class LaserCombat {
             this.muzzleFlareMat.opacity = 0.0;
 
             // Linha Guia com Codificação de Cores Táticas
-            if (!isLineOfSightClear) {
-                this.laserMat.opacity = 0.45;
-                this.laserMat.color.setHex(0xef4444); // Vermelho: Obstruído
-            } else if (!isWithinFOV) {
+            if (!isWithinFOV) {
                 this.laserMat.opacity = 0.40;
-                this.laserMat.color.setHex(0xf59e0b); // Âmbar: Fora do FOV
+                this.laserMat.color.setHex(0xf59e0b); // Âmbar: Fora do FOV (robô pivoteando)
             } else {
                 this.laserMat.opacity = 0.40;
                 this.laserMat.color.setHex(0x38bdf8); // Ciano: Pronto / Liberado
@@ -352,10 +342,6 @@ export class LaserCombat {
                 this.crosshairRingElem.style.borderColor = '#00f0ff';
                 this.crosshairRingElem.style.boxShadow = '0 0 20px #00f0ff, inset 0 0 10px #00f0ff';
                 this.crosshairRingElem.style.transform = `scale(${1.2 + pulseHarmonic * 0.08})`;
-            } else if (!isLineOfSightClear) {
-                this.crosshairRingElem.style.borderColor = '#ef4444';
-                this.crosshairRingElem.style.boxShadow = '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.5)';
-                this.crosshairRingElem.style.transform = 'scale(0.95)';
             } else if (!isWithinFOV) {
                 this.crosshairRingElem.style.borderColor = '#f59e0b';
                 this.crosshairRingElem.style.boxShadow = '0 0 12px rgba(245, 158, 11, 0.7), inset 0 0 5px rgba(245, 158, 11, 0.4)';

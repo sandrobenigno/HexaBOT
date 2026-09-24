@@ -32,6 +32,8 @@ export class HUDController {
         this.btnToggleHudElem = document.getElementById('btn-toggle-hud');
         this.startOverlayElem = document.getElementById('start-overlay');
         this.btnStartGameElem = document.getElementById('btn-start-game');
+        this.chkObstaclesElem = document.getElementById('chk-obstacles');
+        this.lblObstaclesElem = document.getElementById('lbl-obstacles');
 
         // Elementos da Barra Gamer de Status (HP e EN)
         this.hpFillBar = document.getElementById('hp-fill-bar');
@@ -157,6 +159,19 @@ export class HUDController {
         if (this.btnCloseModalElem && this.helpModalElem) {
             this.btnCloseModalElem.addEventListener('click', () => {
                 this.helpModalElem.classList.remove('active');
+            });
+        }
+
+        // Toggle de Restrição de Colisão com Obstáculos/Pilares
+        if (this.chkObstaclesElem) {
+            this.chkObstaclesElem.checked = true; // Padrão ativada
+            this.chkObstaclesElem.addEventListener('change', (e) => {
+                const enabled = e.target.checked;
+                this.eventBus.emit('collision:toggleObstacles', enabled);
+                if (this.lblObstaclesElem) {
+                    this.lblObstaclesElem.innerText = enabled ? 'Ativada' : 'Desativada';
+                    this.lblObstaclesElem.style.color = enabled ? '#38bdf8' : '#94a3b8';
+                }
             });
         }
 
