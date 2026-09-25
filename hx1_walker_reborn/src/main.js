@@ -120,7 +120,7 @@ function initApp() {
     });
 
     // 9. Carregar Modelo Inicial Padrão: HX2 (Pernalonga)
-    modelLoader.loadModelPreset('../glb/aranha_pernalonga.glb', 'HX2 (Pernalonga)');
+    modelLoader.loadModelPreset('./assets/glb/aranha_pernalonga.glb', 'HX2 (Pernalonga)');
 
     // 10. Iniciar Loop de Renderização
     engine.start();

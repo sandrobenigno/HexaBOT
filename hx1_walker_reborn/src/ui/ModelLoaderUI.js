@@ -4,7 +4,7 @@
  * Gerenciador de Carregamento de Modelos 3D e Manifestos (.glb / .gltf / .bot.json)
  * ============================================================================
  * Suporta 3 métodos de carregamento integrados:
- * 1. Dropdown de Presets: Modelos calibrados em ../glb/ (HX2 Pernalonga e HX1 Clássica).
+ * 1. Dropdown de Presets: Modelos calibrados em ./assets/glb/ (HX2 Pernalonga e HX1 Clássica).
  * 2. Botão "📂 Abrir" (File Input): Upload local de qualquer .glb/.gltf ou manifesto .bot.json.
  * 3. Drag & Drop: Arrastar e soltar arquivos diretamente na janela do simulador.
  */

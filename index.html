@@ -3,1532 +3,439 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HexaBOT - IK Adaptativo & Auto-Balanço Calibrado</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕷️</text></svg>">
+    <title>HexaBOT — Tactical Mech Engine & IK Research Hub</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            user-select: none;
         }
+
         body {
-            background-color: #0b0f17;
-            color: #e6edf3;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-        }
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        #ui-overlay {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            pointer-events: none;
-            z-index: 10;
-        }
-        .panel {
-            background: rgba(13, 17, 23, 0.94);
-            backdrop-filter: blur(14px);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 14px;
-            padding: 16px 20px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-            pointer-events: auto;
-            max-width: 380px;
-        }
-        h1 {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 6px;
-            color: #58a6ff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        p {
-            font-size: 0.82rem;
-            color: #8b949e;
-            line-height: 1.45;
-            margin-bottom: 10px;
-        }
-        .posture-badge {
-            display: inline-block;
-            background: rgba(46, 213, 115, 0.15);
-            color: #2ed573;
-            border: 1px solid rgba(46, 213, 115, 0.3);
-            border-radius: 6px;
-            padding: 2px 8px;
-            font-size: 0.72rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-        .telemetry {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
-            padding: 10px;
-            margin-top: 8px;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-            font-size: 0.74rem;
-            line-height: 1.5;
-            color: #7ee787;
-        }
-        .telemetry-row {
-            display: flex;
-            justify-content: space-between;
-        }
-        .telemetry-row span:first-child {
-            color: #8b949e;
-        }
-        #loading {
-            position: absolute;
-            inset: 0;
-            background: #0b0f17;
+            background-color: #030712;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            transition: opacity 0.5s ease;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(88, 166, 255, 0.15);
-            border-top-color: #58a6ff;
-            border-radius: 50%;
-            animation: spin 0.9s linear infinite;
-            margin-bottom: 16px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        /* --- ESTILO GERAL LIL-GUI (DESKTOP) --- */
-        .lil-gui {
-            --background-color: rgba(13, 17, 23, 0.94) !important;
-            --text-color: #e6edf3 !important;
-            --title-background-color: rgba(22, 27, 34, 0.95) !important;
-            --widget-color: #21262d !important;
-            --hover-color: #30363d !important;
-            --focus-color: #58a6ff !important;
-            --number-color: #79c0ff !important;
-            --string-color: #7ee787 !important;
-            font-family: inherit !important;
-            border-radius: 14px !important;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            overflow-x: hidden;
+            position: relative;
         }
 
-        .lil-gui.root {
-            position: fixed !important;
-            top: 16px !important;
-            right: 16px !important;
-            max-height: calc(100vh - 32px) !important;
-            overflow-y: auto !important;
-            z-index: 20;
-        }
-
-        /* --- RESPONSIVIDADE MOBILE (LAYOUT EMPILHADO) --- */
-        @media (max-width: 768px) {
-            /* 1. TÍTULO ACIMA */
-            #ui-overlay {
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                right: 10px;
-                width: auto;
-                max-width: none;
-                z-index: 10;
-                pointer-events: none;
-            }
-            .panel {
-                padding: 10px 14px;
-                border-radius: 14px;
-                text-align: center;
-                max-width: 100%;
-            }
-            h1 {
-                font-size: 1.15rem;
-                justify-content: center;
-                margin-bottom: 4px;
-            }
-            .posture-badge {
-                font-size: 0.8rem;
-                padding: 3px 10px;
-                margin-bottom: 0;
-            }
-            #telemetry-box {
-                text-align: left;
-                margin-top: 8px;
-            }
-
-            /* 2. HEXABOT NO MEIO */
-            #canvas-container {
-                position: absolute;
-                inset: 0;
-                width: 100vw;
-                height: 100vh;
-            }
-
-            /* 3. PARÂMETROS ABAIXO */
-            .lil-gui.root {
-                position: fixed !important;
-                top: auto !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                width: 100% !important;
-                max-width: 100vw !important;
-                max-height: 44vh !important;
-                border-radius: 20px 20px 0 0 !important;
-                border-left: none !important;
-                border-right: none !important;
-                border-bottom: none !important;
-                border-top: 1px solid rgba(255, 255, 255, 0.18) !important;
-                box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.75) !important;
-                overflow-y: auto !important;
-                -webkit-overflow-scrolling: touch;
-                touch-action: pan-y;
-                z-index: 30;
-            }
-
-            .lil-gui.root > .title {
-                position: sticky !important;
-                top: 0 !important;
-                z-index: 10 !important;
-                text-align: center !important;
-                font-size: 0.88rem !important;
-                font-weight: 700 !important;
-                padding: 10px 14px !important;
-                cursor: pointer;
-                background: rgba(22, 27, 34, 0.98) !important;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-            }
-
-            /* Barra indicadora de gaveta / aba */
-            .lil-gui.root > .title::before {
-                content: '';
-                display: block;
-                width: 40px;
-                height: 4px;
-                background: rgba(255, 255, 255, 0.35);
-                border-radius: 2px;
-                margin: 0 auto 6px auto;
-            }
-
-            .lil-gui .controller {
-                min-height: 32px !important;
-            }
-            .lil-gui .name {
-                font-size: 0.78rem !important;
-            }
-        }
-
-        /* --- MODAL DE AJUDA / SHORTCUTS (TECLA H) --- */
-        .modal-overlay {
+        /* Fundo de Grade Cibernética e Glow */
+        body::before {
+            content: "";
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(3, 7, 18, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 999;
-            opacity: 0;
-            transition: opacity 0.2s ease;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.12) 0%, transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
+                linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
             pointer-events: none;
+            z-index: 0;
         }
-        .modal-overlay.active {
-            display: flex;
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .modal-card {
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(56, 189, 248, 0.28);
-            border-radius: 18px;
-            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 32px rgba(56, 189, 248, 0.15);
-            width: 440px;
-            max-width: calc(100vw - 32px);
-            max-height: calc(100vh - 40px);
-            overflow: hidden;
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 48px 24px 60px;
+            position: relative;
+            z-index: 1;
+            flex: 1;
             display: flex;
             flex-direction: column;
-            transform: scale(0.95);
-            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            gap: 48px;
         }
-        .modal-overlay.active .modal-card {
-            transform: scale(1);
+
+        /* Cabeçalho */
+        header {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
         }
-        .modal-header {
+
+        .badge-header {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            padding: 5px 14px;
+            border-radius: 999px;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+        }
+
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #ffffff 0%, #bae6fd 60%, #38bdf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+        }
+
+        p.subtitle {
+            font-size: 1.05rem;
+            color: #94a3b8;
+            max-width: 680px;
+            line-height: 1.6;
+        }
+
+        /* CARD PRINCIPAL (GAME HERO) */
+        .hero-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 26, 0.98) 100%);
+            border: 2px solid rgba(56, 189, 248, 0.45);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+
+        .hero-card::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .hero-tag {
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #4ade80;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            padding: 4px 12px;
+            border-radius: 6px;
+        }
+
+        .hero-title {
+            font-size: 2.1rem;
+            font-weight: 900;
+            color: #f8fafc;
+            letter-spacing: 0.04em;
+        }
+
+        .hero-desc {
+            font-size: 1.0rem;
+            color: #cbd5e1;
+            line-height: 1.65;
+            max-width: 820px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin: 6px 0 12px;
+        }
+
+        .feature-item {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .feature-item strong {
+            font-size: 0.88rem;
+            color: #38bdf8;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px 14px;
-            background: rgba(0, 0, 0, 0.4);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            gap: 6px;
         }
-        .modal-title {
+
+        .feature-item span {
+            font-size: 0.80rem;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+
+        .btn-play-hero {
+            align-self: flex-start;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+            color: #030712;
+            text-decoration: none;
+            font-size: 1.15rem;
+            font-weight: 900;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+            padding: 16px 40px;
+            border-radius: 14px;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.6), 0 6px 20px rgba(0, 0, 0, 0.4);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .btn-play-hero:hover {
+            transform: scale(1.04);
+            background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+            box-shadow: 0 0 45px rgba(56, 189, 248, 0.9), 0 8px 25px rgba(0, 0, 0, 0.6);
+        }
+
+        /* SEÇÃO DE FERRAMENTAS (TOOLS) */
+        .section-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: -16px;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #e2e8f0;
             display: flex;
             align-items: center;
             gap: 10px;
-            font-size: 1rem;
-            font-weight: 700;
-            color: #f8fafc;
         }
-        .modal-close-btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #94a3b8;
-            border-radius: 8px;
-            width: 28px;
-            height: 28px;
+
+        .section-link {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #38bdf8;
+            text-decoration: none;
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.15s ease;
+            gap: 4px;
+            transition: color 0.2s;
         }
-        .modal-close-btn:hover {
-            background: rgba(239, 68, 68, 0.25);
-            color: #fca5a5;
-            border-color: #ef4444;
+
+        .section-link:hover {
+            color: #7dd3fc;
+            text-decoration: underline;
         }
-        .modal-body {
-            padding: 16px 20px 20px;
-            overflow-y: auto;
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .tool-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
+            transition: all 0.25s ease;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
         }
-        .shortcut-list {
+
+        .tool-card:hover {
+            border-color: rgba(56, 189, 248, 0.5);
+            background: rgba(30, 41, 59, 0.85);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.2);
+        }
+
+        .tool-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tool-badge {
+            font-size: 0.70rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .tool-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #f1f5f9;
+        }
+
+        .tool-desc {
+            font-size: 0.86rem;
+            color: #94a3b8;
+            line-height: 1.5;
+            flex: 1;
+        }
+
+        .tool-footer {
+            font-size: 0.80rem;
+            font-weight: 700;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        /* Rodapé */
+        footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 24px;
+            text-align: center;
+            font-size: 0.80rem;
+            color: #64748b;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
-        .shortcut-row {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 8px 12px;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            transition: background 0.15s ease;
-        }
-        .shortcut-row:hover {
-            background: rgba(56, 189, 248, 0.1);
-            border-color: rgba(56, 189, 248, 0.2);
-        }
-        .shortcut-keys {
-            min-width: 44px;
-            display: flex;
-            justify-content: center;
-        }
-        kbd {
-            display: inline-block;
-            background: #0f172a;
-            border: 1px solid rgba(56, 189, 248, 0.4);
-            border-bottom: 2px solid #38bdf8;
-            color: #38bdf8;
-            font-family: "SFMono-Regular", Consolas, monospace;
-            font-size: 0.82rem;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-        }
-        .shortcut-info {
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-        }
-        .shortcut-info strong {
-            font-size: 0.84rem;
-            color: #f1f5f9;
-        }
-        .shortcut-info span {
-            font-size: 0.72rem;
+
+        footer a {
             color: #94a3b8;
+            text-decoration: none;
+            transition: color 0.2s;
         }
-        .modal-footer-tip {
-            margin-top: 4px;
-            padding: 10px 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            font-size: 0.72rem;
-            color: #64748b;
-            line-height: 1.4;
-            border-left: 3px solid #38bdf8;
+
+        footer a:hover {
+            color: #38bdf8;
         }
     </style>
-    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-          "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.min.js"
-        }
-      }
-    </script>
 </head>
 <body>
-    <div id="loading">
-        <div class="spinner"></div>
-        <p style="color: #e6edf3; font-weight: 500;">Carregando HexaBOT com Parâmetros Calibrados...</p>
-    </div>
 
-    <div id="ui-overlay">
-        <div class="panel">
-            <h1>🤖 HexaBOT IK</h1>
-			<span class="posture-badge">IK Solver By Sandro Benigno (EvilPlaymobil)</span>
-            <p class="subtitle" style="font-size: 0.78rem; color: #8b949e; margin: 4px 0 6px;">Simulação biomecânica com Cinemática Inversa 3-DoF e curva adaptativa.</p>
-            <div id="telemetry-box" style="display: none; margin-top: 6px;">
-                <div class="telemetry">
-                    <div class="telemetry-row"><span>Status IK:</span> <span id="ik-status" style="color: #58a6ff;">Nominal (3-DoF)</span></div>
-                    <div class="telemetry-row"><span>Altura do Corpo (Y):</span> <span id="tel-height">0.60 m</span></div>
-                    <div class="telemetry-row"><span>Elevação da Coxa:</span> <span id="tel-coxa">40.6° (Auto)</span></div>
-                    <div class="telemetry-row"><span>Estado das Patas:</span> <span id="tel-fl"><span style="color: #7ee787;">100% Contato</span></span></div>
+    <div class="container">
+        <!-- Cabeçalho -->
+        <header>
+            <div class="badge-header">⚡ BIOMECHANICAL IK & SIMULATION HUB</div>
+            <h1>HEXABOT WALKER</h1>
+            <p class="subtitle">
+                De um exercício aprofundado de cinemática inversa vetorial (IK 3-DoF) e auto-rigging universal até o simulador de combate tático em tempo real.
+            </p>
+        </header>
+
+        <!-- CARD DE DESTAQUE PRINCIPAL: O JOGO -->
+        <div class="hero-card">
+            <div class="hero-top-row">
+                <span class="hero-tag">🎮 Experiência Completa &middot; Jogável no Navegador</span>
+                <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">Arquitetura Modular ES6</span>
+            </div>
+
+            <div class="hero-title">HX1 Walker: Reborn — Simulador Tático</div>
+            <p class="hero-desc">
+                Controle o robô hexápode em uma arena 3D com relevo procedural. Conta com motores de passo analíticos em tempo real, marcha tripé adaptativa, sistema de combate com laser térmico e retículo tático, cabines geradoras de inimigos e áudio 3D posicional.
+            </p>
+
+            <div class="features-grid">
+                <div class="feature-item">
+                    <strong>🎯 Mira & Disparo Tático</strong>
+                    <span>Retículo no cursor com FOV 60°, oclusão por dunas e laser contínuo.</span>
+                </div>
+                <div class="feature-item">
+                    <strong>📐 Cinemática Inversa 3-DOF</strong>
+                    <span>Resolução analítica de juntas com algoritmo Auto-Reach Fallback.</span>
+                </div>
+                <div class="feature-item">
+                    <strong>🐞 Inimigos & IA Dinâmica</strong>
+                    <span>Joaninhas robóticas com animações de Shape Keys e detonação de bombas.</span>
+                </div>
+                <div class="feature-item">
+                    <strong>🔊 Áudio Espacial 3D</strong>
+                    <span>Ambiente sonoro posicional, servomotores dinâmicos e mixagem Web Audio.</span>
                 </div>
             </div>
+
+            <a href="./hx1_walker_reborn/index.html" class="btn-play-hero">
+                <span>▶</span> INICIAR MISSÃO (JOGAR)
+            </a>
         </div>
-    </div>
 
-    <div id="canvas-container"></div>
-
-    <!-- MODAL DE ATALHOS / HELP (TECLA H) -->
-    <div id="help-modal-overlay" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <span style="font-size: 1.25rem;">⌨️</span>
-                    <span>Atalhos de Teclado & Controles</span>
-                </div>
-                <button class="modal-close-btn" id="btn-close-help" title="Fechar (Esc)">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="shortcut-list">
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>H</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Ajuda & Atalhos</strong>
-                            <span>Abre ou fecha este painel central de comandos</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>P</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Clean View</strong>
-                            <span>Oculta ou exibe todos os painéis e interfaces da tela</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>R</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Resetar Postura</strong>
-                            <span>Restaura altura, rotações, abertura e Shape Keys ao padrão</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>A</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Auto-Balanço (Rebolado)</strong>
-                            <span>Liga / desliga a simulação contínua de oscilação e marcha</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>X</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Modo Raio-X (X-Ray)</strong>
-                            <span>Exibe os eixos de juntas, âncoras IK e esqueleto interno</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>I</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Telemetria / Info</strong>
-                            <span>Exibe / oculta o HUD com métricas em tempo real e status IK</span>
-                        </div>
-                    </div>
-                    <div class="shortcut-row">
-                        <div class="shortcut-keys"><kbd>Esc</kbd></div>
-                        <div class="shortcut-info">
-                            <strong>Fechar Janela</strong>
-                            <span>Fecha a tela de ajuda atual</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer-tip">
-                    <span>💡 <strong>Dica de Navegação:</strong> Botão esquerdo do mouse gira a câmera, botão direito faz pan, scroll dá zoom.</span>
-                </div>
-            </div>
+        <!-- SEÇÃO DAS FERRAMENTAS E LABORATÓRIO -->
+        <div class="section-title-row">
+            <div class="section-title">🔬 Laboratório & Ferramentas de Cinemática</div>
+            <a href="./tools/README.md" class="section-link">Ver Documentação Completa das Tools &rarr;</a>
         </div>
+
+        <div class="tools-grid">
+            <!-- Tool 1 -->
+            <a href="./tools/index.html" class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-badge">Tool 1</span>
+                    <span style="font-size: 1.2rem;">📱</span>
+                </div>
+                <div class="tool-title">Simulador Clássico & Mobile</div>
+                <div class="tool-desc">
+                    Ambiente ágil de simulação de locomoção com suporte nativo a telas touch, balanço contínuo (Auto-Sway) e curva hermítica de elevação.
+                </div>
+                <div class="tool-footer">Abrir Ferramenta &rarr;</div>
+            </a>
+
+            <!-- Tool 2 -->
+            <a href="./tools/index2.html" class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-badge">Tool 2</span>
+                    <span style="font-size: 1.2rem;">🎛️</span>
+                </div>
+                <div class="tool-title">Oficina de Rigging & Exportador</div>
+                <div class="tool-desc">
+                    Importe modelos 3D arbitrários, execute auto-rigging via detecção por Regex, console de Shape Keys (Mesa de Som) e exporte para .glb com manifesto embutido ou .bot.json.
+                </div>
+                <div class="tool-footer">Abrir Ferramenta &rarr;</div>
+            </a>
+
+            <!-- Tool 3 -->
+            <a href="./tools/index3.html" class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-badge">Tool 3</span>
+                    <span style="font-size: 1.2rem;">🚀</span>
+                </div>
+                <div class="tool-title">Runtime com Manifesto</div>
+                <div class="tool-desc">
+                    Simulador avançado com travamento milimétrico de âncoras, leitura direta de arquivos de manifesto .bot.json, painel Frost Glass e iluminação HDR RoomEnvironment.
+                </div>
+                <div class="tool-footer">Abrir Ferramenta &rarr;</div>
+            </a>
+        </div>
+
+        <!-- Rodapé -->
+        <footer>
+            <p>HexaBOT Tactical Engine &middot; Desenvolvido em Three.js e WebGL.</p>
+            <p>
+                <a href="./README.md">Documentação Geral (README)</a> &middot; 
+                <a href="./tools/README.md">Documentação das Ferramentas</a>
+            </p>
+        </footer>
     </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-        import { Line2 } from 'three/addons/lines/Line2.js';
-        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
-        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
-        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-        import GUI from 'lil-gui';
-
-        // --- CENA & RENDERER ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color('#0b0f17');
-        scene.fog = new THREE.FogExp2('#0b0f17', 0.025);
-
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(11, 7, 13);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.15;
-        container.appendChild(renderer.domElement);
-
-        // --- PARÂMETROS PADRÃO CALIBRADOS ---
-        const params = {
-            bodyPosX: 0,
-            bodyPosY: 0.6,
-            bodyPosZ: 0,
-            bodyPitch: 0,
-            bodyRoll: 0,
-            bodyYaw: 0,
-            // Elevação Adaptativa da Coxa
-            adaptiveElevation: true,
-            autoReachFallback: true,
-            coxaElevation: 40.6, // Graus
-            stanceSpread: 1.15,
-            // Balanço Automático Calibrado
-            autoSway: true,
-            swaySpeed: 2.0,
-            swayHeightCenter: 0.6,
-            swayHeightAmp: 0.3,
-            swayPitchRoll: 5.0,
-            swayYaw: 25.0,
-            swayShift: 0.25,
-            // BlendShapes / Expressão
-            irisE: 0.0,
-            irisD: 0.0,
-            // Visualização
-            xrayMode: false,
-            showTelemetry: false,
-            showFootTargets: false,
-            showSkeletonLines: false,
-            envIntensity: 1.2,
-            envRotation: 0,
-            showLightHelpers: false,
-            ikEnabled: true,
-            resetPose: () => resetPose()
-        };
-
-        const telemetryBox = document.getElementById('telemetry-box');
-        function toggleTelemetry(val) {
-            params.showTelemetry = (val !== undefined) ? val : !params.showTelemetry;
-            if (telemetryBox) {
-                telemetryBox.style.display = params.showTelemetry ? 'block' : 'none';
-            }
-        }
-
-        let uiVisible = true;
-        function toggleUIVisibility(val) {
-            uiVisible = (val !== undefined) ? val : !uiVisible;
-            const overlay = document.getElementById('ui-overlay');
-            if (overlay) overlay.style.display = uiVisible ? '' : 'none';
-            const lilGuis = document.querySelectorAll('.lil-gui');
-            lilGuis.forEach(g => g.style.display = uiVisible ? '' : 'none');
-        }
-
-        // --- GLOBAL WORLD / ENVIRONMENT MAP PROCEDURAL (REFLEXOS METÁLICOS SEM FUNDO 360) ---
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-        const roomEnvironment = new RoomEnvironment();
-
-        function updateEnvironment() {
-            const rotDeg = params.envRotation;
-            const intensity = params.envIntensity;
-
-            const rad = THREE.MathUtils.degToRad(rotDeg);
-            roomEnvironment.rotation.set(0, rad, 0);
-            roomEnvironment.updateMatrixWorld(true);
-
-            if (scene.environment) scene.environment.dispose();
-            const envTexture = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
-            scene.environment = envTexture;
-
-            scene.traverse((child) => {
-                if (child.isMesh && child.material && !child.userData.isXrayHelper) {
-                    const mats = Array.isArray(child.material) ? child.material : [child.material];
-                    mats.forEach(m => {
-                        if ('envMapIntensity' in m) {
-                            m.envMapIntensity = intensity;
-                        }
-                    });
-                }
-            });
-        }
-        updateEnvironment();
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.maxPolarAngle = Math.PI / 2 - 0.01;
-        controls.target.set(0, 0.6, 0);
-
-	    // --- LUZES & CHÃO ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
-        scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0xfffaed, 2.8);
-        dirLight.position.set(5, 12, 7);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 30;
-        dirLight.shadow.camera.left = -8;
-        dirLight.shadow.camera.right = 8;
-        dirLight.shadow.camera.top = 8;
-        dirLight.shadow.camera.bottom = -8;
-        dirLight.shadow.bias = -0.0005;
-        scene.add(dirLight);
-
-        const rimLight = new THREE.PointLight(0x58a6ff, 20, 100);
-        rimLight.position.set(-2, 6.5, -0.5);
-        scene.add(rimLight);
-
-        const rimLight2 = new THREE.PointLight(0xfb4141, 12, 100);
-        rimLight2.position.set(5.5, 5, 8);
-        scene.add(rimLight2);
-
-        // --- MARCADORES E HELPERS DE LUZ (VISUALIZADORES TEMPORÁRIOS) ---
-        const dirMarker = new THREE.Mesh(
-            new THREE.SphereGeometry(0.5, 16, 16),
-            new THREE.MeshBasicMaterial({ color: 0xffd700, wireframe: true })
-        );
-        dirMarker.visible = false;
-        dirLight.add(dirMarker);
-        const dirLightHelper = new THREE.DirectionalLightHelper(dirLight, 3.0, 0xffd700);
-        dirLightHelper.visible = false;
-        scene.add(dirLightHelper);
-
-        const rimMarker1 = new THREE.Mesh(
-            new THREE.SphereGeometry(0.35, 16, 16),
-            new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
-        );
-        rimMarker1.visible = false;
-        rimLight.add(rimMarker1);
-        const rimLightHelper = new THREE.PointLightHelper(rimLight, 0.8, 0x58a6ff);
-        rimLightHelper.visible = false;
-        scene.add(rimLightHelper);
-
-        const rimMarker2 = new THREE.Mesh(
-            new THREE.SphereGeometry(0.35, 16, 16),
-            new THREE.MeshBasicMaterial({ color: 0x58a6ff, wireframe: true })
-        );
-        rimMarker2.visible = false;
-        rimLight2.add(rimMarker2);
-        const rimLight2Helper = new THREE.PointLightHelper(rimLight2, 0.8, 0x58a6ff);
-        rimLight2Helper.visible = false;
-        scene.add(rimLight2Helper);
-
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(80, 80),
-            new THREE.MeshStandardMaterial({ color: 0x070a10, roughness: 0.85, metalness: 0.2 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        const gridHelper = new THREE.GridHelper(30, 60, 0x58a6ff, 0x21262d);
-        gridHelper.position.y = 0.002;
-        scene.add(gridHelper);
-
-        // --- GRUPOS ---
-        const bodyGroup = new THREE.Group();
-        scene.add(bodyGroup);
-
-        const footTargetGroup = new THREE.Group();
-        footTargetGroup.visible = false;
-        scene.add(footTargetGroup);
-
-        const skeletonLinesGroup = new THREE.Group();
-        skeletonLinesGroup.visible = false;
-        scene.add(skeletonLinesGroup);
-
-        const xrayGizmosGroup = new THREE.Group();
-        xrayGizmosGroup.visible = false;
-        scene.add(xrayGizmosGroup);
-
-        // --- XRAY MODE ASSETS & HELPERS ---
-        function createCrossGizmo(size = 0.35, sphereRadius = 0.11) {
-            const group = new THREE.Group();
-            group.userData.isXrayHelper = true;
-
-            // Linha Eixo X (Vermelho #ff3b30)
-            const geoX = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(-size, 0, 0), new THREE.Vector3(size, 0, 0)
-            ]);
-            const matX = new THREE.LineBasicMaterial({ color: 0xff3b30, depthTest: false, transparent: true, opacity: 0.85 });
-            const lineX = new THREE.Line(geoX, matX);
-            lineX.userData.isXrayHelper = true;
-            group.add(lineX);
-
-            // Linha Eixo Y (Verde #34c759)
-            const geoY = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, -size, 0), new THREE.Vector3(0, size, 0)
-            ]);
-            const matY = new THREE.LineBasicMaterial({ color: 0x34c759, depthTest: false, transparent: true, opacity: 0.85 });
-            const lineY = new THREE.Line(geoY, matY);
-            lineY.userData.isXrayHelper = true;
-            group.add(lineY);
-
-            // Linha Eixo Z (Azul #007aff)
-            const geoZ = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, -size), new THREE.Vector3(0, 0, size)
-            ]);
-            const matZ = new THREE.LineBasicMaterial({ color: 0x007aff, depthTest: false, transparent: true, opacity: 0.85 });
-            const lineZ = new THREE.Line(geoZ, matZ);
-            lineZ.userData.isXrayHelper = true;
-            group.add(lineZ);
-
-            // Ponto / Esfera da Junta no Pivot (Azul Elétrico Neon #00d2ff)
-            const jointGeo = new THREE.SphereGeometry(sphereRadius, 16, 16);
-            const jointMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, depthTest: false, transparent: true, opacity: 0.95 });
-            const jointSphere = new THREE.Mesh(jointGeo, jointMat);
-            jointSphere.userData.isXrayHelper = true;
-            group.add(jointSphere);
-
-            group.renderOrder = 999;
-            return group;
-        }
-
-        function setXRayMode(enable) {
-            params.xrayMode = enable;
-
-            if (modelRoot) {
-                modelRoot.traverse((child) => {
-                    if (child.isMesh && !child.userData.isXrayHelper) {
-                        if (child.material) {
-                            const mats = Array.isArray(child.material) ? child.material : [child.material];
-                            mats.forEach(m => m.visible = !enable);
-                        }
-                    }
-                });
-            }
-
-            xrayGizmosGroup.visible = enable;
-
-            skeletonLinesGroup.visible = enable ? true : params.showSkeletonLines;
-            footTargetGroup.visible = enable ? true : params.showFootTargets;
-        }
-
-        const morphMeshes = [];
-
-        function updateMorphTargets() {
-            for (const mesh of morphMeshes) {
-                if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) {
-                    if ('IRIS_E' in mesh.morphTargetDictionary) {
-                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_E']] = params.irisE;
-                    }
-                    if ('IRIS_D' in mesh.morphTargetDictionary) {
-                        mesh.morphTargetInfluences[mesh.morphTargetDictionary['IRIS_D']] = params.irisD;
-                    }
-                }
-            }
-        }
-
-        // Função de Curva Adaptativa da Coxa
-        // Y = 2.5m -> 5°
-        // Y = 1.3m -> 35°
-        // Y = 0.0m -> 45°
-        function calculateAdaptiveElevation(yHeight) {
-            const y = THREE.MathUtils.clamp(yHeight, 0.0, 2.5);
-            if (y >= 1.3) {
-                const t = (y - 1.3) / (2.5 - 1.3);
-                const s = t * t * (3 - 2 * t);
-                return 35.0 - s * (35.0 - 5.0);
-            } else {
-                const t = (1.3 - y) / 1.3;
-                const s = t * t * (3 - 2 * t);
-                return 35.0 + s * (45.0 - 35.0);
-            }
-        }
-
-        function updateAllGuiDisplays() {
-            if (!gui) return;
-            if (typeof gui.controllersRecursive === 'function') {
-                gui.controllersRecursive().forEach(c => c.updateDisplay());
-            } else {
-                const updateFolder = (f) => {
-                    f.controllers.forEach(c => c.updateDisplay());
-                    f.folders.forEach(updateFolder);
-                };
-                updateFolder(gui);
-            }
-        }
-
-        function toggleAutoSway(val) {
-            params.autoSway = (val !== undefined) ? val : !params.autoSway;
-            updateAllGuiDisplays();
-        }
-
-        function resetPose() {
-            params.autoSway = false;
-            params.bodyPosX = 0;
-            params.bodyPosY = 0.6;
-            params.bodyPosZ = 0;
-            params.bodyPitch = 0;
-            params.bodyRoll = 0;
-            params.bodyYaw = 0;
-            params.stanceSpread = 1.15;
-            params.autoReachFallback = true;
-            params.irisE = 0.0;
-            params.irisD = 0.0;
-            bodyGroup.position.set(0, 0.6, 0);
-            bodyGroup.rotation.set(0, 0, 0);
-            bodyGroup.updateMatrixWorld(true);
-            updateMorphTargets();
-            updateFootTargets();
-            params.coxaElevation = calculateAdaptiveElevation(0.6);
-            if (typeof updateHexaBOT === 'function') updateHexaBOT();
-            updateAllGuiDisplays();
-        }
-
-        const L1_M = 2.3608; // Coxa
-        const L2_M = 2.1611; // Fêmur
-        const L3_M = 2.8000; // Tíbia
-
-        let modelRoot = null;
-        let headNode = null;
-        let bodyGizmo = null;
-        let headGizmo = null;
-        let bodySpineMesh = null;
-        const legs = [];
-        const footTargets = [];
-        const targetMeshes = [];
-        const legLines = [];
-        const legJointGizmos = [];
-
-        const _tempVec1 = new THREE.Vector3();
-        const _tempVec2 = new THREE.Vector3();
-        const _tempVec3 = new THREE.Vector3();
-        const _tempVec4 = new THREE.Vector3();
-        const _tempVec5 = new THREE.Vector3();
-        const _tempVec6 = new THREE.Vector3();
-        const _tempVecBc = new THREE.Vector3();
-        const _tempVecHead = new THREE.Vector3();
-
-        // --- CARREGAMENTO DO GLB ---
-        const loader = new GLTFLoader();
-        loader.load('./glb/aranha.glb', (gltf) => {
-            modelRoot = gltf.scene;
-
-            modelRoot.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                    if (child.morphTargetInfluences && child.morphTargetDictionary) {
-                        morphMeshes.push(child);
-                    }
-                }
-            });
-
-            bodyGroup.add(modelRoot);
-/*
-			//Teste de Material
-			// 1. Criamos a variável
-			let Luz;
-			let Default;
-			let Tubo;
-			// 2. No traverse, desempacotamos seja 1 ou vários materiais:
-			modelRoot.traverse((child) => {
-				if (child.isMesh && child.material) {
-					// Garante que funcione mesmo se child.material for uma lista
-					const mats = Array.isArray(child.material) ? child.material : [child.material];
-					
-					mats.forEach((mat) => {
-						if (mat.name === 'Luz') Luz = mat;
-						if (mat.name === 'Default') Default = mat;
-						if (mat.name === 'Tubo') Tubo = mat;
-					});
-				}
-			});
-			// 3. Agora sim funciona de verdade!
-			if (Luz) {
-				Luz.emissive.set('#00ff00'); // Verde neon nos faróis
-				Luz.emissiveIntensity = 10.0;
-			}
-
-			// Dica: Teste mudar a carapaça
-			if (Default) {
-				Default.color.set('#aaaa00'); // Deixa o casco rosa/magenta
-				Default.metalness = 0.6;
-				Default.roughness = 0.37;
-			}
-			
-			if(Tubo) {
-				Tubo.color.set('#bbbbbb');
-				Tubo.metalness = 0.9;
-			}
-
-*/
-
-            const legBaseNames = ['D0_(1)', 'D0_(2)', 'D0_(3)', 'E0_(1)', 'E0_(2)', 'E0_(3)'];
-            const legIds = ['FR', 'MR', 'BR', 'FL', 'ML', 'BL'];
-            const legSides = ['D', 'D', 'D', 'E', 'E', 'E'];
-
-            legBaseNames.forEach((baseName, index) => {
-                let baseNode = null;
-                modelRoot.traverse((n) => {
-                    if (n.name && (n.name === baseName || n.name.includes(baseName.replace(/[()]/g, '')))) {
-                        baseNode = n;
-                    }
-                });
-
-                if (baseNode && baseNode.children.length > 0) {
-                    const j1Node = baseNode.children[0];
-                    const j2Node = j1Node.children.length > 0 ? j1Node.children[0] : null;
-                    const j3Node = j2Node && j2Node.children.length > 0 ? j2Node.children[0] : null;
-
-                    const legObj = {
-                        id: legIds[index],
-                        side: legSides[index],
-                        baseNode,
-                        j1Node,
-                        j2Node,
-                        j3Node,
-                        index
-                    };
-                    legs.push(legObj);
-
-                    const targetSphere = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.14, 16, 16),
-                        new THREE.MeshStandardMaterial({
-                            color: legSides[index] === 'D' ? 0x00d2ff : 0x2ed573,
-                            emissive: legSides[index] === 'D' ? 0x003366 : 0x115522,
-                            roughness: 0.3
-                        })
-                    );
-                    targetSphere.castShadow = true;
-                    footTargetGroup.add(targetSphere);
-                    targetMeshes.push(targetSphere);
-
-                    const lineGeo = new LineGeometry();
-                    lineGeo.setPositions([0,0,0, 0,0,0, 0,0,0, 0,0,0]);
-                    const lineMat = new LineMaterial({
-                        color: legSides[index] === 'D' ? 0x38bdf8 : 0x7bed9f,
-                        linewidth: 5.0,
-                        transparent: true,
-                        opacity: 0.95,
-                        depthTest: false
-                    });
-                    lineMat.resolution.set(window.innerWidth, window.innerHeight);
-                    const lineMesh = new Line2(lineGeo, lineMat);
-                    skeletonLinesGroup.add(lineMesh);
-                    legLines.push(lineMesh);
-                }
-            });
-
-            updateFootTargets();
-
-            // --- LINHAS DE ESQUELETO DO CORPO CENTRAL / ESPINHA DORSAL (ARANHA) ---
-            const spinePosArray = new Float32Array(26 * 3);
-            const spineGeo = new LineSegmentsGeometry();
-            spineGeo.setPositions(spinePosArray);
-            const spineMat = new LineMaterial({
-                color: 0x00d2ff,
-                linewidth: 3.5,
-                transparent: true,
-                opacity: 0.95,
-                depthTest: false
-            });
-            spineMat.resolution.set(window.innerWidth, window.innerHeight);
-            bodySpineMesh = new LineSegments2(spineGeo, spineMat);
-            bodySpineMesh.userData.isXrayHelper = true;
-            skeletonLinesGroup.add(bodySpineMesh);
-
-            // --- CRIAR GIZMOS EM CRUZ (X, Y, Z + JUNTA) NOS PIVOTS ---
-            bodyGizmo = createCrossGizmo(0.55, 0.18);
-            xrayGizmosGroup.add(bodyGizmo);
-
-            legs.forEach((leg, index) => {
-                const gizmos = [
-                    createCrossGizmo(0.35, 0.11), // P0 (Base / Quadril)
-                    createCrossGizmo(0.35, 0.11), // P1 (Coxa / Ombro)
-                    createCrossGizmo(0.35, 0.11), // P2 (Joelho)
-                    createCrossGizmo(0.35, 0.11)  // P3 (Pata / Tornozelo)
-                ];
-                gizmos.forEach(g => xrayGizmosGroup.add(g));
-                legJointGizmos[index] = gizmos;
-            });
-
-            headNode = modelRoot.getObjectByName('Arainha_Pernas_v001:Layer5') || modelRoot.getObjectByName('Layer5');
-            if (headNode) {
-                headGizmo = createCrossGizmo(0.35, 0.11);
-                xrayGizmosGroup.add(headGizmo);
-            }
-
-            const loadingElem = document.getElementById('loading');
-            loadingElem.style.opacity = '0';
-            setTimeout(() => loadingElem.style.display = 'none', 500);
-
-            document.getElementById('ik-status').innerText = `Ativo (${legs.length}/6 Pernas)`;
-            updateEnvironment();
-            initGUI();
-            updateMorphTargets();
-        });
-
-        const defaultFootPositions = [
-            new THREE.Vector3(-5.8, 0.0,  3.2), // FR
-            new THREE.Vector3(-6.4, 0.0, -0.4), // MR
-            new THREE.Vector3(-5.2, 0.0, -4.0), // BR
-            new THREE.Vector3( 5.8, 0.0,  3.2), // FL
-            new THREE.Vector3( 6.4, 0.0, -0.4), // ML
-            new THREE.Vector3( 5.2, 0.0, -4.0)  // BL
-        ];
-
-        function updateFootTargets() {
-            footTargets.length = 0;
-            defaultFootPositions.forEach((pos, i) => {
-                const targetPos = new THREE.Vector3(
-                    pos.x * params.stanceSpread,
-                    pos.y,
-                    pos.z * params.stanceSpread
-                );
-                footTargets.push(targetPos);
-                if (targetMeshes[i]) targetMeshes[i].position.copy(targetPos);
-            });
-        }
-
-        // --- SOLVER DE CINEMÁTICA VETORIAL COM BASE ORTONORMAL UNIFICADA ---
-        const _P0 = new THREE.Vector3(); // Hip
-        const _P1 = new THREE.Vector3(); // Coxa Tip (subindo)
-        const _P2 = new THREE.Vector3(); // Knee (cume do arco)
-        const _P3 = new THREE.Vector3(); // Foot (chão)
-
-        const _dirH = new THREE.Vector3();
-        const _up = new THREE.Vector3(0, 1, 0);
-        const _vTarget = new THREE.Vector3();
-        const _vTUnit = new THREE.Vector3();
-        const _hingeAxis = new THREE.Vector3();
-        const _perpUp = new THREE.Vector3();
-        const _femurDir = new THREE.Vector3();
-        const _tibiaDir = new THREE.Vector3();
-        const _coxaDir = new THREE.Vector3();
-
-        const _X1 = new THREE.Vector3();
-        const _Y1 = new THREE.Vector3();
-        const _Z1 = new THREE.Vector3();
-        const _X2 = new THREE.Vector3();
-        const _Y2 = new THREE.Vector3();
-        const _Z2 = new THREE.Vector3();
-        const _X3 = new THREE.Vector3();
-        const _Y3 = new THREE.Vector3();
-        const _Z3 = new THREE.Vector3();
-
-        const _matWorld1 = new THREE.Matrix4();
-        const _matWorld2 = new THREE.Matrix4();
-        const _matWorld3 = new THREE.Matrix4();
-
-        const _qWorldBase = new THREE.Quaternion();
-        const _qWorld1 = new THREE.Quaternion();
-        const _qWorld2 = new THREE.Quaternion();
-        const _qWorld3 = new THREE.Quaternion();
-
-        const _qInvBase = new THREE.Quaternion();
-        const _qInv1 = new THREE.Quaternion();
-        const _qInv2 = new THREE.Quaternion();
-
-        function solveLegIK(leg, worldTarget, lineMesh, currentElevationDeg) {
-            const { baseNode, j1Node, j2Node, j3Node } = leg;
-            if (!baseNode || !j1Node || !j2Node || !j3Node) return;
-
-            // 1. Posição Mundial do Quadril (P0)
-            baseNode.getWorldPosition(_P0);
-
-            // 2. Direção horizontal do Quadril até a Âncora no chão
-            _dirH.subVectors(worldTarget, _P0);
-            _dirH.y = 0;
-            const horizDist = _dirH.length();
-            if (horizDist > 0.001) _dirH.divideScalar(horizDist);
-
-            // 3. Posição da Ponta da Coxa (P1) com Elevação Adaptativa e Auto-Reach Fallback
-            let gamma = THREE.MathUtils.degToRad(currentElevationDeg);
-            let isFallbackActive = false;
-
-            if (params.autoReachFallback) {
-                const h = _P0.y - worldTarget.y;
-                const D_total = Math.sqrt(horizDist * horizDist + h * h);
-                const theta_target = Math.atan2(-h, horizDist);
-                const D_max = (L2_M + L3_M) * 0.98;
-
-                // Checagem se a elevação nominal excede o alcance físico da cadeia fêmur+tíbia
-                const p1x_nom = L1_M * Math.cos(gamma);
-                const p1y_nom = L1_M * Math.sin(gamma);
-                const dist1_sq = (horizDist - p1x_nom) * (horizDist - p1x_nom) + (-h - p1y_nom) * (-h - p1y_nom);
-
-                if (dist1_sq > D_max * D_max && D_total > 0.001) {
-                    const K = (D_total * D_total + L1_M * L1_M - D_max * D_max) / (2 * L1_M * D_total);
-                    if (K <= 1.0) {
-                        const deltaTheta = Math.acos(THREE.MathUtils.clamp(K, -1.0, 1.0));
-                        const gammaLimit = theta_target + deltaTheta;
-                        if (gammaLimit < gamma) {
-                            gamma = gammaLimit;
-                            isFallbackActive = true;
-                        }
-                    } else {
-                        gamma = theta_target;
-                        isFallbackActive = true;
-                    }
-                }
-            }
-
-            _P1.copy(_P0)
-               .addScaledVector(_dirH, L1_M * Math.cos(gamma))
-               .addScaledVector(_up, L1_M * Math.sin(gamma));
-
-            // 4. Cinemática 2-Bone de P1 até worldTarget (Fêmur P1->P2 e Tíbia P2->P3)
-            _vTarget.subVectors(worldTarget, _P1);
-            const dist = _vTarget.length();
-
-            const dClamped = THREE.MathUtils.clamp(dist, Math.abs(L2_M - L3_M) * 1.02, (L2_M + L3_M) * 0.98);
-            const cosAlpha = THREE.MathUtils.clamp((L2_M * L2_M + dClamped * dClamped - L3_M * L3_M) / (2 * L2_M * dClamped), -1, 1);
-            const alpha = Math.acos(cosAlpha);
-
-            _vTUnit.copy(_vTarget).divideScalar(dist);
-
-            // Eixo da dobradiça UNIFICADO (dirH x UP)
-            _hingeAxis.crossVectors(_dirH, _up).normalize();
-
-            // Vetor perpendicular no plano vertical apontando para CIMA
-            _perpUp.crossVectors(_hingeAxis, _vTUnit).normalize();
-            if (_perpUp.y < 0) _perpUp.negate();
-
-            // Direção do Fêmur rotacionada para CIMA (Elbow-UP)
-            _femurDir.copy(_vTUnit).multiplyScalar(Math.cos(alpha))
-                     .addScaledVector(_perpUp, Math.sin(alpha))
-                     .normalize();
-
-            // Posição do Joelho (P2)
-            _P2.copy(_P1).addScaledVector(_femurDir, L2_M);
-
-            // Direção da Tíbia apontando para a âncora
-            _tibiaDir.subVectors(worldTarget, _P2).normalize();
-            _P3.copy(_P2).addScaledVector(_tibiaDir, L3_M);
-
-            // Direção da Coxa (P0 -> P1)
-            _coxaDir.subVectors(_P1, _P0).normalize();
-
-            // Feedback Visual de Tensão e Fallback
-            const tensionRatio = dist / (L2_M + L3_M);
-            const index = leg.index;
-
-            if (lineMesh) {
-                if (isFallbackActive) {
-                    lineMesh.material.color.setHex(0xff0038); // Vermelho Intenso: Atuação Adaptativa / Fallback Ativo
-                } else if (tensionRatio > 0.85) {
-                    lineMesh.material.color.setHex(0xffd32a); // Amarelo: Sob Tensão
-                } else {
-                    lineMesh.material.color.setHex(leg.side === 'D' ? 0x38bdf8 : 0x7bed9f); // Ciano (D) / Verde (E)
-                }
-            }
-
-            if (targetMeshes[index]) {
-                if (isFallbackActive) {
-                    targetMeshes[index].material.color.setHex(0xff0038);
-                    targetMeshes[index].material.emissive.setHex(0x880011);
-                } else if (tensionRatio > 0.85) {
-                    targetMeshes[index].material.color.setHex(0xffd32a);
-                    targetMeshes[index].material.emissive.setHex(0x554400);
-                } else {
-                    targetMeshes[index].material.color.setHex(leg.side === 'D' ? 0x00d2ff : 0x2ed573);
-                    targetMeshes[index].material.emissive.setHex(leg.side === 'D' ? 0x003366 : 0x115522);
-                }
-            }
-
-            if (params.ikEnabled) {
-                // 5. BASE ORTONORMAL RIGOROSA (ZERO BANK)
-                // --- SEGMENTO 1: COXA ---
-                _X1.copy(_coxaDir);
-                _Y1.copy(_hingeAxis);
-                _Z1.crossVectors(_X1, _Y1).normalize();
-                _matWorld1.makeBasis(_X1, _Y1, _Z1);
-                _qWorld1.setFromRotationMatrix(_matWorld1);
-
-                baseNode.getWorldQuaternion(_qWorldBase);
-                _qInvBase.copy(_qWorldBase).invert();
-                j1Node.quaternion.multiplyQuaternions(_qInvBase, _qWorld1);
-                j1Node.updateMatrixWorld(true);
-
-                // --- SEGMENTO 2: FÊMUR ---
-                _X2.copy(_femurDir);
-                _Y2.copy(_hingeAxis);
-                _Z2.crossVectors(_X2, _Y2).normalize();
-                _matWorld2.makeBasis(_X2, _Y2, _Z2);
-                _qWorld2.setFromRotationMatrix(_matWorld2);
-
-                _qInv1.copy(_qWorld1).invert();
-                j2Node.quaternion.multiplyQuaternions(_qInv1, _qWorld2);
-                j2Node.updateMatrixWorld(true);
-
-                // --- SEGMENTO 3: TÍBIA ---
-                _X3.copy(_tibiaDir);
-                _Y3.copy(_hingeAxis);
-                _Z3.crossVectors(_X3, _Y3).normalize();
-                _matWorld3.makeBasis(_X3, _Y3, _Z3);
-                _qWorld3.setFromRotationMatrix(_matWorld3);
-
-                _qInv2.copy(_qWorld2).invert();
-                j3Node.quaternion.multiplyQuaternions(_qInv2, _qWorld3);
-                j3Node.updateMatrixWorld(true);
-            }
-
-            // Atualizar Linha do Esqueleto IK
-            if (lineMesh && (params.showSkeletonLines || params.xrayMode)) {
-                lineMesh.geometry.setPositions([
-                    _P0.x, _P0.y, _P0.z,
-                    _P1.x, _P1.y, _P1.z,
-                    _P2.x, _P2.y, _P2.z,
-                    _P3.x, _P3.y, _P3.z
-                ]);
-            }
-
-            // Atualizar Gizmos e Juntas XRay da Perna (4 juntas: P0, P1, P2, P3)
-            if (legJointGizmos[leg.index]) {
-                const [g0, g1, g2, g3] = legJointGizmos[leg.index];
-                g0.position.copy(_P0);
-                g0.quaternion.copy(_qWorldBase);
-
-                g1.position.copy(_P1);
-                g1.quaternion.copy(_qWorld1);
-
-                g2.position.copy(_P2);
-                g2.quaternion.copy(_qWorld2);
-
-                g3.position.copy(_P3);
-                g3.quaternion.copy(_qWorld3);
-            }
-
-            return isFallbackActive;
-        }
-
-        function updateHexaBOT() {
-            if (!modelRoot || legs.length === 0) return;
-
-            // Atualizar Elevação Adaptativa pela Altura Atual do Corpo
-            let currentElevation = params.coxaElevation;
-            if (params.adaptiveElevation) {
-                currentElevation = calculateAdaptiveElevation(params.bodyPosY);
-                params.coxaElevation = currentElevation;
-            }
-
-            // Translação do Corpo
-            bodyGroup.position.set(params.bodyPosX, params.bodyPosY, params.bodyPosZ);
-
-            // Rotação do Corpo (Pitch, Roll, Yaw)
-            const pitchRad = THREE.MathUtils.degToRad(params.bodyPitch);
-            const rollRad = THREE.MathUtils.degToRad(params.bodyRoll);
-            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw);
-            bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
-
-            // Atualizar matriz de mundo do corpo
-            bodyGroup.updateMatrixWorld(true);
-
-            // Resolver IK com a elevação calculada
-            let fallbackCount = 0;
-            for (let i = 0; i < legs.length; i++) {
-                if (solveLegIK(legs[i], footTargets[i], legLines[i], currentElevation)) {
-                    fallbackCount++;
-                }
-            }
-
-            // Atualizar Gizmo do Corpo e da Cabeça
-            bodyGroup.getWorldPosition(_tempVecBc);
-            if (bodyGizmo) {
-                bodyGizmo.position.copy(_tempVecBc);
-                bodyGizmo.quaternion.copy(bodyGroup.quaternion);
-            }
-            if (headGizmo && headNode) {
-                headNode.getWorldPosition(_tempVecHead);
-                headGizmo.position.copy(_tempVecHead);
-                headNode.getWorldQuaternion(headGizmo.quaternion);
-            }
-
-            // Atualizar Linhas da Espinha Central da Aranha (Conexão do Corpo com as 6 Bases)
-            if (bodySpineMesh && skeletonLinesGroup.visible && legs.length === 6) {
-                const pos = [];
-                bodyGroup.getWorldPosition(_tempVecBc);
-
-                const pFR = legs[0].baseNode.getWorldPosition(_tempVec1);
-                const pMR = legs[1].baseNode.getWorldPosition(_tempVec2);
-                const pBR = legs[2].baseNode.getWorldPosition(_tempVec3);
-                const pFL = legs[3].baseNode.getWorldPosition(_tempVec4);
-                const pML = legs[4].baseNode.getWorldPosition(_tempVec5);
-                const pBL = legs[5].baseNode.getWorldPosition(_tempVec6);
-
-                const bases = [pFR, pMR, pBR, pFL, pML, pBL];
-                // 6 Raios: Centro do Corpo -> Bases das Pernas
-                for (let i = 0; i < 6; i++) {
-                    pos.push(_tempVecBc.x, _tempVecBc.y, _tempVecBc.z, bases[i].x, bases[i].y, bases[i].z);
-                }
-
-                // 3 Transversais: FR<->FL, MR<->ML, BR<->BL
-                pos.push(pFR.x, pFR.y, pFR.z, pFL.x, pFL.y, pFL.z);
-                pos.push(pMR.x, pMR.y, pMR.z, pML.x, pML.y, pML.z);
-                pos.push(pBR.x, pBR.y, pBR.z, pBL.x, pBL.y, pBL.z);
-
-                // 2 Longitudinais Direita: FR<->MR, MR<->BR
-                pos.push(pFR.x, pFR.y, pFR.z, pMR.x, pMR.y, pMR.z);
-                pos.push(pMR.x, pMR.y, pMR.z, pBR.x, pBR.y, pBR.z);
-
-                // 2 Longitudinais Esquerda: FL<->ML, ML<->BL
-                pos.push(pFL.x, pFL.y, pFL.z, pML.x, pML.y, pML.z);
-                pos.push(pML.x, pML.y, pML.z, pBL.x, pBL.y, pBL.z);
-
-                bodySpineMesh.geometry.setPositions(pos);
-            }
-
-            // Atualizar Telemetria
-            const ikStatus = document.getElementById('ik-status');
-            if (ikStatus) {
-                ikStatus.innerText = params.ikEnabled ? 'Ativo (3-DoF)' : 'Pausado';
-                ikStatus.style.color = params.ikEnabled ? '#58a6ff' : '#8b949e';
-            }
-            document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
-            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}`;
-            
-            const telFl = document.getElementById('tel-fl');
-            if (telFl) {
-                if (fallbackCount > 0) {
-                    telFl.innerHTML = `<strong style="color: #ff9f43;">${fallbackCount} pata${fallbackCount > 1 ? 's' : ''} em Fallback</strong>`;
-                } else {
-                    telFl.innerHTML = `<span style="color: #7ee787;">100% Contato</span>`;
-                }
-            }
-        }
-
-        // --- GUI DE CONTROLES ---
-        let gui;
-        function initGUI() {
-            gui = new GUI({ title: '🤖 Controles do HexaBOT' });
-
-            const fPosture = gui.addFolder('Postura & Curva Adaptativa');
-            fPosture.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').listen().onChange(updateFootTargets);
-            const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
-            const cElevation = fPosture.add(params, 'coxaElevation', 5, 45, 0.5).name('Elevação Coxa (°)').listen().disable(params.adaptiveElevation);
-            fPosture.add(params, 'autoReachFallback').name('🛡️ Relaxamento Alcance (Auto)').listen();
-
-            cAdapt.onChange(v => {
-                cElevation.disable(v);
-            });
-
-            const fBodyPos = gui.addFolder('Translação do Corpo');
-            fBodyPos.add(params, 'bodyPosY', 0.0, 2.5, 0.01).name('Altura (Y)').listen();
-            fBodyPos.add(params, 'bodyPosX', -2.0, 2.0, 0.01).name('Lateral (X)').listen();
-            fBodyPos.add(params, 'bodyPosZ', -2.0, 2.0, 0.01).name('Frente/Trás (Z)').listen();
-
-            const fBodyRot = gui.addFolder('Rotação do Corpo');
-            fBodyRot.add(params, 'bodyPitch', -35, 35, 0.1).name('Pitch (Frente/Trás)').listen();
-            fBodyRot.add(params, 'bodyRoll', -35, 35, 0.1).name('Roll (Lateral)').listen();
-            fBodyRot.add(params, 'bodyYaw', -40, 40, 0.1).name('Yaw (Giro)').listen();
-
-            const fHead = gui.addFolder('👁️ Cabeça & Expressão (BlendShapes)');
-            fHead.add(params, 'irisE', 0.0, 1.0, 0.01).name('Íris Esquerda (IRIS_E)').listen().onChange(updateMorphTargets);
-            fHead.add(params, 'irisD', 0.0, 1.0, 0.01).name('Íris Direita (IRIS_D)').listen().onChange(updateMorphTargets);
-
-            const fDemo = gui.addFolder('Auto Balanço / Rebolado');
-            fDemo.add(params, 'autoSway').name('Ativar Balanço (Tecla A)').listen();
-            fDemo.add(params, 'swaySpeed', 0.2, 5.0, 0.1).name('Velocidade');
-            fDemo.add(params, 'swayHeightCenter', 0.2, 1.8, 0.05).name('Altura Média');
-            fDemo.add(params, 'swayHeightAmp', 0.0, 0.8, 0.05).name('Amplitude Altura');
-            fDemo.add(params, 'swayPitchRoll', 0, 30, 1).name('Ângulo Pitch/Roll');
-            fDemo.add(params, 'swayYaw', 0, 45, 1).name('Ângulo Yaw');
-            fDemo.add(params, 'swayShift', 0.0, 1.0, 0.05).name('Deslocamento X/Z');
-
-            const fLights = gui.addFolder('💡 Iluminação & Marcadores');
-            
-            const fEnv = fLights.addFolder('🌐 Reflexos Globais (IBL Room)');
-            fEnv.add(params, 'envIntensity', 0.0, 4.0, 0.05).name('Intensidade Reflexo').listen().onChange(updateEnvironment);
-            fEnv.add(params, 'envRotation', 0, 360, 1).name('Giro do Reflexo (°)').listen().onChange(updateEnvironment);
-            fEnv.open();
-
-            fLights.add(params, 'showLightHelpers').name('Mostrar Marcadores').onChange(v => {
-                dirLightHelper.visible = v;
-                rimLightHelper.visible = v;
-                rimLight2Helper.visible = v;
-                dirMarker.visible = v;
-                rimMarker1.visible = v;
-                rimMarker2.visible = v;
-            });
-
-            const fDir = fLights.addFolder('☀️ Luz Direcional (Sol)');
-            fDir.add(dirLight, 'intensity', 0, 10, 0.1).name('Intensidade');
-            fDir.addColor({ color: '#' + dirLight.color.getHexString() }, 'color').name('Cor').onChange(c => dirLight.color.set(c));
-            fDir.add(dirLight.position, 'x', -30, 30, 0.5).name('Pos X').onChange(() => dirLightHelper.update());
-            fDir.add(dirLight.position, 'y', 0, 40, 0.5).name('Pos Y').onChange(() => dirLightHelper.update());
-            fDir.add(dirLight.position, 'z', -30, 30, 0.5).name('Pos Z').onChange(() => dirLightHelper.update());
-            fDir.close();
-
-            const fRim1 = fLights.addFolder('🔵 Rim Light 1');
-            fRim1.add(rimLight, 'intensity', 0, 20, 0.2).name('Intensidade');
-            fRim1.addColor({ color: '#' + rimLight.color.getHexString() }, 'color').name('Cor').onChange(c => rimLight.color.set(c));
-            fRim1.add(rimLight.position, 'x', -30, 30, 0.5).name('Pos X');
-            fRim1.add(rimLight.position, 'y', -10, 30, 0.5).name('Pos Y');
-            fRim1.add(rimLight.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim1.add(rimLight, 'distance', 0, 200, 1).name('Distância');
-            fRim1.close();
-
-            const fRim2 = fLights.addFolder('🔵 Rim Light 2');
-            fRim2.add(rimLight2, 'intensity', 0, 20, 0.2).name('Intensidade');
-            fRim2.addColor({ color: '#' + rimLight2.color.getHexString() }, 'color').name('Cor').onChange(c => rimLight2.color.set(c));
-            fRim2.add(rimLight2.position, 'x', -30, 30, 0.5).name('Pos X');
-            fRim2.add(rimLight2.position, 'y', -10, 30, 0.5).name('Pos Y');
-            fRim2.add(rimLight2.position, 'z', -30, 30, 0.5).name('Pos Z');
-            fRim2.add(rimLight2, 'distance', 0, 200, 1).name('Distância');
-            fRim2.close();
-
-            const fAmb = fLights.addFolder('🌫️ Luz Ambiente');
-            fAmb.add(ambientLight, 'intensity', 0, 3, 0.05).name('Intensidade');
-            fAmb.addColor({ color: '#' + ambientLight.color.getHexString() }, 'color').name('Cor').onChange(c => ambientLight.color.set(c));
-            fAmb.close();
-
-            fLights.close();
-
-            const fVis = gui.addFolder('Exibição & Auxiliares');
-            fVis.add({ openHelp: () => toggleHelpModal(true) }, 'openHelp').name('⌨️ Guia de Atalhos (Tecla H)');
-            fVis.add(params, 'xrayMode').name('🦴 XRay Mode (Tecla X)').listen().onChange(setXRayMode);
-            fVis.add(params, 'showTelemetry').name('Métricas / Info (Tecla I)').listen().onChange(toggleTelemetry);
-            fVis.add({ toggleUI: () => toggleUIVisibility() }, 'toggleUI').name('🖥️ Ocultar Painéis (Tecla P)');
-            fVis.add(params, 'ikEnabled').name('IK Habilitado');
-            fVis.add(params, 'showSkeletonLines').name('Linhas de Esqueleto IK').onChange(v => {
-                if (!params.xrayMode) skeletonLinesGroup.visible = v;
-            });
-            fVis.add(params, 'showFootTargets').name('Mostrar Âncoras Patas').onChange(v => {
-                if (!params.xrayMode) footTargetGroup.visible = v;
-            });
-            fVis.add(gridHelper, 'visible').name('Mostrar Grade');
-            fVis.close();
-
-            gui.add(params, 'resetPose').name('↺ Resetar Postura (Tecla R)');
-
-            fPosture.open();
-            fBodyPos.open();
-            fBodyRot.open();
-            fHead.open();
-            fDemo.open();
-        }
-
-        // --- JANELA MODAL DE ATALHOS / AJUDA (TECLA H) ---
-        function toggleHelpModal(show) {
-            const modal = document.getElementById('help-modal-overlay');
-            if (!modal) return;
-            const isCurrentlyActive = modal.classList.contains('active');
-            const shouldShow = (show !== undefined) ? show : !isCurrentlyActive;
-            if (shouldShow) {
-                modal.classList.add('active');
-            } else {
-                modal.classList.remove('active');
-            }
-        }
-
-        const btnCloseHelp = document.getElementById('btn-close-help');
-        if (btnCloseHelp) {
-            btnCloseHelp.addEventListener('click', () => toggleHelpModal(false));
-        }
-        const helpOverlay = document.getElementById('help-modal-overlay');
-        if (helpOverlay) {
-            helpOverlay.addEventListener('click', (e) => {
-                if (e.target === helpOverlay) toggleHelpModal(false);
-            });
-        }
-
-        // --- ATALHOS DE TECLADO ---
-        window.addEventListener('keydown', (e) => {
-            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
-            if (e.key === 'h' || e.key === 'H') {
-                toggleHelpModal();
-            } else if (e.key === 'Escape') {
-                toggleHelpModal(false);
-            } else if (e.key === 'i' || e.key === 'I') {
-                toggleTelemetry();
-            } else if (e.key === 'x' || e.key === 'X') {
-                setXRayMode(!params.xrayMode);
-            } else if (e.key === 'r' || e.key === 'R') {
-                resetPose();
-            } else if (e.key === 'a' || e.key === 'A') {
-                toggleAutoSway();
-            } else if (e.key === 'p' || e.key === 'P') {
-                toggleUIVisibility();
-            }
-        });
-
-        // --- LOOP PRINCIPAL ---
-        const clock = new THREE.Clock();
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            if (dirLightHelper && dirLightHelper.visible) {
-                dirLightHelper.update();
-            }
-
-            const elapsedTime = clock.getElapsedTime();
-
-            if (params.autoSway && modelRoot) {
-                const t = elapsedTime * params.swaySpeed;
-
-                // Ondulações com os parâmetros calibrados
-                params.bodyPitch = Math.sin(t * 1.1) * params.swayPitchRoll;
-                params.bodyRoll = Math.cos(t * 0.9) * params.swayPitchRoll;
-                params.bodyYaw = Math.sin(t * 0.7) * params.swayYaw;
-
-                // Altura oscilando em torno da Altura Média (0.6m) com amplitude (0.3m) -> varia de 0.3m a 0.9m
-                params.bodyPosY = THREE.MathUtils.clamp(
-                    params.swayHeightCenter + Math.sin(t * 1.8) * params.swayHeightAmp,
-                    0.02,
-                    2.5
-                );
-                params.bodyPosX = Math.cos(t * 0.8) * params.swayShift;
-                params.bodyPosZ = Math.sin(t * 0.6) * params.swayShift;
-            }
-
-            updateHexaBOT();
-
-            controls.update();
-            renderer.render(scene, camera);
-        }
-
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            legLines.forEach(l => l.material.resolution.set(window.innerWidth, window.innerHeight));
-            if (bodySpineMesh) bodySpineMesh.material.resolution.set(window.innerWidth, window.innerHeight);
-        });
-    </script>
 </body>
 </html>
