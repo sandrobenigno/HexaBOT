@@ -72,8 +72,9 @@ export class ShapeKeyAnimator {
      * @param {boolean} isActuallyFiring Se o laser está efetivamente disparando
      * @param {number} damageIntensity Intensidade atual do envelope de dano (0.0 a 1.0)
      * @param {boolean} [isDead=false] Se o robô está em estado de morte/paralisia
+     * @param {boolean} [isVictoryDancing=false] Se o robô está na Dança da Vitória
      */
-    update(dt, elapsedTime, isActuallyFiring, damageIntensity, isDead = false) {
+    update(dt, elapsedTime, isActuallyFiring, damageIntensity, isDead = false, isVictoryDancing = false) {
         // 1. Componente de Tiro (Dilatação da Íris com Easy-Out de 500ms)
         if (isActuallyFiring && !isDead) {
             this.irisShootingWeight = THREE.MathUtils.damp(this.irisShootingWeight, 1.00, 32.0, dt);
@@ -95,11 +96,25 @@ export class ShapeKeyAnimator {
         // No tiro, os olhos saltam apenas 10%
         const shootingOlhosWeight = this.irisShootingWeight * 0.10;
 
-        // 2. Combinação e Ponderação Final (Tiro + Dano + Morte Paralisada)
+        // 2. Combinação e Ponderação Final (Tiro + Dano + Morte Paralisada + Dança da Vitória)
         let finalIrisD = Math.max(this.irisShootingWeight, 0.30 * damageIntensity);
         let finalIrisE = Math.max(this.irisShootingWeight, 1.00 * damageIntensity);
         let finalCarapaca = 0.95 * damageIntensity;
         let finalOlhos = Math.max(shootingOlhosWeight, 1.00 * damageIntensity);
+
+        // Dança da Vitória (Funk Groove): Sincronizado a 1 batida por segundo (BPM 60)
+        if (isVictoryDancing && !isDead) {
+            const beatPhase = (elapsedTime * Math.PI); // 1 Batida por segundo (meio ciclo seno)
+            const danceCarapaca = Math.pow(Math.abs(Math.sin(beatPhase)), 1.5) * 0.95;
+            const danceOlhos = Math.pow(Math.abs(Math.cos(beatPhase)), 1.5) * 0.70;
+            const danceIrisD = 0.75 + Math.sin(beatPhase * 2.0) * 0.25;
+            const danceIrisE = 0.75 + Math.cos(beatPhase * 2.0) * 0.25;
+
+            finalCarapaca = Math.max(finalCarapaca, danceCarapaca);
+            finalOlhos = Math.max(finalOlhos, danceOlhos);
+            finalIrisD = Math.max(finalIrisD, danceIrisD);
+            finalIrisE = Math.max(finalIrisE, danceIrisE);
+        }
 
         // Quando a HX morre: carapaça travada aberta, olhos saltados pra fora, olho D meio aberto (50%) e olho E fechado (0%)
         if (isDead) {

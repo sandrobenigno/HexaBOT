@@ -48,6 +48,10 @@ export class EnemyManager {
         this.tribalMasterAngle = 0.0;
         this.hasStartedTribalMusic = false;
 
+        // Estado de Vitória (Todos os inimigos destruídos)
+        this.hasSpawnedEnemies = false;
+        this.victoryTriggered = false;
+
         // Ouvir quando um inimigo finaliza o carregamento do modelo GLB
         this.eventBus.on('enemy:modelReady', () => {
             this.updateTargetableCache();
@@ -61,6 +65,7 @@ export class EnemyManager {
      * Posiciona as cabines iniciais na arena de combate.
      */
     setupInitialSpawners() {
+        this.hasSpawnedEnemies = true;
         // Cabine 1 (Setor Nordeste)
         this.createSpawner(28.0, 24.0, 5.0);
         // Cabine 2 (Setor Sudoeste)
@@ -242,6 +247,15 @@ export class EnemyManager {
             }
         }
 
+        // 4. Verificar Condição de Vitória (Todas as cabines e joaninhas destruídas)
+        if (this.hasSpawnedEnemies && !hxIsDead && !this.victoryTriggered) {
+            if (this.spawners.length === 0 && this.enemies.length === 0) {
+                this.victoryTriggered = true;
+                this.eventBus.emit('combat:victory');
+                console.log('[EnemyManager] Todos os inimigos destruídos! Disparando Dança da Vitória!');
+            }
+        }
+
         if (targetsNeedUpdate) {
             this.updateTargetableCache();
         }
@@ -361,6 +375,8 @@ export class EnemyManager {
         this.tribalCircleActive = false;
         this.tribalMasterAngle = 0.0;
         this.hasStartedTribalMusic = false;
+        this.victoryTriggered = false;
+        this.hasSpawnedEnemies = false;
 
         this.spawners.forEach(s => s.dispose());
         this.enemies.forEach(e => e.dispose());

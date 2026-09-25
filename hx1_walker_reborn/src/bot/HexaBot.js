@@ -147,6 +147,11 @@ export class HexaBot {
         this.currentInputManager = null;
         this.buildLockCone();
 
+        // Estado da Dança da Vitória (Ao Som de funk.mp3)
+        this.isVictoryDancing = false;
+        this.victoryDanceTime = 0.0;
+        this.tempDanceTarget = new THREE.Vector3();
+
         // Registrar eventos do Barramento
         this.setupEventListeners();
     }
@@ -160,6 +165,8 @@ export class HexaBot {
         this.eventBus.on('bot:resetPosition', () => this.resetWalker());
         this.eventBus.on('bot:toggleXRay', () => this.toggleXRay());
         this.eventBus.on('combat:toggleLock', () => this.toggleTargetLock());
+        this.eventBus.on('combat:victory', () => this.triggerVictoryDance());
+        this.eventBus.on('combat:continue', () => this.stopVictoryDance());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {
             this.walkerState.camAzimuth += deltaAzimuth;
             this.walkerState.camPitchDeg = THREE.MathUtils.clamp(
@@ -175,6 +182,29 @@ export class HexaBot {
                 100.0
             );
         });
+    }
+
+    /**
+     * Dispara o estado da Dança da Vitória (ao som de funk.mp3).
+     */
+    triggerVictoryDance() {
+        if (this.isDead) return;
+        this.isVictoryDancing = true;
+        this.victoryDanceTime = 0.0;
+        if (this.lockedTarget) {
+            this.lockedTarget = null;
+        }
+        if (this.lockConeMesh) {
+            this.lockConeMesh.visible = false;
+        }
+    }
+
+    /**
+     * Encerra a Dança da Vitória e devolve o controle do mecha ao jogador.
+     */
+    stopVictoryDance() {
+        this.isVictoryDancing = false;
+        this.victoryDanceTime = 0.0;
     }
 
     /**
@@ -657,6 +687,8 @@ export class HexaBot {
         this.walkerState.dynPitch = 0;
         this.walkerState.bodyHeight = this.activeBotManifest?.calibration?.defaultHeight || 1.70;
         this.damageReactionTimer = 0.0;
+        this.isVictoryDancing = false;
+        this.victoryDanceTimer = 0.0;
 
         // Restaurar integridade e energia
         this.hp = this.maxHp;
@@ -795,11 +827,11 @@ export class HexaBot {
         // Atualizar indicador visual da trava de mira (Cone Azul)
         this.updateLockCone(dt, elapsedTime);
 
-        // 2. Leitura de Movimentação WASD
+        // 2. Leitura de Movimentação WASD (Bloqueado se estiver morto ou na Dança da Vitória)
         const { moveFwd: rawMoveFwd, moveSide: rawMoveSide, isMoving: rawIsMoving } = inputManager.getMovementVector();
-        const moveFwd = this.isDead ? 0 : rawMoveFwd;
-        const moveSide = this.isDead ? 0 : rawMoveSide;
-        const isMoving = this.isDead ? false : rawIsMoving;
+        const moveFwd = (this.isDead || this.isVictoryDancing) ? 0 : rawMoveFwd;
+        const moveSide = (this.isDead || this.isVictoryDancing) ? 0 : rawMoveSide;
+        const isMoving = (this.isDead || this.isVictoryDancing) ? false : rawIsMoving;
         this.walkerState.isMoving = isMoving;
 
         // 3. Mira em Dois Níveis (Dual-Tier Aiming) & Proximidade
@@ -811,7 +843,7 @@ export class HexaBot {
             : (this.walkerState.baseHeading || 0);
 
         // Velocidade integral de avanço (sem redução ao combater inimigos próximos)
-        const effectiveMoveSpeed = this.isDead ? 0 : this.walkerState.moveSpeed;
+        const effectiveMoveSpeed = (this.isDead || this.isVictoryDancing) ? 0 : this.walkerState.moveSpeed;
 
         let deltaAngle = targetAimAngle - (this.walkerState.baseHeading || 0);
         deltaAngle = Math.atan2(Math.sin(deltaAngle), Math.cos(deltaAngle));
@@ -819,8 +851,8 @@ export class HexaBot {
 
         const comfortLimit = this.walkerState.comfortAngle; // 25 graus
 
-        if (this.isDead) {
-            // Se estiver morto ou em colapso, reseta a torção do tronco suavemente
+        if (this.isDead || this.isVictoryDancing) {
+            // Se estiver morto ou dançando, reseta a torção do tronco suavemente
             this.walkerState.torsoYaw = THREE.MathUtils.damp(this.walkerState.torsoYaw || 0, 0, 8.0, dt);
             this.walkerState.isTurningInPlace = false;
             this.walkerState.turnDir = 0;
@@ -977,6 +1009,7 @@ export class HexaBot {
                           !this.gait.isStepActive &&
                           !inputManager.isAimFiring &&
                           !inputManager.isMiddleDragging &&
+                          !this.isVictoryDancing &&
                           (this.damageReactionTimer <= 0);
 
         const swayRes = this.sway.update(dt, elapsedTime, {
@@ -986,8 +1019,48 @@ export class HexaBot {
             bodyHeight: this.walkerState.bodyHeight
         });
 
-        // 9. Atualizar Sistema de Combate Laser (Bloqueia até 100% caso a energia zere ou se estiver morto)
-        const canFireLaser = !this.isDead && !this.isEnergyDepleted && (this.energy > 0.0);
+        // 8.1 Cálculo Procedural da Dança da Vitória (Funk Groove a 1 Batida por Segundo)
+        let danceBounce = 0.0;
+        let danceShiftZ = 0.0;
+        let dancePitch = 0.0;
+        let danceRoll = 0.0;
+        let danceYaw = 0.0;
+
+        if (this.isVictoryDancing && !this.isDead) {
+            this.victoryDanceTime = (this.victoryDanceTime || 0) + dt;
+            const t = this.victoryDanceTime % 4.0;
+            const beatNum = Math.floor(t);
+            const beatProgress = t - beatNum;
+
+            // Heave bounce constante no beat do funk (1 por segundo)
+            const beatBounce = Math.abs(Math.sin(beatProgress * Math.PI)) * 0.28;
+            danceBounce = beatBounce;
+
+            if (beatNum === 0) {
+                // Beat 0 (0-1s): Swing e roll para a esquerda, pata FL sobe
+                danceRoll = -Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(14.0);
+                danceYaw = -Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(12.0);
+                dancePitch = Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(6.0);
+            } else if (beatNum === 1) {
+                // Beat 1 (1-2s): Swing e roll para a direita, pata FR sobe
+                danceRoll = Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(14.0);
+                danceYaw = Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(12.0);
+                dancePitch = Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(6.0);
+            } else if (beatNum === 2) {
+                // Beat 2 (2-3s): Double bounce / Raise the roof! Tronco empina para cima
+                danceBounce = Math.abs(Math.sin(beatProgress * Math.PI * 2.0)) * 0.35;
+                dancePitch = -Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(15.0);
+                danceShiftZ = -Math.sin(beatProgress * Math.PI) * 0.15;
+            } else if (beatNum === 3) {
+                // Beat 3 (3-4s): Funk drop squat e impulso
+                danceBounce = -Math.sin(beatProgress * Math.PI) * 0.30;
+                dancePitch = Math.sin(beatProgress * Math.PI) * THREE.MathUtils.degToRad(12.0);
+                danceShiftZ = Math.sin(beatProgress * Math.PI) * 0.10;
+            }
+        }
+
+        // 9. Atualizar Sistema de Combate Laser (Bloqueia durante a Dança da Vitória, caso a energia zere ou se estiver morto)
+        const canFireLaser = !this.isDead && !this.isVictoryDancing && !this.isEnergyDepleted && (this.energy > 0.0);
         const combatRes = this.combat.update(dt, elapsedTime, {
             isAimFiring: inputManager.isAimFiring && canFireLaser,
             bodyGroup: this.bodyGroup,
@@ -1030,7 +1103,7 @@ export class HexaBot {
         }
 
         // 10. Atualizar Morph Targets
-        this.shapeKeys.update(dt, elapsedTime, combatRes.isActuallyFiring, damageIntensity, this.isDead);
+        this.shapeKeys.update(dt, elapsedTime, combatRes.isActuallyFiring, damageIntensity, this.isDead, this.isVictoryDancing);
 
         // 11. Posicionamento do Chassi no Mundo
         this.robotMasterGroup.position.set(
@@ -1047,13 +1120,13 @@ export class HexaBot {
 
         this.bodyGroup.position.set(
             damageJoltX + swayRes.swayX,
-            this.walkerState.bodyHeight + this.walkerState.dynLift + damageJoltY + swayRes.swayY,
-            this.walkerState.dynShiftZ + combatRes.shootingShiftZ + damageJoltZ + swayRes.swayZ
+            this.walkerState.bodyHeight + this.walkerState.dynLift + damageJoltY + swayRes.swayY + danceBounce,
+            this.walkerState.dynShiftZ + combatRes.shootingShiftZ + damageJoltZ + swayRes.swayZ + danceShiftZ
         );
         this.bodyGroup.rotation.set(
-            this.walkerState.dynPitch + damageWobblePitch + swayRes.swayPitch,
-            this.walkerState.torsoYaw + damageWobbleYaw + swayRes.swayYaw,
-            damageWobbleRoll + swayRes.swayRoll,
+            this.walkerState.dynPitch + damageWobblePitch + swayRes.swayPitch + dancePitch,
+            this.walkerState.torsoYaw + damageWobbleYaw + swayRes.swayYaw + danceYaw,
+            damageWobbleRoll + swayRes.swayRoll + danceRoll,
             'YXZ'
         );
 
@@ -1061,13 +1134,52 @@ export class HexaBot {
 
         // 12. Executar Solver IK em Todas as Pernas
         const currentElevation = IKSolver.calculateAdaptiveElevation(
-            this.walkerState.bodyHeight + this.walkerState.dynLift
+            this.walkerState.bodyHeight + this.walkerState.dynLift + danceBounce
         );
         this.legs.forEach((leg) => {
-            if (leg.targetMesh) {
-                leg.targetMesh.position.copy(leg.currentTarget);
+            let ikTarget = leg.currentTarget;
+            if (this.isVictoryDancing && (leg.id === 'FL' || leg.id === 'FR')) {
+                const t = (this.victoryDanceTime || 0) % 4.0;
+                const beatNum = Math.floor(t);
+                const beatProgress = t - beatNum;
+
+                this.tempDanceTarget.copy(leg.currentTarget);
+
+                if (beatNum === 0 && leg.id === 'FL') {
+                    // Beat 0: Pata FL acenando no ar ao ritmo funk
+                    const wave = Math.sin(beatProgress * Math.PI);
+                    this.tempDanceTarget.y += wave * 1.15;
+                    this.tempDanceTarget.x -= wave * 0.45;
+                    this.tempDanceTarget.z += wave * 0.35;
+                    ikTarget = this.tempDanceTarget;
+                } else if (beatNum === 1 && leg.id === 'FR') {
+                    // Beat 1: Pata FR acenando no ar ao ritmo funk
+                    const wave = Math.sin(beatProgress * Math.PI);
+                    this.tempDanceTarget.y += wave * 1.15;
+                    this.tempDanceTarget.x += wave * 0.45;
+                    this.tempDanceTarget.z += wave * 0.35;
+                    ikTarget = this.tempDanceTarget;
+                } else if (beatNum === 2) {
+                    // Beat 2: Ambas patas FL e FR no ar (Raise the Roof!)
+                    const wave = Math.sin(beatProgress * Math.PI);
+                    const sign = (leg.id === 'FL' ? -1 : 1);
+                    this.tempDanceTarget.y += wave * 1.40;
+                    this.tempDanceTarget.x += sign * wave * 0.50;
+                    this.tempDanceTarget.z += wave * 0.40;
+                    ikTarget = this.tempDanceTarget;
+                } else if (beatNum === 3) {
+                    // Beat 3: Patas no solo com leve abertura lateral no drop squat
+                    const spread = Math.sin(beatProgress * Math.PI) * 0.25;
+                    const sign = (leg.id === 'FL' ? -1 : 1);
+                    this.tempDanceTarget.x += sign * spread;
+                    ikTarget = this.tempDanceTarget;
+                }
             }
-            IKSolver.solveLegIK(leg, leg.currentTarget, currentElevation, this.xrayMode);
+
+            if (leg.targetMesh) {
+                leg.targetMesh.position.copy(ikTarget);
+            }
+            IKSolver.solveLegIK(leg, ikTarget, currentElevation, this.xrayMode);
         });
 
         // 13. Cálculo da Velocidade Angular Instantânea e Modulação dos Servos (motor.mp3)

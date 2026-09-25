@@ -21,6 +21,7 @@ import { CollisionSystem } from './world/CollisionSystem.js';
 import { HexaBot } from './bot/HexaBot.js';
 import { EnemyManager } from './combat/EnemyManager.js';
 import { TribalFX } from './combat/TribalFX.js';
+import { VictoryFX } from './combat/VictoryFX.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
@@ -57,22 +58,26 @@ function initApp() {
     // 7. Instanciar Gerador de Efeitos de Fogo, Fumaça e Iluminação Tribal
     const tribalFX = new TribalFX(engine.scene, globalEventBus);
 
-    // 8. Instanciar Controlador do Hexápode
+    // 8. Instanciar Gerador de Confetes e Luz Festiva da Dança da Vitória
+    const victoryFX = new VictoryFX(engine.scene, globalEventBus);
+
+    // 9. Instanciar Controlador do Hexápode
     const hexaBot = new HexaBot(engine.scene, globalEventBus);
 
-    // 9. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
+    // 10. Inicializar Controladores de Interface (HUD e Carregador de Modelos)
     const hudController = new HUDController(globalEventBus, hexaBot, terrainArena);
     const modelLoader = new ModelLoaderUI(hexaBot, terrainArena);
 
-    // Resetar inimigos quando o robô for resetado
+    // Resetar inimigos quando o robô for resetado ou avançar de fase após vitória
     globalEventBus.on('bot:resetPosition', () => enemyManager.reset());
+    globalEventBus.on('combat:continue', () => enemyManager.reset());
 
     // Alternar restrição de colisão com pilares/obstáculos
     globalEventBus.on('collision:toggleObstacles', (enabled) => {
         collisionSystem.enableObstacles = enabled;
     });
 
-    // 10. Registrar Loop de Atualização no Game Loop do Engine
+    // 11. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
         // Atualizar animações de sancas e painéis de luz da arena
         terrainArena.update(dt, elapsedTime);
@@ -82,6 +87,9 @@ function initApp() {
 
         // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
         tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
+
+        // Atualizar partículas de confetes da vitória
+        victoryFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
 
         // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
         hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);

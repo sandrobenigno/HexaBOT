@@ -34,6 +34,8 @@ export class HUDController {
         this.btnStartGameElem = document.getElementById('btn-start-game');
         this.chkObstaclesElem = document.getElementById('chk-obstacles');
         this.lblObstaclesElem = document.getElementById('lbl-obstacles');
+        this.victoryModalElem = document.getElementById('victory-modal');
+        this.btnVictoryContinueElem = document.getElementById('btn-victory-continue');
 
         // Elementos da Barra Gamer de Status (HP e EN)
         this.hpFillBar = document.getElementById('hp-fill-bar');
@@ -206,12 +208,50 @@ export class HUDController {
             };
             window.addEventListener('keydown', onKeyStart);
         }
+
+        // Botão Continuar da Modal de Vitória
+        if (this.btnVictoryContinueElem) {
+            this.btnVictoryContinueElem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.eventBus.emit('combat:continue');
+            });
+        }
+
+        // Tecla Espaço ou Enter para avançar na comemoração da vitória
+        window.addEventListener('keydown', (e) => {
+            if (this.victoryModalElem && this.victoryModalElem.style.display !== 'none') {
+                if (e.code === 'Space' || e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.eventBus.emit('combat:continue');
+                }
+            }
+        });
     }
 
     /**
      * Vincula listeners de telemetria e notificações de estado via EventBus.
      */
     bindEventBusListeners() {
+        // Modal de Celebração da Vitória (Dança do Funk)
+        this.eventBus.on('combat:victory', () => {
+            if (this.victoryModalElem) {
+                this.victoryModalElem.style.display = 'block';
+            }
+        });
+
+        this.eventBus.on('combat:continue', () => {
+            if (this.victoryModalElem) {
+                this.victoryModalElem.style.display = 'none';
+            }
+        });
+
+        this.eventBus.on('bot:resetPosition', () => {
+            if (this.victoryModalElem) {
+                this.victoryModalElem.style.display = 'none';
+            }
+        });
+
         // Alternar modo HUD e painéis ocultos
         this.eventBus.on('ui:togglePanels', () => {
             document.body.classList.toggle('hud-panels-hidden');

@@ -46,10 +46,13 @@ export class SoundManager {
         this.loadSound('step_1', './assets/mp3/step_1.mp3');
         this.loadSound('motor', './assets/mp3/motor.mp3');
         this.loadSound('tribal', './assets/mp3/tribal.mp3');
+        this.loadSound('supercharge', './assets/mp3/supercharge.mp3');
+        this.loadSound('funk', './assets/mp3/funk.mp3');
 
-        // Estado do Som Ambiente e Intro
+        // Estado do Som Ambiente, Tribal e Funk
         this.ambientSound = null;
         this.tribalSound = null;
+        this.funkSound = null;
         this.hasStartedAmbient = false;
         this.hasPlayedInitialIntro = false;
         this.pendingIntroPlay = false;
@@ -180,6 +183,7 @@ export class SoundManager {
 
         this.eventBus.on('bot:resetPosition', () => {
             this.stopTribalMusic();
+            this.stopFunkMusic();
             this.playIntro(0.90);
         });
 
@@ -240,6 +244,61 @@ export class SoundManager {
         this.eventBus.on('sound:cabinDestroyed', (position) => {
             this.playCabinDestroyed(position);
         });
+
+        // Trilha Funk da Dança da Vitória
+        this.eventBus.on('combat:victory', () => {
+            this.startFunkMusic(0.95);
+        });
+
+        // Parar funk ao continuar
+        this.eventBus.on('combat:continue', () => {
+            this.stopFunkMusic(0.35);
+        });
+    }
+
+    /**
+     * Inicia a reprodução contínua da música Funk em loop durante a Dança da Vitória.
+     * @param {number} [volume=0.95]
+     */
+    startFunkMusic(volume = 0.95) {
+        const buffer = this.audioBuffers.get('funk');
+        if (!buffer) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        if (this.funkSound && this.funkSound.isPlaying) {
+            this.funkSound.stop();
+        }
+
+        this.funkSound = new THREE.Audio(this.listener);
+        this.funkSound.setBuffer(buffer);
+        this.funkSound.setLoop(true);
+        this.funkSound.setVolume(volume);
+        this.funkSound.play();
+    }
+
+    /**
+     * Encerra a música Funk com rampa suave de saída (fade-out).
+     * @param {number} [fadeTime=0.25]
+     */
+    stopFunkMusic(fadeTime = 0.25) {
+        if (!this.funkSound || !this.funkSound.isPlaying) return;
+
+        const gain = this.funkSound.getOutput();
+        if (gain && gain.gain && this.listener.context) {
+            const now = this.listener.context.currentTime;
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.linearRampToValueAtTime(0.001, now + fadeTime);
+            setTimeout(() => {
+                if (this.funkSound && this.funkSound.isPlaying) {
+                    this.funkSound.stop();
+                }
+            }, fadeTime * 1000);
+        } else {
+            this.funkSound.stop();
+        }
     }
 
     /**
