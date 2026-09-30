@@ -108,7 +108,7 @@ export class BotManifest {
      * @returns {Object} Configuração padrão
      */
     static getFallbackCalibration(modelName = '') {
-        const isHX1 = modelName.includes('aranha.glb') && !modelName.includes('pernalonga');
+        const isHX1 = (modelName.endsWith('aranha.glb') || modelName.includes('HX1')) && !modelName.includes('pernalonga') && !modelName.includes('texturizada');
         if (isHX1) {
             return {
                 defaultHeight: 0.75,
@@ -116,7 +116,7 @@ export class BotManifest {
                 swayDefaults: { speed: 4.0, heightCenter: 0.75, heightAmp: 0.05, pitchRoll: 2.0, yaw: 4.0, shift: 0.1 }
             };
         }
-        // Padrão HX2 (Pernalonga)
+        // Padrão HX2 (Pernalonga / Texturizada)
         return {
             defaultHeight: 1.85,
             stanceSpread: 1.00,

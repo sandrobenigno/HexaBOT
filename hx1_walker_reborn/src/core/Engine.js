@@ -33,7 +33,7 @@ export class Engine {
             45,
             window.innerWidth / window.innerHeight,
             0.5,
-            500
+            800
         );
         this.camera.position.set(0, 35, 40);
 
@@ -65,6 +65,11 @@ export class Engine {
         // 7. Evento de Redimensionamento da Janela
         this.boundOnResize = this.onWindowResize.bind(this);
         window.addEventListener('resize', this.boundOnResize);
+
+        // 8. Amortecimento da Câmera Adaptativa (Elevação & Zoom-out Dinâmicos)
+        this.adaptivePitch = 0.0;
+        this.adaptiveDist = 0.0;
+        this.adaptiveHeight = 0.0;
     }
 
     /**
@@ -168,13 +173,17 @@ export class Engine {
 
     /**
      * Atualiza a posição e orientação da câmera tática orbital em torno do alvo.
+     * Inclui elevação adaptativa automática e zoom-out suave ao aproximar-se dos blocos de borda,
+     * mantendo o foco absoluto no robô sem desencaixar o enquadramento.
      * @param {THREE.Vector3} targetPos Posição central do robô no mundo
      * @param {number} bodyHeight Altura atual do corpo
      * @param {number} camAzimuth Ângulo azimute da câmera (radianos)
      * @param {number} camPitchDeg Ângulo de inclinação da câmera (graus)
      * @param {number} camDistance Distância da câmera ao robô (metros)
+     * @param {number} [dt=0.016] Delta time em segundos
+     * @param {Object} [terrainArena=null] Instância de TerrainArena para detecção de obstáculos perimétricos
      */
-    updateTacticalCamera(targetPos, bodyHeight, camAzimuth, camPitchDeg, camDistance) {
+    updateTacticalCamera(targetPos, bodyHeight, camAzimuth, camPitchDeg, camDistance, dt = 0.016, terrainArena = null) {
         const pitchRad = THREE.MathUtils.degToRad(camPitchDeg);
         const camDistH = camDistance * Math.cos(pitchRad);
         const camDistV = camDistance * Math.sin(pitchRad);
@@ -183,16 +192,121 @@ export class Engine {
         const camTargetY = targetPos.y + bodyHeight * 0.7;
         const camTargetZ = targetPos.z;
 
-        const desiredCamX = camTargetX + Math.sin(camAzimuth) * camDistH;
-        const desiredCamY = camTargetY + camDistV;
-        const desiredCamZ = camTargetZ + Math.cos(camAzimuth) * camDistH;
+        const baseCamX = camTargetX + Math.sin(camAzimuth) * camDistH;
+        const baseCamY = camTargetY + camDistV;
+        const baseCamZ = camTargetZ + Math.cos(camAzimuth) * camDistH;
 
-        this.camera.position.set(desiredCamX, desiredCamY, desiredCamZ);
+        let maxNeededLift = 0.0;
+
+        // 1. Proximidade geral dos limites da arena (anel de monólitos a R ~ 122m)
+        const rCam = Math.sqrt(baseCamX * baseCamX + baseCamZ * baseCamZ);
+        const rBot = Math.sqrt(camTargetX * camTargetX + camTargetZ * camTargetZ);
+        const rMax = Math.max(rCam - 75.0, rBot - 60.0);
+        if (rMax > 0.0) {
+            const fRadius = THREE.MathUtils.clamp(rMax / 45.0, 0.0, 1.0);
+            maxNeededLift = Math.max(maxNeededLift, fRadius * 24.0);
+        }
+
+        // 2. Interseção com monólitos e elevação sobre os blocos de fortaleza
+        if (terrainArena && terrainArena.boundaryBlocks && terrainArena.boundaryBlocks.length > 0) {
+            const rayDx = camTargetX - baseCamX;
+            const rayDz = camTargetZ - baseCamZ;
+            const rayLen2D = Math.sqrt(rayDx * rayDx + rayDz * rayDz);
+            const uRayX = (rayLen2D > 0.001) ? (rayDx / rayLen2D) : 0;
+            const uRayZ = (rayLen2D > 0.001) ? (rayDz / rayLen2D) : 0;
+
+            for (let i = 0; i < terrainArena.boundaryBlocks.length; i++) {
+                const b = terrainArena.boundaryBlocks[i];
+                const bTopY = b.baseY + b.height + 4.0; // Topo com margem de segurança
+
+                // Distância da câmera ao centro do bloco
+                const toCamX = baseCamX - b.x;
+                const toCamZ = baseCamZ - b.z;
+                const distCam = Math.sqrt(toCamX * toCamX + toCamZ * toCamZ);
+
+                // Proximidade direta da câmera
+                if (distCam < 38.0) {
+                    const fProx = 1.0 - (distCam / 38.0);
+                    const liftDirect = Math.max(0.0, bTopY + 8.0 - baseCamY);
+                    maxNeededLift = Math.max(maxNeededLift, liftDirect * fProx);
+                }
+
+                // Teste de raio entre câmera e robô
+                if (rayLen2D > 0.001) {
+                    const toBlockX = b.x - baseCamX;
+                    const toBlockZ = b.z - baseCamZ;
+                    const projT = toBlockX * uRayX + toBlockZ * uRayZ;
+                    const s = projT / rayLen2D;
+
+                    if (s > -0.10 && s < 1.05) {
+                        const closeX = baseCamX + projT * uRayX;
+                        const closeZ = baseCamZ + projT * uRayZ;
+                        const distRay = Math.sqrt((b.x - closeX) * (b.x - closeX) + (b.z - closeZ) * (b.z - closeZ));
+                        const rInfl = Math.max(b.width, b.depth) * 0.75 + 10.0;
+
+                        if (distRay < rInfl) {
+                            const fRay = 1.0 - (distRay / rInfl);
+                            const sClamp = THREE.MathUtils.clamp(s, 0.05, 0.85);
+                            const reqCamY = (bTopY + 6.0 - sClamp * camTargetY) / (1.0 - sClamp);
+                            const liftRay = Math.max(0.0, reqCamY - baseCamY);
+                            maxNeededLift = Math.max(maxNeededLift, liftRay * fRay);
+                        }
+                    }
+                }
+            }
+        }
+
+        const targetLiftY = maxNeededLift;
+        const targetExtraPitch = THREE.MathUtils.clamp(targetLiftY * 1.1, 0.0, 32.0); // Eleva pitch até ~57°
+        const targetExtraDist = THREE.MathUtils.clamp(targetLiftY * 0.9, 0.0, 35.0); // Dá zoom-out até ~85m
+
+        // Interpolação suave e contínua (smooth damping)
+        const dampFactor = 5.5;
+        this.adaptiveHeight = THREE.MathUtils.damp(this.adaptiveHeight, targetLiftY, dampFactor, dt);
+        this.adaptivePitch = THREE.MathUtils.damp(this.adaptivePitch, targetExtraPitch, dampFactor, dt);
+        this.adaptiveDist = THREE.MathUtils.damp(this.adaptiveDist, targetExtraDist, dampFactor, dt);
+
+        // Calcular posição candidata da câmera adaptada
+        const effPitchRad = THREE.MathUtils.degToRad(camPitchDeg + this.adaptivePitch);
+        const effDist = camDistance + this.adaptiveDist;
+        const effDistH = effDist * Math.cos(effPitchRad);
+        const effDistV = effDist * Math.sin(effPitchRad) + this.adaptiveHeight;
+
+        const rawCamX = camTargetX + Math.sin(camAzimuth) * effDistH;
+        const rawCamY = camTargetY + effDistV;
+        const rawCamZ = camTargetZ + Math.cos(camAzimuth) * effDistH;
+
+        // 3. Trava de Contenção do Domo (Impede que a câmera ultrapasse ou atravesse a abóbada)
+        const domeCenterY = -2.5;
+        const domeMaxRadius = 148.0;
+        const safeClearance = 6.5; // Margem de segurança de 6.5m abaixo do teto/parede
+        const maxSafeDist = domeMaxRadius - safeClearance; // 141.5m
+
+        const dxDome = rawCamX;
+        const dyDome = rawCamY - domeCenterY;
+        const dzDome = rawCamZ;
+        const distFromDome = Math.sqrt(dxDome * dxDome + dyDome * dyDome + dzDome * dzDome);
+
+        let finalCamX = rawCamX;
+        let finalCamY = rawCamY;
+        let finalCamZ = rawCamZ;
+
+        if (distFromDome > maxSafeDist) {
+            const clampRatio = maxSafeDist / distFromDome;
+            finalCamX = dxDome * clampRatio;
+            finalCamY = domeCenterY + dyDome * clampRatio;
+            finalCamZ = dzDome * clampRatio;
+        }
+
+        // Piso mínimo de segurança para a câmera
+        finalCamY = Math.max(finalCamY, 2.5);
+
+        this.camera.position.set(finalCamX, finalCamY, finalCamZ);
         this.camera.lookAt(camTargetX, camTargetY, camTargetZ);
 
-        // Atualizar Fog dinâmico ancorado na distância da câmera
-        this.scene.fog.near = Math.max(10.0, camDistance - 30.0);
-        this.scene.fog.far = camDistance + 150.0;
+        // Atualizar Fog dinâmico calibrado para manter o domo visível e nítido
+        this.scene.fog.near = Math.max(10.0, effDist - 30.0);
+        this.scene.fog.far = Math.max(180.0, effDist + 160.0);
     }
 
     /**

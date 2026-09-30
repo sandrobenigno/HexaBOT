@@ -83,6 +83,7 @@ export class TerrainArena {
         this.decorativePillars = [];
         this.pillarsData = [];
         this.aimTargetableMeshes = [];
+        this.boundaryBlocks = [];
 
         // Precomputar valores constantes dos bumps para aceleração matemática
         this.bumps.forEach((b) => {
@@ -100,11 +101,13 @@ export class TerrainArena {
             b.halfZ = b.sizeZ * 0.5;
         });
 
-        // Construir malha do terreno, shader, blocos e pilares
+        // Construir malha do terreno, shader, blocos, pilares, barreira de fortaleza e domo de contenção
         this.buildTerrainMesh();
         this.buildSteppableBoxes();
         this.buildPillars();
         this.buildGridHelper();
+        this.buildBoundaryFortressBlocks();
+        this.buildSkyDome();
     }
 
     /**
@@ -174,11 +177,11 @@ export class TerrainArena {
     }
 
     /**
-     * Constrói a malha principal de terreno (280x280m com 140x140 subdivisões)
+     * Constrói a malha principal de terreno plano azulejado e dunas (300x300m com 150x150 subdivisões)
      * e aplica o Shader PBR avançado com mistura de mapas normais e texturas procedurais.
      */
     buildTerrainMesh() {
-        this.terrainGeo = new THREE.PlaneGeometry(280, 280, 140, 140);
+        this.terrainGeo = new THREE.PlaneGeometry(300, 300, 150, 150);
         this.terrainGeo.rotateX(-Math.PI / 2);
 
         const posAttr = this.terrainGeo.attributes.position;
@@ -536,16 +539,365 @@ export class TerrainArena {
     }
 
     /**
-     * Adiciona uma grade tática escura sobre o solo.
+     * Adiciona uma grade tática escura sobre o solo (300x300m).
      */
     buildGridHelper() {
-        this.gridHelper = new THREE.GridHelper(280, 70, 0x0a101d, 0x04070d);
+        this.gridHelper = new THREE.GridHelper(300, 75, 0x0a101d, 0x04070d);
         this.gridHelper.position.y = 0.04;
         this.arenaGroup.add(this.gridHelper);
     }
 
     /**
-     * Atualiza as animações de pulso das sancas, rodapés e painéis piscantes de Quake 3.
+     * Constrói a barreira perimétrica de grandes blocos monolíticos de fortaleza sci-fi contornando a arena.
+     * Inclui bordas holográficas neon, sancas de base/topo e painéis verticais com luzes piscantes (Quake III).
+     * Cada monólito possui materiais próprios para permitir transparência / fading por oclusão de câmera.
+     */
+    buildBoundaryFortressBlocks() {
+        const count = 28; // 28 monólitos gigantes cobrindo todo o perímetro da arena de 280x280m
+        const baseRadius = 122.0;
+
+        for (let k = 0; k < count; k++) {
+            const angle = (k / count) * Math.PI * 2 + Math.sin(k * 1.7) * 0.05;
+            const radiusJitter = Math.sin(k * 3.1) * 5.0 + Math.cos(k * 1.9) * 3.0;
+            const r = baseRadius + radiusJitter;
+
+            const blockX = Math.cos(angle) * r;
+            const blockZ = Math.sin(angle) * r;
+            const blockY = this.getBaseGroundMeshHeight(blockX, blockZ);
+
+            // Dimensões táticas do monólito
+            const sizeX = 14.0 + (k % 4) * 2.5; // 14.0 a 21.5m de largura
+            const sizeZ = 9.0 + ((k + 2) % 3) * 2.0; // 9.0 a 13.0m de profundidade
+            const height = 15.0 + (k % 5) * 2.4; // 15.0 a 24.6m de altura
+
+            const blockGroup = new THREE.Group();
+            // Rotação tangencial ao anel da arena com leve inclinação orgânica
+            const rotY = -angle + Math.PI * 0.5 + Math.sin(k * 2.2) * 0.15;
+            blockGroup.rotation.y = rotY;
+            blockGroup.position.set(blockX, blockY + height * 0.5, blockZ);
+
+            // Materiais individuais do monólito para suporte a X-Ray / Camera Occlusion Fading
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x090d14,
+                roughness: 0.85,
+                metalness: 0.25,
+                transparent: false,
+                opacity: 1.0
+            });
+
+            const capMat = new THREE.MeshStandardMaterial({
+                color: 0x05070c,
+                roughness: 0.80,
+                metalness: 0.35,
+                transparent: false,
+                opacity: 1.0
+            });
+
+            const padMat = new THREE.MeshStandardMaterial({
+                color: 0x030508,
+                emissive: 0x00060d,
+                roughness: 0.85,
+                metalness: 0.2,
+                transparent: false,
+                opacity: 1.0
+            });
+
+            const edgeColor = (k % 2 === 0) ? 0x00f0ff : 0x0284c7;
+            const edgeMat = new THREE.LineBasicMaterial({
+                color: edgeColor,
+                transparent: true,
+                opacity: 0.35
+            });
+
+            const coveCyanMat = new THREE.MeshBasicMaterial({
+                color: 0x00f0ff,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending
+            });
+
+            const coveAmberMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                transparent: true,
+                opacity: 0.75,
+                blending: THREE.AdditiveBlending
+            });
+
+            const panelMatA = new THREE.MeshBasicMaterial({
+                color: 0x00f0ff,
+                transparent: true,
+                opacity: 0.90,
+                blending: THREE.AdditiveBlending
+            });
+
+            const panelMatB = new THREE.MeshBasicMaterial({
+                color: 0xff8800,
+                transparent: true,
+                opacity: 0.80,
+                blending: THREE.AdditiveBlending
+            });
+
+            // 1. Corpo principal sólido do monólito
+            const bodyGeo = new THREE.BoxGeometry(sizeX, height, sizeZ);
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            bodyMesh.receiveShadow = true;
+            blockGroup.add(bodyMesh);
+            this.aimTargetableMeshes.push(bodyMesh);
+
+            // 2. Linhas de borda neon holográficas
+            const bodyEdges = new THREE.EdgesGeometry(bodyGeo);
+            const bodyLine = new THREE.LineSegments(bodyEdges, edgeMat);
+            blockGroup.add(bodyLine);
+
+            // 3. Topo escalonado (Cúpula / Módulo de Comando)
+            const capH = height * 0.16;
+            const capGeo = new THREE.BoxGeometry(sizeX * 0.72, capH, sizeZ * 0.72);
+            const capMesh = new THREE.Mesh(capGeo, capMat);
+            capMesh.position.y = height * 0.5 + capH * 0.5;
+            capMesh.receiveShadow = true;
+            blockGroup.add(capMesh);
+            this.aimTargetableMeshes.push(capMesh);
+
+            const capEdges = new THREE.EdgesGeometry(capGeo);
+            const capLine = new THREE.LineSegments(capEdges, edgeMat);
+            capLine.position.y = capMesh.position.y;
+            blockGroup.add(capLine);
+
+            // 4. Pad Tático no topo da cúpula
+            const padGeo = new THREE.PlaneGeometry(sizeX * 0.58, sizeZ * 0.58);
+            padGeo.rotateX(-Math.PI / 2);
+            const padMesh = new THREE.Mesh(padGeo, padMat);
+            padMesh.position.y = height * 0.5 + capH + 0.02;
+            padMesh.receiveShadow = true;
+            blockGroup.add(padMesh);
+
+            // 5. Sancas Horizontais de Luz (Trims de Energia)
+            // Sanca de Base (inferior)
+            const coveBaseGeo = new THREE.BoxGeometry(sizeX + 0.16, 0.25, sizeZ + 0.16);
+            const coveBaseMesh = new THREE.Mesh(coveBaseGeo, (k % 2 === 0) ? coveCyanMat : coveAmberMat);
+            coveBaseMesh.position.y = -height * 0.5 + 0.20;
+            blockGroup.add(coveBaseMesh);
+
+            // Sanca Intermediária (cintura)
+            const coveMidGeo = new THREE.BoxGeometry(sizeX + 0.12, 0.20, sizeZ + 0.12);
+            const coveMidMesh = new THREE.Mesh(coveMidGeo, (k % 2 === 0) ? coveAmberMat : coveCyanMat);
+            coveMidMesh.position.y = 0.0;
+            blockGroup.add(coveMidMesh);
+
+            // Sanca Superior (sub-borda)
+            const coveTopGeo = new THREE.BoxGeometry(sizeX + 0.16, 0.25, sizeZ + 0.16);
+            const coveTopMesh = new THREE.Mesh(coveTopGeo, (k % 2 === 0) ? coveCyanMat : coveAmberMat);
+            coveTopMesh.position.y = height * 0.5 - 0.20;
+            blockGroup.add(coveTopMesh);
+
+            // 6. Painéis Verticais Piscantes de Status (Quake III consoles & status slits)
+            // Painéis na face frontal (voltada para dentro da arena)
+            const panelCountFront = 4;
+            const slitW = 0.45;
+            const slitH = height * 0.60;
+            const panelFrontGeo = new THREE.BoxGeometry(slitW, slitH, 0.08);
+
+            const spacing = sizeX / (panelCountFront + 1);
+            for (let p = 0; p < panelCountFront; p++) {
+                const px = -sizeX * 0.5 + (p + 1) * spacing;
+                const pMat = ((k + p) % 2 === 0) ? panelMatA : panelMatB;
+                const panelMesh = new THREE.Mesh(panelFrontGeo, pMat);
+                // Face frontal no espaço local (+Z)
+                panelMesh.position.set(px, 0.0, sizeZ * 0.5 + 0.04);
+                blockGroup.add(panelMesh);
+            }
+
+            // Painéis nas faces laterais (+X e -X)
+            const panelSideGeo = new THREE.BoxGeometry(0.08, slitH * 0.8, 0.45);
+            const leftPanel = new THREE.Mesh(panelSideGeo, ((k % 2 === 0) ? panelMatB : panelMatA));
+            leftPanel.position.set(-sizeX * 0.5 - 0.04, 0.0, 0.0);
+            blockGroup.add(leftPanel);
+
+            const rightPanel = new THREE.Mesh(panelSideGeo, ((k % 2 === 0) ? panelMatA : panelMatB));
+            rightPanel.position.set(sizeX * 0.5 + 0.04, 0.0, 0.0);
+            blockGroup.add(rightPanel);
+
+            // 7. Balizadores de Luz suave nos quatro cantos superiores
+            const cornerSize = 0.35;
+            const cornerGeo = new THREE.BoxGeometry(cornerSize, 0.15, cornerSize);
+            const hx = sizeX * 0.46;
+            const hz = sizeZ * 0.46;
+            const corners = [
+                { cx: -hx, cz: -hz }, { cx: hx, cz: -hz },
+                { cx: -hx, cz: hz }, { cx: hx, cz: hz }
+            ];
+            corners.forEach((c) => {
+                const cornerMesh = new THREE.Mesh(cornerGeo, coveCyanMat);
+                cornerMesh.position.set(c.cx, height * 0.5 + 0.08, c.cz);
+                blockGroup.add(cornerMesh);
+            });
+
+            // 8. Ponto de luz sutil nas fortalezas cardeais principais
+            if (k % 7 === 0) {
+                const beaconLight = new THREE.PointLight(
+                    (k % 2 === 0) ? 0x00f0ff : 0xff9900,
+                    1.6,
+                    28.0
+                );
+                beaconLight.position.set(0, height * 0.5 + capH + 1.0, 0);
+                beaconLight.castShadow = false;
+                blockGroup.add(beaconLight);
+            }
+
+            this.arenaGroup.add(blockGroup);
+
+            // Registrar monólito na coleção para controle de oclusão e animação
+            this.boundaryBlocks.push({
+                group: blockGroup,
+                x: blockX,
+                z: blockZ,
+                baseY: blockY,
+                height: height,
+                width: sizeX,
+                depth: sizeZ,
+                occlusionRadius: Math.max(sizeX, sizeZ) * 0.65,
+                currentOpacity: 1.0,
+                materials: {
+                    bodyMat,
+                    capMat,
+                    padMat,
+                    edgeMat,
+                    coves: [coveBaseMesh.material, coveMidMesh.material, coveTopMesh.material, coveCyanMat, coveAmberMat],
+                    panelsA: [panelMatA],
+                    panelsB: [panelMatB]
+                }
+            });
+
+            // Registrar colisor sólido no perímetro da arena
+            this.pillarsData.push({
+                x: blockX,
+                z: blockZ,
+                radius: Math.max(sizeX, sizeZ) * 0.46
+            });
+        }
+
+        console.log(`[TerrainArena] Barreira perimétrica de ${count} Blocos de Fortaleza Sci-Fi gerada no limite da arena (Raio ~122m, Iluminação Quake III).`);
+    }
+
+    /**
+     * Constrói o Domo Holográfico de Contenção (Sky Dome Sci-Fi) cobrindo a arena inteira.
+     * Envolve o terreno (R = 148m) com transição contínua entre o horizonte escuro,
+     * grade hexagonal de campo de força cibernético, pulsos de radar e céu noturno profundo.
+     */
+    buildSkyDome() {
+        const domeGeo = new THREE.SphereGeometry(148.0, 64, 36, 0, Math.PI * 2, 0, Math.PI * 0.53);
+
+        // Shader Procedural de Domo Holográfico de Campo de Força
+        this.skyDomeMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0.0 },
+                uFogColor: { value: new THREE.Color(0x020306) },
+                uSkyColor: { value: new THREE.Color(0x020a14) },
+                uZenithColor: { value: new THREE.Color(0x041829) },
+                uGridColor: { value: new THREE.Color(0x00d2ff) },
+                uPulseColor: { value: new THREE.Color(0x00f0ff) }
+            },
+            vertexShader: `
+                varying vec3 vWorldPos;
+                varying vec2 vUv;
+                varying vec3 vNormalVec;
+
+                void main() {
+                    vUv = uv;
+                    vNormalVec = normal;
+                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    vWorldPos = worldPos.xyz;
+                    gl_Position = projectionMatrix * viewMatrix * worldPos;
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform vec3 uFogColor;
+                uniform vec3 uSkyColor;
+                uniform vec3 uZenithColor;
+                uniform vec3 uGridColor;
+                uniform vec3 uPulseColor;
+
+                varying vec3 vWorldPos;
+                varying vec2 vUv;
+                varying vec3 vNormalVec;
+
+                // Função para gerar grade hexagonal analítica regular
+                float hexGrid(vec2 p, float scale) {
+                    vec2 q = p * scale;
+                    const vec2 s = vec2(1.0, 1.7320508);
+                    vec4 hexC = floor(vec4(q, q - vec2(0.5, 1.0)) / vec4(s, s)) + 0.5;
+                    vec4 h = vec4(q - hexC.xy * s, q - (hexC.zw + 0.5) * s);
+                    vec2 g = dot(h.xy, h.xy) < dot(h.zw, h.zw) ? h.xy : h.zw;
+
+                    float d = max(dot(abs(g), vec2(0.8660254, 0.5)), abs(g.y));
+                    float edge = smoothstep(0.48, 0.50, d);
+                    return edge;
+                }
+
+                // Ruído pseudo-aleatório para estrelas cintilantes
+                float hash(vec2 p) {
+                    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+                }
+
+                void main() {
+                    float hY = max(0.0, vWorldPos.y);
+                    float normY = clamp(hY / 144.0, 0.0, 1.0);
+
+                    // 1. Gradiente Atmosférico Vertical (Horizonte Escuro -> Céu Tático Profundo)
+                    vec3 colAtmosphere = mix(uFogColor, uSkyColor, smoothstep(0.0, 0.35, normY));
+                    colAtmosphere = mix(colAtmosphere, uZenithColor, smoothstep(0.35, 1.0, normY));
+
+                    // 2. Anéis Horizontais de Contenção de Latitude
+                    float latRings = sin(vUv.y * 3.14159 * 18.0);
+                    float latLine = smoothstep(0.96, 0.995, latRings) * smoothstep(0.05, 0.25, normY);
+
+                    // 3. Campo de Força Holográfico Hexagonal (Matriz Honeycomb)
+                    vec2 uvSphere = vec2(atan(vWorldPos.z, vWorldPos.x) * 18.0, vWorldPos.y * 0.20);
+                    float hex = hexGrid(uvSphere, 0.65);
+                    float hexGlow = hex * smoothstep(0.03, 0.40, normY) * (1.0 - smoothstep(0.70, 0.98, normY));
+
+                    // 4. Pulso de Varredura / Radar Vertical Ascendente
+                    float sweepPos = mod(uTime * 18.0, 155.0);
+                    float sweepDist = abs(vWorldPos.y - sweepPos);
+                    float sweep = exp(-sweepDist * 0.22) * smoothstep(0.02, 0.20, normY);
+
+                    // 5. Estrelas Sci-Fi sutis no zênite
+                    vec2 starUV = floor(vWorldPos.xz * 1.3);
+                    float n = hash(starUV);
+                    float star = 0.0;
+                    if (n > 0.982 && normY > 0.40) {
+                        float twinkle = 0.6 + 0.4 * sin(uTime * 3.0 + n * 62.8);
+                        star = (n - 0.982) / 0.018 * twinkle * smoothstep(0.40, 0.85, normY);
+                    }
+
+                    // 6. Composição Final das Camadas de Luz
+                    vec3 finalCol = colAtmosphere;
+                    finalCol += uGridColor * (hexGlow * 0.28);
+                    finalCol += uGridColor * (latLine * 0.35);
+                    finalCol += uPulseColor * (sweep * 0.45);
+                    finalCol += vec3(0.7, 0.85, 1.0) * (star * 0.80);
+
+                    // Dissolvimento estrito na base (Horizonte = 100% Fog Color em Y <= 2.0m)
+                    float baseBlend = smoothstep(0.0, 0.06, normY);
+                    finalCol = mix(uFogColor, finalCol, baseBlend);
+
+                    gl_FragColor = vec4(finalCol, 1.0);
+                }
+            `,
+            side: THREE.BackSide,
+            depthWrite: false
+        });
+
+        this.skyDomeMesh = new THREE.Mesh(domeGeo, this.skyDomeMat);
+        this.skyDomeMesh.position.set(0, -2.5, 0);
+        this.arenaGroup.add(this.skyDomeMesh);
+
+        console.log('[TerrainArena] Domo Holográfico de Contenção gerado com sucesso (Raio 148m, Shader Hexagonal e Varredura de Pulso).');
+    }
+
+    /**
+     * Atualiza as animações de pulso das sancas, rodapés, painéis piscantes de Quake 3 e domo de contenção.
      * @param {number} dt Delta time em segundos
      * @param {number} elapsedTime Tempo total decorrido em segundos
      */
@@ -569,10 +921,15 @@ export class TerrainArena {
         const flicker = (Math.sin(elapsedTime * 12.0) * 0.5 + Math.cos(elapsedTime * 19.0) * 0.5);
         const blinkB = THREE.MathUtils.clamp(0.50 + flicker * 0.45, 0.12, 0.95);
         this.blinkingPanelMatB.opacity = blinkB;
+
+        // 5. Atualizar animação do Domo Holográfico de Contenção
+        if (this.skyDomeMat && this.skyDomeMat.uniforms.uTime) {
+            this.skyDomeMat.uniforms.uTime.value = elapsedTime;
+        }
     }
 
     /**
-     * Atualiza a escala de relevo do terreno e reposiciona caixas e pilares dinamicamente.
+     * Atualiza a escala de relevo do terreno e reposiciona caixas, pilares e blocos fortaleza dinamicamente.
      * @param {number} newScale Multiplicador de relevo (ex: 1.20)
      */
     updateReliefScale(newScale) {
@@ -601,6 +958,12 @@ export class TerrainArena {
         this.decorativePillars.forEach((colGroup, idx) => {
             const p = this.pillarLayout[idx];
             if (p) colGroup.position.y = this.getBaseGroundMeshHeight(p.x, p.z) + 5.0;
+        });
+
+        // Recalcular blocos de fortaleza do perímetro
+        this.boundaryBlocks.forEach((b) => {
+            b.baseY = this.getBaseGroundMeshHeight(b.x, b.z);
+            b.group.position.y = b.baseY + b.height * 0.5;
         });
     }
 }

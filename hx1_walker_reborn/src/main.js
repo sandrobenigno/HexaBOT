@@ -79,6 +79,20 @@ function initApp() {
 
     // 11. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
+        // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
+        hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
+
+        // Atualizar câmera tática orbital acompanhando o robô (com elevação e zoom adaptativos nos limites)
+        engine.updateTacticalCamera(
+            hexaBot.robotMasterGroup.position,
+            hexaBot.walkerState.bodyHeight,
+            hexaBot.walkerState.camAzimuth,
+            hexaBot.walkerState.camPitchDeg,
+            hexaBot.walkerState.camDistance,
+            dt,
+            terrainArena
+        );
+
         // Atualizar animações de sancas e painéis de luz da arena
         terrainArena.update(dt, elapsedTime);
 
@@ -90,18 +104,6 @@ function initApp() {
 
         // Atualizar partículas de confetes da vitória
         victoryFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
-
-        // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
-        hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
-
-        // Atualizar câmera tática orbital acompanhando o robô
-        engine.updateTacticalCamera(
-            hexaBot.robotMasterGroup.position,
-            hexaBot.walkerState.bodyHeight,
-            hexaBot.walkerState.camAzimuth,
-            hexaBot.walkerState.camPitchDeg,
-            hexaBot.walkerState.camDistance
-        );
 
         // Atualizar posicionamento do luar direcional e projeção de sombras
         engine.updateSunLight(
@@ -119,8 +121,8 @@ function initApp() {
         });
     });
 
-    // 9. Carregar Modelo Inicial Padrão: HX2 (Pernalonga)
-    modelLoader.loadModelPreset('./assets/glb/aranha_pernalonga.glb', 'HX2 (Pernalonga)');
+    // 9. Carregar Modelo Inicial Padrão: HX2 (Texturizada)
+    modelLoader.loadModelPreset('./assets/glb/aranha_texturizada.glb', 'HX2 (Texturizada)');
 
     // 10. Iniciar Loop de Renderização
     engine.start();
