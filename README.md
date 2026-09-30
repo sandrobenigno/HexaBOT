@@ -15,18 +15,7 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 > 🕹️ **JOGAR ONLINE**: [https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)  
 > 📖 **DOCUMENTAÇÃO DEDICADA**: [Consulte o README do Jogo](file:///x:/GEMINY/AranhaThreeJS/hx1_walker_reborn/README.md)
 
-```
-       [ Retículo / Cursor ]
-              ◎
-               \   (Feixe de Plasma Térmico + Brasas de Solda)
-                \=========================> [ Inimigo / Cabine / Monólito ]
-         ┌───────────────┐
-       ╱ │   HEXABOT     │ ╲
-     ─┼──┤  TACTICAL MECH ├──┼─   [ Marcha Tripé com IK 3-DoF Analítico ]
-       ╲ │               │ ╱
-         └───────┬───────┘
-                ╱ ╲
-```
+![screen](img/ScreenGame.jpg)
 
 ### Principais Destaques do Gameplay
 * **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante $O(1)$, garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
