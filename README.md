@@ -4,71 +4,73 @@
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=for-the-badge&logo=three.js)](https://threejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-O **HexaBOT** nasceu como um estudo matemático e exercício aprofundado sobre **Cinemática Inversa Vetorial (IK 3-DoF)**, auto-rigging procedural e dinâmica de marcha para robôs hexápodes em computação gráfica 3D. 
+O **HexaBOT** é um projeto de pesquisa e simulação em computação gráfica 3D focado em **Cinemática Inversa Vetorial (IK 3-DoF)**, auto-rigging procedural e locomoção para robôs hexápodes. 
 
-O projeto evoluiu progressivamente através de ferramentas de calibração, bancadas de teste e um laboratório de deformações (*Shape Keys*), culminando no **HX1 Walker: Reborn** — um simulador tático de combate robótico em tempo real totalmente jogável no navegador.
+A plataforma inclui uma suíte completa de ferramentas de calibração, diagnóstico e deformação de malha (*Shape Keys*), além do **HX1 Walker: Reborn** — um jogo tático de combate robótico em tempo real executado diretamente no navegador.
 
 ---
 
 ## 🎮 O Jogo: HX1 Walker: Reborn
 
-> 🕹️ **JOGAR ONLINE**: [https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)
+> 🕹️ **JOGAR ONLINE**: [https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)  
+> 📖 **DOCUMENTAÇÃO DEDICADA**: [Consulte o README do Jogo](file:///x:/GEMINY/AranhaThreeJS/hx1_walker_reborn/README.md)
 
 ```
-       [ Retículo / Mira ]
+       [ Retículo / Cursor ]
               ◎
-               \   (Feixe Contínuo de Plasma Térmico)
-                \=========================> [ Inimigo / Cabine ]
+               \   (Feixe de Plasma Térmico + Brasas de Solda)
+                \=========================> [ Inimigo / Cabine / Monólito ]
          ┌───────────────┐
        ╱ │   HEXABOT     │ ╲
-     ─┼──┤  TACTICAL MECH ├──┼─   [ Marcha Tripé com IK 3-DOF Analítico ]
+     ─┼──┤  TACTICAL MECH ├──┼─   [ Marcha Tripé com IK 3-DoF Analítico ]
        ╲ │               │ ╱
          └───────┬───────┘
                 ╱ ╲
 ```
 
 ### Principais Destaques do Gameplay
-* **Marcha Tripé com IK Analítico 3-DoF:** Motores de passo matemáticos com algoritmo analítico de *Auto-Reach Fallback* em tempo constante $O(1)$, garantindo contato firme das 6 patas mesmo sob aclives acentuados e desníveis do terreno.
-* **Sistema de Combate & Retículo Tático:** Mira em 360° com campo de visão dinâmico (FOV 60°), oclusão analítica de visada por relevo/obstáculos, recuo físico do chassi (*Shooting Shift*) e disparo contínuo de feixe de plasma térmico.
-* **Inteligência Artificial & Inimigos:** Cabines geradoras com escudos de energia segmentados que realizam o *spawn* de joaninhas robóticas dotadas de animações em tempo real via *Shape Keys / Morph Targets*, fala espacial e detonação de bombas com física de repulsão.
-* **Paisagem & Shader PBR:** Arena com dunas e escombros procedurais, blend dinâmico de mapas de normais (ladrilhos vs. areia) e iluminação cênica com sombras projetadas (*PCFShadowMap*).
-* **Áudio Espacial Imersivo:** Sonorização 3D posicional com *Web Audio API*, modulação orgânica da intensidade/pitch dos servomotores em tempo real e trilha sonora dinâmica.
+* **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante $O(1)$, garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
+* **Sistema de Combate & Laser de Plasma:** Disparo livre com restrição de FOV ($\pm 30^\circ$), recuo mecânico do chassi (*Shooting Shift*), colisão física por raycasting e *Welding Sparks Fountain* (faíscas incandescentes em arco parabólico com rastro inercial e glow multi-camadas).
+* **Supercharge de Plasma (500% de Energia):** Esferas de plasma procedurais surgem no topo dos monólitos perimétricos com sinalizador vertical gigante de 160m (*Sky Beacon Beam*). Ao mirar e pressionar <kbd>Espaço</kbd>, o mech absorve 500% de energia, disparando um feixe hiper-ampliado que drena 400% adicionais antes do consumo padrão.
+* **Inteligência Artificial & Inimigos:** Cabines geradoras modulares com 4 portas de saída e robôs joaninhas (*LadyBUG*) com animação procedural via *Shape Keys* (`DROP`), minas de proximidade de 3s e comportamento de bando com separação física (*Anti-Nesting*).
+* **Cenário Sci-Fi & Sky Dome:** Arena de $300\text{m} \times 300\text{m}$ cercada por 28 monólitos fortaleza e abóbada hemisférica de $148\text{m}$ com shader procedural GLSL (campo de força hexagonal *honeycomb*, radar ascendente e estrelas), com trava de câmera esférica anti-atravessamento.
+* **Áudio Espacial & Modulação Dinâmica:** Áudio posicional 3D via *Web Audio API*, modulação contínua do pitch dos servomotores pelo movimento do tronco, envelope ADSR no canhão laser e trilhas comemorativas para a vitória (dança funk com confetes) e derrota (ritual tribal com fogueira).
 
 ### ⌨️ Controles do Jogo (HX1 Walker: Reborn)
 
 | Comando | Ação |
 | :---: | :--- |
-| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Locomoção no terreno (Avançar, Recuar e Strafe Lateral) |
+| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Locomoção no terreno (Avanço, Recuo e Strafe Lateral) |
 | <kbd>Mouse</kbd> | Mirar e Disparar Laser de Plasma Térmico |
-| <kbd>Espaço</kbd> | Travar / Destravar Mira (Lock-On Holográfico) |
+| <kbd>Espaço</kbd> | Coleta de Supercharge / Travar Mira (Lock-On) / Continuar Missão |
 | <kbd>Botão do Meio (Drag)</kbd> | Órbita e rotação livre da câmera tática |
 | <kbd>Scroll do Mouse</kbd> | Ajuste de Zoom da câmera (50m a 100m) |
 | <kbd>P</kbd> | Exibir / Ocultar Painéis Táticos e Sliders de Calibração |
-| <kbd>H</kbd> | Abrir / Fechar Guia de Ajuda in-game |
+| <kbd>H</kbd> | Abrir / Fechar Guia Central de Ajuda in-game |
 | <kbd>X</kbd> | Alternar Modo Raio-X Biomecânico |
-| <kbd>R</kbd> | Resetar Posição na Arena |
+| <kbd>R</kbd> | Resetar Partida / Posição do Mech |
 
 ---
 
 ## 🔬 Laboratório & Ferramentas de Cinemática
 
-Toda a infraestrutura do jogo foi construída sobre um conjunto de ferramentas e protótipos de pesquisa:
+A plataforma conta com uma suíte de ferramentas de engenharia e inspeção:
 
-1. **📱 [Tool 1: Simulador Clássico & Mobile](https://sandrobenigno.github.io/HexaBOT/tools/index.html)** — Ambiente leve de simulação com balanço contínuo (*Auto-Sway*), suporte a controles touch e curva hermítica de elevação de pernas.
-2. **🎛️ [Tool 2: Oficina de Rigging & Exportador](https://sandrobenigno.github.io/HexaBOT/tools/index2.html)** — Laboratório universal para importação de modelos arbitrários via Drag-and-Drop, detecção hierárquica por Regex, console de *Shape Keys* estilo mesa de som e exportação de manifestos biomecânicos (`.bot.json` e `.glb` com manifesto embutido).
+1. **📱 [Tool 1: Simulador Clássico & Mobile](https://sandrobenigno.github.io/HexaBOT/tools/index.html)** — Ambiente leve de simulação com balanço contínuo (*Auto-Sway*), suporte a controles touch e curva hermítica de elevação de patas.
+2. **🎛️ [Tool 2: Oficina de Rigging & Exportador](https://sandrobenigno.github.io/HexaBOT/tools/index2.html)** — Laboratório universal para importação de modelos via Drag-and-Drop, detecção hierárquica por Regex, console de *Shape Keys* estilo mesa de som e exportação de manifestos biomecânicos (`.bot.json` e `.glb` com manifesto embutido).
 3. **🚀 [Tool 3: Runtime com Manifesto](https://sandrobenigno.github.io/HexaBOT/tools/index3.html)** — Simulador de alta fidelidade que consome diretamente os manifestos biomecânicos com travamento milimétrico de âncoras e iluminação HDR (*RoomEnvironment*).
 
-> 📖 **Para mais detalhes das ferramentas, consulte a [Documentação das Tools](https://github.com/sandrobenigno/HexaBOT/blob/main/tools/README.md).**
+> 📖 **Para documentação técnica detalhada das ferramentas, consulte o [README das Tools](file:///x:/GEMINY/AranhaThreeJS/tools/README.md).**
 
 ---
 
 ## ⚡ Fundamentos Matemáticos da Cinemática
 
-O robô utiliza um solucionador trigonométrico rigoroso para cada uma das 6 pernas:
+Cada uma das 6 pernas é calculada de forma independente através de uma cadeia cinemática de 3 graus de liberdade:
 
-* **Base Ortonormal Zero-Bank:** Elimina rotações indesejadas em torno do eixo longitudinal da pata através da projeção direta no plano da dobradiça.
-* **Solução Fechada por Lei dos Cossenos:** Calcula os ângulos $\alpha$ (fêmur) e $\beta$ (tíbia) analiticamente sem iterações numéricas pesadas.
-* **Auto-Reach Fallback:** Quando a distância até a âncora excede o limite físico da pata, o algoritmo ajusta suavemente o ângulo de abertura $\gamma$, mantendo o robô estável e impedindo que as patas se descolem do solo:
+* **Base Ortonormal Zero-Bank:** Alinha o plano da perna ao eixo da dobradiça (*hinge axis*) usando produtos vetoriais puros, eliminando rotações parasitas de rolamento (*roll*).
+* **Solução Fechada por Lei dos Cossenos:** Determina os ângulos $\alpha$ (fêmur) e $\beta$ (tíbia) analiticamente sem iterações numéricas:
+* **Auto-Reach Fallback ($O(1)$):** Quando a âncora excede o alcance nominal da perna, o ângulo de abertura $\gamma$ é relaxado analiticamente em tempo constante:
   $$K = \frac{D_{\text{total}}^2 + L_1^2 - (L_2 + L_3)^2}{2 L_1 D_{\text{total}}}$$
   $$\gamma_{\text{fallback}} = \theta_{\text{target}} + \arccos(\text{clamp}(K, -1, 1))$$
 
@@ -77,28 +79,37 @@ O robô utiliza um solucionador trigonométrico rigoroso para cada uma das 6 per
 ## 📁 Estrutura do Projeto
 
 ```text
-├── index.html                   # Launcher / Hub principal de navegação (GitHub Pages)
+├── index.html                   # Launcher / Hub de navegação (GitHub Pages)
 ├── README.md                    # Documentação geral do projeto
 ├── hx1_walker_reborn/           # 🎮 O Jogo (Simulador Tático de Combate)
 │   ├── index.html               # Ponto de entrada do jogo
-│   ├── css/                     # Estilos sci-fi do HUD e barras gamer
+│   ├── README.md                # Documentação detalhada da mecânica e arquitetura do jogo
+│   ├── css/                     # Folha de estilos sci-fi (HUD, barras de status, modais)
 │   ├── assets/
 │   │   ├── glb/                 # Modelos 3D locais (aranha.glb, aranha_pernalonga.glb, LadyBUG.glb)
-│   │   ├── img/                 # Normal maps de piso e areia/rocha
-│   │   └── mp3/                 # Efeitos sonoros espaciais e trilhas
-│   └── src/                     # Arquitetura modular ES6 (Engine, Bot, Kinematics, Combat, Audio, UI)
-└── tools/                       # 🔬 Laboratório de IK e Ferramentas de Pesquisa
+│   │   ├── img/                 # Normal maps de relevo (areia, piso, blocos, rocha)
+│   │   └── mp3/                 # Efeitos sonoros espaciais e trilhas (laser, supercharge, kaboom, etc.)
+│   └── src/                     # Arquitetura modular ES6 desacoplada via EventBus
+│       ├── core/                # Engine 3D, EventBus e InputManager
+│       ├── audio/               # SoundManager com Web Audio API espacial
+│       ├── world/               # TerrainArena (PBR, blocos, Sky Dome) e CollisionSystem
+│       ├── kinematics/          # IKSolver, Leg e TripodGait
+│       ├── bot/                 # HexaBot, AutoSway e BotManifest
+│       ├── combat/              # LaserCombat, SuperchargeManager, LadybugEnemy, CabinSpawner, EnemyManager
+│       └── ui/                  # HUDController e ModelLoaderUI
+└── tools/                       # 🔬 Laboratório de Cinemática e Ferramentas
     ├── index.html               # Tool 1: Simulador Clássico & Mobile
-    ├── index2.html              # Tool 2: Oficina de Rigging & Exportador
-    ├── index3.html              # Tool 3: Runtime de Produção com Manifesto
-    └── README.md                # Documentação técnica detalhada das ferramentas
+    ├── index2.html              # Tool 2: Oficina de Rigging & Exportador de Bots
+    ├── index3.html              # Tool 3: Runtime com Consumo de Manifesto
+    └── README.md                # Documentação técnica da suíte de ferramentas
 ```
 
 ---
 
 ## 🛠️ Tecnologias Principais
 
-* **[Three.js (r160)](https://threejs.org/)** — Renderização 3D WebGL, iluminação física PBR e shaders customizados.
-* **Web Audio API** — Processamento de áudio espacial 3D com posicionamento e pitch dinâmico.
-* **JavaScript ES6 Modular** — Arquitetura desacoplada via `EventBus`.
-* **HTML5 Canvas & CSS3 Moderno** — Interface de usuário (HUD) tática responsiva com efeitos translúcidos e barras de status gamer.
+* **[Three.js (r160)](https://threejs.org/)** — Renderização WebGL, iluminação PBR, shaders customizados e PMREM Environment.
+* **Web Audio API** — Espacialização 3D, modulação orgânica de pitch e controle de envelope ADSR.
+* **JavaScript ES6 Modular** — Arquitetura de eventos desacoplada (*Publish/Subscribe*).
+* **GLSL Shaders** — Shaders atmosféricos para o Sky Dome e texturização procedural com blend de relevo.
+* **HTML5 Canvas & CSS3** — Interface tática translúcida de baixa latência.
