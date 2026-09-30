@@ -18,7 +18,7 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 ![screen](img/ScreenGame.jpg)
 
 ### Principais Destaques do Gameplay
-* **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante $O(1)$, garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
+* **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante O(1), garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
 * **Sistema de Combate & Laser de Plasma:** Disparo livre com restrição de FOV ($\pm 30^\circ$), recuo mecânico do chassi (*Shooting Shift*), colisão física por raycasting e *Welding Sparks Fountain* (faíscas incandescentes em arco parabólico com rastro inercial e glow multi-camadas).
 * **Esferas de Plasma (Supercharge & Healing):**
   - **⚡ Supercharge (Azul):** Surge nos 28 monólitos perimétricos (sinalizador de 160m). Concede **500% de energia** e feixe ampliado.
@@ -60,7 +60,7 @@ A plataforma conta com uma suíte de ferramentas de engenharia e inspeção:
 
 ## ⚡ Fundamentos Matemáticos da Cinemática
 
-A locomoção do robô e o posicionamento das suas 6 patas assentam sobre um sistema de **Cinemática Inversa Vetorial Analítica (IK 3-DoF)** com solução trigonométrica fechada e tempo de execução determinístico $O(1)$.
+A locomoção do robô e o posicionamento das suas 6 patas assentam sobre um sistema de **Cinemática Inversa Vetorial Analítica (IK 3-DoF)** com solução trigonométrica fechada e tempo de execução determinístico O(1).
 
 ```
          (P0: Socket / Quadril)
@@ -152,7 +152,7 @@ $$
 
 ---
 
-### 3. Auto-Reach Fallback (Relaxamento Analítico $O(1)$)
+### 3. Auto-Reach Fallback (Relaxamento Analítico O(1))
 
 Quando o terreno acidentado ou uma rotação brusca do corpo posiciona a âncora além do alcance nominal da perna:
 

@@ -58,7 +58,7 @@ Esta pasta reúne o conjunto de ferramentas interativas, ambientes de calibraç�
 
 ## ⚡ Fundamentos Matemáticos e Cinemáticos
 
-O laboratório de ferramentas apoia-se em um modelo analítico rigoroso de **Cinemática Inversa Vetorial (IK 3-DoF)** com determinação geométrica fechada e complexidade $O(1)$.
+O laboratório de ferramentas apoia-se em um modelo analítico rigoroso de **Cinemática Inversa Vetorial (IK 3-DoF)** com determinação geométrica fechada e complexidade O(1).
 
 ```
          (P0: Socket / Quadril)
@@ -150,7 +150,7 @@ $$
 
 ---
 
-### 3. Auto-Reach Fallback (Relaxamento Adaptativo Analítico $O(1)$)
+### 3. Auto-Reach Fallback (Relaxamento Adaptativo Analítico O(1))
 
 Quando a âncora no solo excede o alcance físico nominal da perna:
 
