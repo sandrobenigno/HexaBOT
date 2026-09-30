@@ -47,12 +47,15 @@ export class SoundManager {
         this.loadSound('motor', './assets/mp3/motor.mp3');
         this.loadSound('tribal', './assets/mp3/tribal.mp3');
         this.loadSound('supercharge', './assets/mp3/supercharge.mp3');
+        this.loadSound('healing', './assets/mp3/healing.mp3');
         this.loadSound('funk', './assets/mp3/funk.mp3');
 
         // Estado do Som Ambiente, Tribal e Funk
         this.ambientSound = null;
         this.tribalSound = null;
         this.funkSound = null;
+        this.superchargeSound = null;
+        this.healingSound = null;
         this.hasStartedAmbient = false;
         this.hasPlayedInitialIntro = false;
         this.pendingIntroPlay = false;
@@ -157,6 +160,16 @@ export class SoundManager {
                 // Se a intro carregou após desbloqueio ou estava pendente, dispara
                 if (name === 'intro' && (this.isAudioUnlocked || this.pendingIntroPlay) && !this.hasPlayedInitialIntro) {
                     this.playIntro();
+                }
+
+                // Pré-alocação dos canais de Supercharge e Healing para zero-latency
+                if (name === 'supercharge' && !this.superchargeSound) {
+                    this.superchargeSound = new THREE.Audio(this.listener);
+                    this.superchargeSound.setBuffer(buffer);
+                }
+                if (name === 'healing' && !this.healingSound) {
+                    this.healingSound = new THREE.Audio(this.listener);
+                    this.healingSound.setBuffer(buffer);
                 }
             },
             undefined,
@@ -266,6 +279,11 @@ export class SoundManager {
         // Efeito sonoro de Coleta do Supercharge de Plasma
         this.eventBus.on('combat:superchargeCollected', () => {
             this.playSuperchargeCollectedSound(0.50);
+        });
+
+        // Efeito sonoro de Coleta de Regeneração / Healing
+        this.eventBus.on('combat:healingCollected', () => {
+            this.playHealingCollectedSound(0.55);
         });
     }
 
@@ -748,6 +766,33 @@ export class SoundManager {
             this.superchargeSound.play();
         } catch (e) {
             console.warn('[SoundManager] Erro ao reproduzir som de supercharge:', e);
+        }
+    }
+
+    /**
+     * Reproduz o som estéreo de coleta de Healing com nó de áudio reutilizável (sem GC/travamentos).
+     * @param {number} [volume=0.55] Volume de reprodução
+     */
+    playHealingCollectedSound(volume = 0.55) {
+        const buffer = this.audioBuffers.get('healing');
+        if (!buffer) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        try {
+            if (!this.healingSound) {
+                this.healingSound = new THREE.Audio(this.listener);
+                this.healingSound.setBuffer(buffer);
+            }
+            if (this.healingSound.isPlaying) {
+                this.healingSound.stop();
+            }
+            this.healingSound.setVolume(volume);
+            this.healingSound.play();
+        } catch (e) {
+            console.warn('[SoundManager] Erro ao reproduzir som de healing:', e);
         }
     }
 }

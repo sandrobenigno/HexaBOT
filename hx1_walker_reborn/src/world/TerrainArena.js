@@ -973,10 +973,21 @@ export class TerrainArena {
     }
 
     /**
-     * Retorna a lista de posições 3D no topo das torres e monólitos da arena.
+     * Retorna a lista de posições 3D no topo das torres e monólitos do perímetro da arena.
      * @returns {Array<THREE.Vector3>}
      */
     getTowerTopPositions() {
         return this.towerTopPositions;
+    }
+
+    /**
+     * Retorna a lista de posições 3D no topo dos cilindros/tambores de colisão da arena.
+     * @returns {Array<THREE.Vector3>}
+     */
+    getPillarTopPositions() {
+        return this.pillarLayout.map((p) => {
+            const groundY = this.getBaseGroundMeshHeight(p.x, p.z);
+            return new THREE.Vector3(p.x, groundY + 10.0, p.z);
+        });
     }
 }

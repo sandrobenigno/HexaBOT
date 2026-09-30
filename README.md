@@ -20,7 +20,10 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 ### Principais Destaques do Gameplay
 * **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante $O(1)$, garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
 * **Sistema de Combate & Laser de Plasma:** Disparo livre com restrição de FOV ($\pm 30^\circ$), recuo mecânico do chassi (*Shooting Shift*), colisão física por raycasting e *Welding Sparks Fountain* (faíscas incandescentes em arco parabólico com rastro inercial e glow multi-camadas).
-* **Supercharge de Plasma (500% de Energia):** Esferas de plasma procedurais surgem no topo dos monólitos perimétricos com sinalizador vertical gigante de 160m (*Sky Beacon Beam*). Ao mirar e pressionar <kbd>Espaço</kbd>, o mech absorve 500% de energia, disparando um feixe hiper-ampliado que drena 400% adicionais antes do consumo padrão.
+* **Esferas de Plasma (Supercharge & Healing):**
+  - **⚡ Supercharge (Azul):** Surge nos 28 monólitos perimétricos (sinalizador de 160m). Concede **500% de energia** e feixe ampliado.
+  - **❤️ Regeneração / Healing (Vermelha):** Surge nos 16 tambores/cilindros de colisão da arena. Restaura **+500 HP** de vida com áudio estéreo dedicado (`healing.mp3`).
+  - Coleta analítica ultrarrápida ($0\text{ms}$) ao mirar na orbe e pressionar <kbd>Espaço</kbd>.
 * **Inteligência Artificial & Inimigos:** Cabines geradoras modulares com 4 portas de saída e robôs joaninhas (*LadyBUG*) com animação procedural via *Shape Keys* (`DROP`), minas de proximidade de 3s e comportamento de bando com separação física (*Anti-Nesting*).
 * **Cenário Sci-Fi & Sky Dome:** Arena de $300\text{m} \times 300\text{m}$ cercada por 28 monólitos fortaleza e abóbada hemisférica de $148\text{m}$ com shader procedural GLSL (campo de força hexagonal *honeycomb*, radar ascendente e estrelas), com trava de câmera esférica anti-atravessamento.
 * **Áudio Espacial & Modulação Dinâmica:** Áudio posicional 3D via *Web Audio API*, modulação contínua do pitch dos servomotores pelo movimento do tronco, envelope ADSR no canhão laser e trilhas comemorativas para a vitória (dança funk com confetes) e derrota (ritual tribal com fogueira).
@@ -31,7 +34,7 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 | :---: | :--- |
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Locomoção no terreno (Avanço, Recuo e Strafe Lateral) |
 | <kbd>Mouse</kbd> | Mirar e Disparar Laser de Plasma Térmico |
-| <kbd>Espaço</kbd> | Coleta de Supercharge / Travar Mira (Lock-On) / Continuar Missão |
+| <kbd>Espaço</kbd> | Coletar Orbes (Supercharge / Cura) / Travar Mira / Continuar |
 | <kbd>Botão do Meio (Drag)</kbd> | Órbita e rotação livre da câmera tática |
 | <kbd>Scroll do Mouse</kbd> | Ajuste de Zoom da câmera (50m a 100m) |
 | <kbd>P</kbd> | Pausar / Despausar a Simulação e Combate |

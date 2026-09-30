@@ -23,6 +23,7 @@ import { EnemyManager } from './combat/EnemyManager.js';
 import { TribalFX } from './combat/TribalFX.js';
 import { VictoryFX } from './combat/VictoryFX.js';
 import { SuperchargeManager } from './combat/SuperchargeManager.js';
+import { HealingManager } from './combat/HealingManager.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
@@ -64,6 +65,9 @@ function initApp() {
 
     // 8.1 Instanciar Gerenciador de Esferas de Supercharge
     const superchargeManager = new SuperchargeManager(engine.scene, globalEventBus, terrainArena);
+
+    // 8.2 Instanciar Gerenciador de Esferas de Regeneração / Healing
+    const healingManager = new HealingManager(engine.scene, globalEventBus, terrainArena);
 
     // 9. Instanciar Controlador do Hexápode
     const hexaBot = new HexaBot(engine.scene, globalEventBus);
@@ -131,6 +135,9 @@ function initApp() {
 
             // Atualizar esfera de plasma Supercharge nas torres e coleta
             superchargeManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, inputManager.raycaster);
+
+            // Atualizar esfera de plasma Healing nos cilindros e coleta
+            healingManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, inputManager.raycaster);
 
             // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
             tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));

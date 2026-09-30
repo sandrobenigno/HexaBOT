@@ -169,6 +169,11 @@ export class HexaBot {
             this.energy = energy || 500.0;
             this.isEnergyDepleted = false;
         });
+        this.eventBus.on('combat:healingCollected', ({ amount = 500.0 }) => {
+            if (!this.isDead) {
+                this.hp = Math.min(this.maxHp, this.hp + amount);
+            }
+        });
         this.eventBus.on('combat:victory', () => this.triggerVictoryDance());
         this.eventBus.on('combat:continue', () => this.stopVictoryDance());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {

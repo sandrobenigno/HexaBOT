@@ -42,11 +42,10 @@ O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo r
 * **Raycast de Colisão Real:** O feixe colide com o primeiro objeto sólido no trajeto (inimigos, cabines, blocos, pilares ou relevo).
 * **Welding Sparks Fountain (Brasas de Solda em Arco):** Partículas volumétricas incandescentes projetadas em arcos balísticos com gravidade ($g = 19.5\text{m/s}^2$), quique no solo, rastro inercial de movimento da mira e glow multi-camadas (clarão central, aura estendida e luz pontual ciano de 28m).
 
-### 3. Esfera de Supercharge de Plasma (500% de Energia)
-* **Spawn Perimétrico:** Surge no topo de um dos 28 monólitos fortaleza perimétricos com um feixe vertical gigante (*Sky Beacon Beam*) de 160m.
-* **Detecção Ultrarrápida & Coleta:** Mira sobre a esfera com verificação analítica $0\text{ms}$ e pressione <kbd>Espaço</kbd>.
-* **Energia Quíntupla (500%):** O laser ganha feixe ampliado ($1.45\times$) e drena os $400\%$ adicionais antes do consumo padrão.
-* **Ciclo Contínuo:** Se não coletada em 13s, rotaciona para outra torre; após a coleta, ressurge rapidamente em 3 a 5 segundos.
+### 3. Esferas de Plasma: Supercharge (Azul) & Regeneração / Healing (Vermelha)
+* **⚡ Supercharge (500% de Laser):** Surge no topo dos 28 monólitos fortaleza perimétricos com feixe vertical de 160m (*Sky Beacon Beam*). Mira + <kbd>Espaço</kbd> concede 500% de energia e feixe hiper-ampliado.
+* **❤️ Regeneração / Healing (+500 HP):** Surge no topo dos 16 tambores/cilindros de colisão da arena com feixe vertical vermelho. Mira + <kbd>Espaço</kbd> restaura instantaneamente +500 HP de integridade com áudio estéreo dedicado (`healing.mp3`).
+* **Ciclos de Respawn Contínuos:** Ambos os orbes possuem rotação automática se não coletados em 14s e ressurgem rapidamente (3 a 6s) após a coleta.
 
 ### 4. Inimigos, Cabines & Rituais
 * **Cabines Spawners:** Estruturas cúbicas com 4 portas que geram joaninhas robóticas periodicamente.
