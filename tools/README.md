@@ -152,7 +152,13 @@ $$
 
 ### 3. Auto-Reach Fallback (Relaxamento Adaptativo Analítico $O(1)$)
 
-Quando a âncora excede o alcance físico nominal ($\|\vec{T} - \vec{P}_1\| > L_2 + L_3$), o algoritmo calcula de forma determinística a constante de relaxamento $K$ e o novo ângulo de abertura da coxa $\gamma_{\text{fallback}}$:
+Quando a âncora no solo excede o alcance físico nominal da perna:
+
+$$
+\|\vec{T} - \vec{P}_1\| > L_2 + L_3
+$$
+
+O algoritmo calcula de forma determinística a constante geométrica de relaxamento $K$ e o ângulo de abertura da coxa $\gamma_{\text{fallback}}$:
 
 $$
 K = \frac{D_{\text{total}}^2 + L_1^2 - (L_2 + L_3)^2}{2 L_1 D_{\text{total}}} \gets \text{Constante geométrica analítica de transição}
@@ -167,10 +173,10 @@ $$
 $$
 
 Onde:
-* $D_{\text{total}} = \|\vec{T} - \vec{P}_0\|$: Distância total euclidiana do quadril ao contato no solo.
-* $L_1, L_2, L_3$: Segmentos métricos detectados automaticamente na Tool 2.
-* $\gamma_{\text{nominal}}$: Ângulo padrão de descanso da coxa definido no manifesto.
-* $\gamma_{\text{efetivo}}$: Ângulo relaxado aplicado em tempo real, preservando a estabilidade postural e o contato milimétrico no solo.
+* **$D_{\text{total}} = \|\vec{T} - \vec{P}_0\|$**: Distância total euclidiana do quadril ao contato no solo.
+* **$L_1, L_2, L_3$**: Segmentos métricos detectados automaticamente na Tool 2.
+* **$\gamma_{\text{nominal}}$**: Ângulo padrão de descanso da coxa definido no manifesto.
+* **$\gamma_{\text{efetivo}}$**: Ângulo relaxado aplicado em tempo real, preservando a estabilidade postural e o contato milimétrico no solo.
 
 ---
 

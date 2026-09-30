@@ -154,7 +154,13 @@ $$
 
 ### 3. Auto-Reach Fallback (Relaxamento Analítico $O(1)$)
 
-Quando o terreno acidentado ou uma rotação brusca do corpo posiciona a âncora além do alcance nominal da perna ($\|\vec{T} - \vec{P}_1\| > L_2 + L_3$), o solver tradicional divergiria. O **Auto-Reach Fallback** calcula em tempo constante a compensação angular exata $\gamma_{\text{fallback}}$ para a coxa:
+Quando o terreno acidentado ou uma rotação brusca do corpo posiciona a âncora além do alcance nominal da perna:
+
+$$
+\|\vec{T} - \vec{P}_1\| > L_2 + L_3
+$$
+
+O solver tradicional divergiria. O **Auto-Reach Fallback** calcula em tempo constante a compensação angular exata através da constante analítica de transição $K$:
 
 $$
 K = \frac{D_{\text{total}}^2 + L_1^2 - (L_2 + L_3)^2}{2 L_1 D_{\text{total}}} \gets \text{Constante geométrica analítica de transição}
@@ -169,10 +175,10 @@ $$
 $$
 
 Onde:
-* $D_{\text{total}} = \|\vec{T} - \vec{P}_0\|$: Distância total entre o quadril e a âncora no solo.
-* $L_1, L_2, L_3$: Comprimentos físicos dos segmentos da coxa, fêmur e tíbia.
-* $\gamma_{\text{nominal}}$: Ângulo de abertura em repouso configurado no manifesto biomecânico.
-* $\gamma_{\text{efetivo}}$: Ângulo final aplicado à junta de abertura da coxa, garantindo contato contínuo no solo sem escorregamento (*Zero Slipping*).
+* **$D_{\text{total}} = \|\vec{T} - \vec{P}_0\|$**: Distância total entre o quadril e a âncora no solo.
+* **$L_1, L_2, L_3$**: Comprimentos físicos dos segmentos da coxa, fêmur e tíbia.
+* **$\gamma_{\text{nominal}}$**: Ângulo de abertura em repouso configurado no manifesto biomecânico.
+* **$\gamma_{\text{efetivo}}$**: Ângulo final aplicado à junta de abertura da coxa, garantindo contato contínuo no solo sem escorregamento (*Zero Slipping*).
 
 ---
 
