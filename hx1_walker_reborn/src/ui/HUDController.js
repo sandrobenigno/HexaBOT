@@ -308,6 +308,8 @@ export class HUDController {
      * @param {Object} telemetry Dados de telemetria do HexaBot
      */
     updateTelemetry({ walkerState, effectiveMoveSpeed, swayWeight, legs, hp = 1000, maxHp = 1000, energy = 100, maxEnergy = 100, isEnergyDepleted = false }) {
+        if (!walkerState) return;
+
         // 1. Atualizar Barra Gamer de Vida (HP)
         const safeHp = Math.max(0, hp);
         const hpRatio = THREE.MathUtils.clamp(safeHp / maxHp, 0.0, 1.0);
@@ -412,8 +414,9 @@ export class HUDController {
 
         // 6. Atualizar Indicadores Leds das Pernas (Stance vs Swing)
         const activeGroup = this.bot.gait.activeTripodGroup;
-        for (let i = 0; i < legs.length; i++) {
-            const leg = legs[i];
+        const safeLegs = legs || this.bot.legs || [];
+        for (let i = 0; i < safeLegs.length; i++) {
+            const leg = safeLegs[i];
             const legDot = document.getElementById(`dot-${leg.id}`);
             if (legDot) {
                 const isSwing = isGaitActive && (leg.group === activeGroup);

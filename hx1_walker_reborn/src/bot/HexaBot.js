@@ -1221,6 +1221,7 @@ export class HexaBot {
             swayWeight: swayRes.swayWeight,
             activeTripodGroup: this.gait.activeTripodGroup,
             isGaitActive: this.walkerState.isMoving || this.walkerState.isTurningInPlace || this.gait.isStepActive,
+            legs: this.legs,
             hp: this.hp,
             maxHp: this.maxHp,
             energy: this.energy,
