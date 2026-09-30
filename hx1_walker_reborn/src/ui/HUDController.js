@@ -28,8 +28,9 @@ export class HUDController {
         this.gaitStateTextElem = document.getElementById('gait-state-text');
         this.helpModalElem = document.getElementById('help-modal');
         this.btnCloseModalElem = document.getElementById('btn-close-modal');
+        this.pauseOverlayElem = document.getElementById('pause-overlay');
+        this.btnResumeGameElem = document.getElementById('btn-resume-game');
         this.btnXrayElem = document.getElementById('btn-xray');
-        this.btnToggleHudElem = document.getElementById('btn-toggle-hud');
         this.startOverlayElem = document.getElementById('start-overlay');
         this.btnStartGameElem = document.getElementById('btn-start-game');
         this.chkObstaclesElem = document.getElementById('chk-obstacles');
@@ -152,15 +153,15 @@ export class HUDController {
             });
         }
 
-        if (this.btnToggleHudElem) {
-            this.btnToggleHudElem.addEventListener('click', () => {
-                this.eventBus.emit('ui:togglePanels');
+        if (this.btnCloseModalElem && this.helpModalElem) {
+            this.btnCloseModalElem.addEventListener('click', () => {
+                this.eventBus.emit('ui:toggleHelp');
             });
         }
 
-        if (this.btnCloseModalElem && this.helpModalElem) {
-            this.btnCloseModalElem.addEventListener('click', () => {
-                this.helpModalElem.classList.remove('active');
+        if (this.btnResumeGameElem) {
+            this.btnResumeGameElem.addEventListener('click', () => {
+                this.eventBus.emit('game:togglePause');
             });
         }
 
@@ -250,6 +251,9 @@ export class HUDController {
             if (this.victoryModalElem) {
                 this.victoryModalElem.style.display = 'none';
             }
+            if (this.pauseOverlayElem) {
+                this.pauseOverlayElem.classList.remove('active');
+            }
         });
 
         // Alternar modo HUD e painéis ocultos
@@ -257,10 +261,34 @@ export class HUDController {
             document.body.classList.toggle('hud-panels-hidden');
         });
 
-        // Alternar modal de ajuda
+        // Alternar modal de ajuda (e notificar sobre estado de pausa)
         this.eventBus.on('ui:toggleHelp', () => {
             if (this.helpModalElem) {
-                this.helpModalElem.classList.toggle('active');
+                const isActive = this.helpModalElem.classList.toggle('active');
+                this.eventBus.emit('ui:helpStateChanged', isActive);
+            }
+        });
+
+        // Tecla Escape: Fecha Ajuda, avança vitória ou pausa/despausa
+        this.eventBus.on('ui:escape', () => {
+            if (this.helpModalElem && this.helpModalElem.classList.contains('active')) {
+                this.helpModalElem.classList.remove('active');
+                this.eventBus.emit('ui:helpStateChanged', false);
+            } else if (this.victoryModalElem && this.victoryModalElem.style.display !== 'none') {
+                this.eventBus.emit('combat:continue');
+            } else {
+                this.eventBus.emit('game:togglePause');
+            }
+        });
+
+        // Notificação de Estado de Pausa
+        this.eventBus.on('game:pauseStateChanged', (isPaused, source) => {
+            if (this.pauseOverlayElem) {
+                if (isPaused && source !== 'help') {
+                    this.pauseOverlayElem.classList.add('active');
+                } else {
+                    this.pauseOverlayElem.classList.remove('active');
+                }
             }
         });
 

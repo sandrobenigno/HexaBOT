@@ -34,10 +34,12 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 | <kbd>Espaço</kbd> | Coleta de Supercharge / Travar Mira (Lock-On) / Continuar Missão |
 | <kbd>Botão do Meio (Drag)</kbd> | Órbita e rotação livre da câmera tática |
 | <kbd>Scroll do Mouse</kbd> | Ajuste de Zoom da câmera (50m a 100m) |
-| <kbd>P</kbd> | Exibir / Ocultar Painéis Táticos e Sliders de Calibração |
-| <kbd>H</kbd> | Abrir / Fechar Guia Central de Ajuda in-game |
+| <kbd>P</kbd> | Pausar / Despausar a Simulação e Combate |
+| <kbd>H</kbd> | Abrir / Fechar Guia Central de Ajuda in-game (Pausa automática) |
 | <kbd>X</kbd> | Alternar Modo Raio-X Biomecânico |
 | <kbd>R</kbd> | Resetar Partida / Posição do Mech |
+| <kbd>Esc</kbd> | Fechar Janelas Modais / Pausar Jogo |
+| *(Oculto)* <kbd>O</kbd> | Exibir / Ocultar Painéis de Calibração e Sliders |
 
 ---
 

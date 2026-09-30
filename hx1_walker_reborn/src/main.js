@@ -72,9 +72,43 @@ function initApp() {
     const hudController = new HUDController(globalEventBus, hexaBot, terrainArena);
     const modelLoader = new ModelLoaderUI(hexaBot, terrainArena);
 
+    // Estado Geral da Missão e Pausa
+    let isGameStarted = false;
+    let isManualPaused = false;
+    let isHelpOpen = false;
+
     // Resetar inimigos quando o robô for resetado ou avançar de fase após vitória
-    globalEventBus.on('bot:resetPosition', () => enemyManager.reset());
-    globalEventBus.on('combat:continue', () => enemyManager.reset());
+    globalEventBus.on('bot:resetPosition', () => {
+        isManualPaused = false;
+        enemyManager.reset();
+        globalEventBus.emit('game:pauseStateChanged', false);
+    });
+
+    globalEventBus.on('combat:continue', () => {
+        isManualPaused = false;
+        enemyManager.reset();
+        globalEventBus.emit('game:pauseStateChanged', false);
+    });
+
+    // Início da Partida (quando o jogador clica em INICIAR MISSÃO)
+    globalEventBus.on('game:start', () => {
+        isGameStarted = true;
+        isManualPaused = false;
+    });
+
+    // Alternar Pausa Manual com a Tecla P
+    globalEventBus.on('game:togglePause', () => {
+        if (!isGameStarted || isHelpOpen) return;
+        isManualPaused = !isManualPaused;
+        globalEventBus.emit('game:pauseStateChanged', isManualPaused, 'manual');
+    });
+
+    // Notificação de Abertura/Fechamento do Modal de Ajuda
+    globalEventBus.on('ui:helpStateChanged', (isOpen) => {
+        isHelpOpen = !!isOpen;
+        const effectivePaused = isManualPaused || isHelpOpen;
+        globalEventBus.emit('game:pauseStateChanged', effectivePaused, isHelpOpen ? 'help' : 'manual');
+    });
 
     // Alternar restrição de colisão com pilares/obstáculos
     globalEventBus.on('collision:toggleObstacles', (enabled) => {
@@ -83,10 +117,29 @@ function initApp() {
 
     // 11. Registrar Loop de Atualização no Game Loop do Engine
     engine.registerUpdate((dt, elapsedTime) => {
-        // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
-        hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
+        const isSimulationRunning = isGameStarted && !isManualPaused && !isHelpOpen;
 
-        // Atualizar câmera tática orbital acompanhando o robô (com elevação e zoom adaptativos nos limites)
+        if (isSimulationRunning) {
+            // Atualizar robô (locomoção, pivô, IK, combate, shapekeys e dano)
+            hexaBot.update(dt, elapsedTime, inputManager, collisionSystem, terrainArena, enemyManager);
+
+            // Atualizar animações de sancas e painéis de luz da arena
+            terrainArena.update(dt, elapsedTime);
+
+            // Atualizar orquestrador de inimigos, cabines e bombas
+            enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, hexaBot.isDead);
+
+            // Atualizar esfera de plasma Supercharge nas torres e coleta
+            superchargeManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, inputManager.raycaster);
+
+            // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
+            tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
+
+            // Atualizar partículas de confetes da vitória
+            victoryFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
+        }
+
+        // Câmera tática e iluminação continuam responsivas para inspeção mesmo em pausa
         engine.updateTacticalCamera(
             hexaBot.robotMasterGroup.position,
             hexaBot.walkerState.bodyHeight,
@@ -97,22 +150,6 @@ function initApp() {
             terrainArena
         );
 
-        // Atualizar animações de sancas e painéis de luz da arena
-        terrainArena.update(dt, elapsedTime);
-
-        // Atualizar orquestrador de inimigos, cabines e bombas
-        enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, hexaBot.isDead);
-
-        // Atualizar esfera de plasma Supercharge nas torres e coleta
-        superchargeManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, inputManager.raycaster);
-
-        // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
-        tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
-
-        // Atualizar partículas de confetes da vitória
-        victoryFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));
-
-        // Atualizar posicionamento do luar direcional e projeção de sombras
         engine.updateSunLight(
             hexaBot.robotMasterGroup.position,
             hexaBot.walkerState.bodyHeight

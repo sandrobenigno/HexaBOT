@@ -230,6 +230,14 @@ export class SoundManager {
             this.stopLaser();
         });
 
+        // Silenciar laser e motores ao pausar o jogo
+        this.eventBus.on('game:pauseStateChanged', (isPaused) => {
+            if (isPaused) {
+                this.stopLaser(0.05);
+                this.updateMotorSound({ intensity: 0.0, pitchMod: 0.35 });
+            }
+        });
+
         // Detonação da Bomba das Joaninhas ("Booom!")
         this.eventBus.on('sound:bombExplosion', (position) => {
             this.playBombExplosion(position);

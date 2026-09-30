@@ -54,11 +54,40 @@ export class InputManager {
         this.tempHitNormal = new THREE.Vector3();
         this.tempGroundHit = new THREE.Vector3();
 
+        // Estado do Jogo e Pausa
+        this.isGameStarted = false;
+        this.isPaused = false;
+
         // Elemento visual do retículo DOM
         this.crosshairElem = document.getElementById('crosshair');
 
         // Inicializar ouvintes de eventos
         this.bindEvents();
+        this.setupEventBusListeners();
+    }
+
+    /**
+     * Vincula ouvintes do barramento de eventos.
+     */
+    setupEventBusListeners() {
+        this.eventBus.on('game:start', () => {
+            this.isGameStarted = true;
+            this.isPaused = false;
+        });
+
+        this.eventBus.on('game:pauseStateChanged', (isPaused) => {
+            this.isPaused = !!isPaused;
+            if (this.isPaused) {
+                this.isAimFiring = false;
+                for (const k in this.keys) {
+                    this.keys[k] = false;
+                }
+            }
+        });
+
+        this.eventBus.on('bot:resetPosition', () => {
+            this.isPaused = false;
+        });
     }
 
     /**
@@ -102,11 +131,13 @@ export class InputManager {
 
         // Atalhos do Sistema
         const keyLower = e.key ? e.key.toLowerCase() : '';
-        if (keyLower === 'p' || e.code === 'KeyP') this.eventBus.emit('ui:togglePanels');
+        if (keyLower === 'o' || e.code === 'KeyO') this.eventBus.emit('ui:togglePanels');
+        if (keyLower === 'p' || e.code === 'KeyP') this.eventBus.emit('game:togglePause');
         if (keyLower === 'h' || e.code === 'KeyH') this.eventBus.emit('ui:toggleHelp');
         if (keyLower === 'r' || e.code === 'KeyR') this.eventBus.emit('bot:resetPosition');
+        if (e.code === 'Escape' || e.key === 'Escape') this.eventBus.emit('ui:escape');
 
-        // Trava de Mira (Lock-On) com Barra de Espaço
+        // Trava de Mira (Lock-On) / Coleta com Barra de Espaço
         if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             this.eventBus.emit('combat:toggleLock');
@@ -167,6 +198,7 @@ export class InputManager {
             this.lastMouseY = e.clientY;
             e.preventDefault();
         } else if (e.button === 0) { // Botão esquerdo: Disparar laser de plasma
+            if (this.isPaused || !this.isGameStarted) return;
             this.isAimFiring = true;
             this.eventBus.emit('combat:fireStart');
         }
@@ -211,6 +243,10 @@ export class InputManager {
      * @returns {{ moveFwd: number, moveSide: number, isMoving: boolean }}
      */
     getMovementVector() {
+        if (this.isPaused || !this.isGameStarted) {
+            return { moveFwd: 0, moveSide: 0, isMoving: false };
+        }
+
         let moveFwd = 0;
         let moveSide = 0;
         if (this.keys.KeyW || this.keys.ArrowUp) moveFwd += 1;

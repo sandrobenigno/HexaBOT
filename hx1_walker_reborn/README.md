@@ -21,10 +21,12 @@ O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo r
 | <kbd>Espaço</kbd> | **Ação Multifunção** | **Coletar Supercharge** (com mira na esfera) / **Lock-On** / **Continuar Missão** |
 | <kbd>Botão do Meio (Drag)</kbd> | **Câmera Orbital** | Rotação livre de 360° ao redor do mech |
 | <kbd>Scroll do Mouse</kbd> | **Zoom da Câmera** | Ajuste dinâmico de distância (50m a 100m) |
-| <kbd>P</kbd> | **Painéis / Calibração** | Alterna exibição dos sliders e painéis táticos |
-| <kbd>H</kbd> | **Guia de Ajuda** | Abre o modal central de comandos in-game |
+| <kbd>P</kbd> | **Pausa da Simulação** | Pausa e despausa o combate e a física a qualquer momento |
+| <kbd>H</kbd> | **Guia de Ajuda** | Abre o modal central de comandos in-game (pausa automaticamente o jogo) |
 | <kbd>X</kbd> | **Modo Raio-X** | Visualiza ossos, juntas (J1, J2, J3) e âncoras no solo |
 | <kbd>R</kbd> | **Reset de Missão** | Restaura a posição inicial, reinicia geradores e orbe de plasma |
+| <kbd>Esc</kbd> | **Fechar / Pausa** | Fecha janelas modais ativas ou alterna a pausa |
+| *(Oculto)* <kbd>O</kbd> | **Painel de Calibração** | Atalho oculto de desenvolvimento para sliders de postura e relevo |
 
 ---
 

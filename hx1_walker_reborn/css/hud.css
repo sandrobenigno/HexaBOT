@@ -597,6 +597,95 @@ body.hud-hidden .mech-card {
     color: #f8fafc;
 }
 
+/* ==========================================================================
+   MODAL DE PAUSA
+   ========================================================================== */
+.pause-card {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(3, 7, 18, 0.98) 100%);
+    border: 1.5px solid rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 50px rgba(56, 189, 248, 0.25), 0 25px 60px rgba(0, 0, 0, 0.9);
+    border-radius: 20px;
+    padding: 36px 44px;
+    text-align: center;
+    max-width: 460px;
+    width: 90vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    animation: startCardEntrance 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pause-badge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 4px 14px;
+    border-radius: 999px;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+.pause-title {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #f8fafc;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+    margin: 0;
+}
+
+.pause-subtitle {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.btn-resume-game {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 14px 34px;
+    font-size: 1.0rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #030712;
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+}
+
+.btn-resume-game:hover {
+    transform: scale(1.05);
+    background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+    box-shadow: 0 0 35px rgba(56, 189, 248, 0.9), 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.btn-resume-game:active {
+    transform: scale(0.98);
+}
+
+.btn-resume-icon {
+    font-size: 1.05rem;
+}
+
+.pause-tip {
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-top: 4px;
+}
+
 /* Drag & Drop File Zone */
 #drop-zone {
     position: fixed;
