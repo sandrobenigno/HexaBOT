@@ -535,7 +535,6 @@ export class TerrainArena {
 
             this.decorativePillars.push(pGroup);
             this.pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
-            this.towerTopPositions.push(new THREE.Vector3(p.x, p.baseY + p.height, p.z));
             this.arenaGroup.add(pGroup);
         });
     }
@@ -965,10 +964,14 @@ export class TerrainArena {
             if (p) colGroup.position.y = this.getBaseGroundMeshHeight(p.x, p.z) + 5.0;
         });
 
-        // Recalcular blocos de fortaleza do perímetro
-        this.boundaryBlocks.forEach((b) => {
+        // Recalcular blocos de fortaleza do perímetro e suas posições no topo
+        this.boundaryBlocks.forEach((b, idx) => {
             b.baseY = this.getBaseGroundMeshHeight(b.x, b.z);
             b.group.position.y = b.baseY + b.height * 0.5;
+            if (this.towerTopPositions[idx]) {
+                const capH = b.height * 0.16;
+                this.towerTopPositions[idx].set(b.x, b.baseY + b.height + capH, b.z);
+            }
         });
     }
 
