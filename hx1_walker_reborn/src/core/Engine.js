@@ -89,15 +89,15 @@ export class Engine {
      * - Luzes de borda distantes (Rim lights) em Ciano e Vermelho
      */
     setupLighting() {
-        // Luz Ambiente
-        this.ambientLight = new THREE.AmbientLight(0x0a1220, 0.04);
+        // Luz Ambiente Neutra
+        this.ambientLight = new THREE.AmbientLight(0x28282c, 0.12);
         this.scene.add(this.ambientLight);
 
         // Vetor Direcional Fixo do Luar (Direção e Ângulo Imutáveis no Mundo)
         this.sunLightDirOffset = new THREE.Vector3(38, 70, 32);
 
-        // Luar Direcional Potente
-        this.sunLight = new THREE.DirectionalLight(0x8faecf, 2.60);
+        // Luz Direcional Principal Neutra / Branca Pura (Sem contaminação de tons azuis)
+        this.sunLight = new THREE.DirectionalLight(0xffffff, 2.90);
         this.sunLight.position.copy(this.sunLightDirOffset);
         this.sunLight.castShadow = true;
         this.sunLight.shadow.mapSize.width = 2048;
@@ -118,12 +118,12 @@ export class Engine {
         this.scene.add(this.sunLight);
         this.scene.add(this.sunLight.target);
 
-        // Luzes de Borda Suaves e Distantes
-        this.rimLightBlue = new THREE.PointLight(0x00d2ff, 1.5, 45);
+        // Luzes de Borda Suaves e Neutras (Sem contaminação ciano)
+        this.rimLightBlue = new THREE.PointLight(0xf0f2f5, 0.45, 45);
         this.rimLightBlue.position.set(-55, 15, -45);
         this.scene.add(this.rimLightBlue);
 
-        this.rimLightRed = new THREE.PointLight(0xff0044, 1.2, 45);
+        this.rimLightRed = new THREE.PointLight(0xff4433, 0.45, 45);
         this.rimLightRed.position.set(55, 15, -45);
         this.scene.add(this.rimLightRed);
     }

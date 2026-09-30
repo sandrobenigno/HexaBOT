@@ -8,7 +8,7 @@
  * - Geração de dunas e escombros procedurais positivos (sem zonas negativas)
  * - Instanciação de plataformas e degraus sólidos escaláveis (steppableBoxes)
  * - Criação de pilares cilíndricos com bordas neon
- * - Shader PBR customizado com blend de normal maps (Ladrilho Metálico vs Areia Fosca)
+ * - Shader PBR customizado com blend de materiais (Ladrilho Metálico Azulado vs Rocha Estilizada com Relevo)
  * - Recálculo dinâmico de vértices e relevo via slider HUD
  */
 
@@ -193,30 +193,36 @@ export class TerrainArena {
         }
         this.terrainGeo.computeVertexNormals();
 
-        // Carregar Normal Maps de Piso e Areia
+        // Carregar Texturas de Piso e Rocha/Relevo
         const textureLoader = new THREE.TextureLoader();
         const floorNormalTex = textureLoader.load('./assets/img/normal/piso.jfif');
         floorNormalTex.wrapS = THREE.RepeatWrapping;
         floorNormalTex.wrapT = THREE.RepeatWrapping;
         floorNormalTex.colorSpace = THREE.NoColorSpace;
 
-        const sandNormalTex = textureLoader.load('./assets/img/normal/rocha.jpg');
-        sandNormalTex.wrapS = THREE.RepeatWrapping;
-        sandNormalTex.wrapT = THREE.RepeatWrapping;
-        sandNormalTex.colorSpace = THREE.NoColorSpace;
+        const rochaNormalTex = textureLoader.load('./assets/img/normal/rocha_style_normal.png');
+        rochaNormalTex.wrapS = THREE.RepeatWrapping;
+        rochaNormalTex.wrapT = THREE.RepeatWrapping;
+        rochaNormalTex.colorSpace = THREE.NoColorSpace;
+
+        const rochaColorTex = textureLoader.load('./assets/img/rocha_style_color.png');
+        rochaColorTex.wrapS = THREE.RepeatWrapping;
+        rochaColorTex.wrapT = THREE.RepeatWrapping;
+        rochaColorTex.colorSpace = THREE.SRGBColorSpace;
 
         this.terrainMat = new THREE.MeshStandardMaterial({
             roughness: 0.5,
             metalness: 0.05,
-            envMapIntensity: 0.05,
+            envMapIntensity: 0.0,
             wireframe: false
         });
 
         // Injeção de Shader Customizado no Material Standard
         this.terrainMat.onBeforeCompile = (shader) => {
             shader.uniforms.uFloorNormalMap = { value: floorNormalTex };
-            shader.uniforms.uSandNormalMap = { value: sandNormalTex };
-            shader.uniforms.uNormalScale = { value: 0.10 };
+            shader.uniforms.uSandNormalMap = { value: rochaNormalTex };
+            shader.uniforms.uSandColorMap = { value: rochaColorTex };
+            shader.uniforms.uNormalScale = { value: 0.25 };
 
             shader.vertexShader = `
                 varying float vWorldY;
@@ -234,6 +240,7 @@ export class TerrainArena {
             shader.fragmentShader = `
                 uniform sampler2D uFloorNormalMap;
                 uniform sampler2D uSandNormalMap;
+                uniform sampler2D uSandColorMap;
                 uniform float uNormalScale;
                 varying float vWorldY;
                 varying vec2 vWorldXZ;
@@ -243,15 +250,15 @@ export class TerrainArena {
                 `
                 #include <normal_fragment_maps>
 
-                // --- NORMAL MAPPING BLEND (PISO vs AREIA) ---
+                // --- NORMAL MAPPING BLEND (PISO LADRILHADO vs ROCHA ESTILIZADA) ---
                 float hNorm = max(0.0, vWorldY);
                 float rubbleBlendNorm = smoothstep(0.02, 0.35, hNorm);
 
-                // Piso com repetição de 8m x 8m (a imagem piso.jfif possui 2x2 ladrilhos internos de 4m x 4m cada)
+                // Normal map do piso base (escala de 8m)
                 vec3 nFloorMap = texture2D(uFloorNormalMap, vWorldXZ / 8.0).xyz * 2.0 - 1.0;
 
-                // Areia e escombros com escala de repetição de 3.2m
-                vec3 nSandMap = texture2D(uSandNormalMap, vWorldXZ / 3.2).xyz * 2.0 - 1.0;
+                // Normal map da rocha com escala ampliada (60m)
+                vec3 nSandMap = texture2D(uSandNormalMap, vWorldXZ / 60.0).xyz * 2.0 - 1.0;
 
                 // Mistura suave dos mapas normais de acordo com a elevação do relevo
                 vec3 mapN = mix(nFloorMap, nSandMap, rubbleBlendNorm);
@@ -271,27 +278,27 @@ export class TerrainArena {
                 `
                 #include <roughnessmap_fragment>
 
-                // Rugosidade adaptativa: Placas do piso acetinadas (0.34), juntas foscas (0.80), terra/areia fosca (0.92)
-                vec2 rTileUV = vWorldXZ / 4.0;
+                // Rugosidade adaptativa: Placas do piso acetinadas (0.34), juntas foscas (0.80), rocha mineral (0.75)
+                vec2 rTileUV = vWorldXZ / 8.0;
                 vec2 rFTile = fract(rTileUV);
-                vec2 rGridLine = smoothstep(0.0, 0.025, rFTile) * smoothstep(1.0, 0.975, rFTile);
+                vec2 rGridLine = smoothstep(0.0, 0.02, rFTile) * smoothstep(1.0, 0.98, rFTile);
                 float rBorderMask = min(rGridLine.x, rGridLine.y);
 
                 float rH = max(0.0, vWorldY);
                 float rRubbleBlend = smoothstep(0.02, 0.30, rH);
 
                 float floorRoughness = mix(0.80, 0.34, rBorderMask);
-                roughnessFactor = mix(floorRoughness, 0.92, rRubbleBlend);
+                roughnessFactor = mix(floorRoughness, 0.75, rRubbleBlend);
                 `
             ).replace(
                 '#include <metalnessmap_fragment>',
                 `
                 #include <metalnessmap_fragment>
 
-                // Metalicidade adaptativa: Placas do piso metálicas (0.55), juntas oxidadas (0.12), terra/areia mineral (0.04)
-                vec2 mTileUV = vWorldXZ / 4.0;
+                // Metalicidade adaptativa: Placas do piso metálicas (0.55), juntas oxidadas (0.12), rocha mineral (0.04)
+                vec2 mTileUV = vWorldXZ / 8.0;
                 vec2 mFTile = fract(mTileUV);
-                vec2 mGridLine = smoothstep(0.0, 0.025, mFTile) * smoothstep(1.0, 0.975, mFTile);
+                vec2 mGridLine = smoothstep(0.0, 0.02, mFTile) * smoothstep(1.0, 0.98, mFTile);
                 float mBorderMask = min(mGridLine.x, mGridLine.y);
 
                 float mH = max(0.0, vWorldY);
@@ -305,32 +312,27 @@ export class TerrainArena {
                 `
                 #include <color_fragment>
 
-                // --- 1. TEXTURA PROCEDURAL TILE PARA O PISO PLANO (Y = 0) ---
-                vec2 tileUV = vWorldXZ / 4.0;
+                // --- 1. TEXTURA PROCEDURAL TILE PARA O PISO PLANO (LADRILHO AZUL-ARDÓSIA SCI-FI) ---
+                vec2 tileUV = vWorldXZ / 8.0;
                 vec2 fTile = fract(tileUV);
-                vec2 gridLine = smoothstep(0.0, 0.025, fTile) * smoothstep(1.0, 0.975, fTile);
+                vec2 gridLine = smoothstep(0.0, 0.02, fTile) * smoothstep(1.0, 0.98, fTile);
                 float borderMask = min(gridLine.x, gridLine.y);
 
                 float tileCheck = mod(floor(tileUV.x) + floor(tileUV.y), 2.0);
-                vec3 colFloorTileA = vec3(0.11, 0.14, 0.18); // Ladrilho ardósia
-                vec3 colFloorTileB = vec3(0.085, 0.11, 0.145); // Ladrilho complementar
+                vec3 colFloorTileA = vec3(0.10, 0.14, 0.19); // Ladrilho ardósia azulado
+                vec3 colFloorTileB = vec3(0.075, 0.105, 0.145); // Ladrilho azul profundo complementar
                 vec3 colFloorTile = mix(colFloorTileA, colFloorTileB, tileCheck * 0.45);
 
                 vec3 colFloorBorder = vec3(0.020, 0.028, 0.040); // Juntas e ranhuras
                 vec3 finalTileFloor = mix(colFloorBorder, colFloorTile, borderMask);
 
-                // --- 2. ESCOMBROS E MONTÍCULOS TERROSOS SOMBRIOS (Y > 0) ---
-                vec3 colEarthBase = vec3(0.07, 0.045, 0.030);
-                vec3 colEarthMid  = vec3(0.13, 0.085, 0.055);
-                vec3 colEarthPeak = vec3(0.19, 0.130, 0.085);
+                // --- 2. TEXTURA DE ROCHA (RGB DIRETO DE ROCHA_STYLE_COLOR.PNG, ESCALA 60m) ---
+                vec3 colRocha = texture2D(uSandColorMap, vWorldXZ / 60.0).rgb;
 
+                // --- 3. TRANSIÇÃO SUAVE: LADRILHO AZUL NO PISO PLANO -> COR RGB DA ROCHA NO RELEVO ---
                 float h = max(0.0, vWorldY);
-                float tElevation = smoothstep(0.2, 4.5, h);
-                vec3 colRubble = mix(colEarthBase, mix(colEarthMid, colEarthPeak, smoothstep(1.5, 4.5, h)), tElevation);
-
-                // --- 3. TRANSIÇÃO SUAVE ENTRE O PISO TILE E OS ESCOMBROS ---
-                float rubbleBlend = smoothstep(0.02, 0.30, h);
-                vec3 finalTerrain = mix(finalTileFloor, colRubble, rubbleBlend);
+                float rubbleBlend = smoothstep(0.02, 0.35, h);
+                vec3 finalTerrain = mix(finalTileFloor, colRocha, rubbleBlend);
 
                 diffuseColor = vec4(finalTerrain, 1.0);
                 `
