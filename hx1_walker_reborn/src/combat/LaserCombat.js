@@ -287,12 +287,12 @@ export class LaserCombat {
      * @param {number} params.targetAimAngle Ângulo de mira em relação ao norte
      * @param {number} params.baseHeading Rumo da base do robô
      * @param {number} params.torsoYaw Torção do tronco
-     * @param {Array<THREE.Mesh>} params.aimTargetableMeshes Obstáculos sólidos para colisão do raio
-     * @param {Function} params.getBaseGroundMeshHeightFn Função analítica de altitude da areia
-     * @returns {{ isActuallyFiring: boolean, shootingShiftZ: number }}
+     * @param {boolean} [params.isSupercharged=false] Se o laser está em modo Supercharge (500%)
+     * @returns {{ isActuallyFiring: boolean, shootingShiftZ: number, snoutPos: THREE.Vector3, hitObject: THREE.Object3D|null }}
      */
     update(dt, elapsedTime, {
         isAimFiring,
+        isSupercharged = false,
         bodyGroup,
         aimWorldPoint,
         aimWorldNormal,
@@ -401,11 +401,12 @@ export class LaserCombat {
         const pulse2 = Math.cos(elapsedTime * 75.0);
         const pulse3 = Math.sin(elapsedTime * 110.0);
         const pulseHarmonic = (pulse1 * 0.5 + pulse2 * 0.35 + pulse3 * 0.15);
+        const superchargeScale = isSupercharged ? 1.45 : 1.0;
 
         if (this.isActuallyFiring) {
             // DISPARO ATIVO
-            const coreRadius = 0.065 + pulseHarmonic * 0.022;
-            const glowRadius = 0.220 + pulseHarmonic * 0.070;
+            const coreRadius = (0.065 + pulseHarmonic * 0.022) * superchargeScale;
+            const glowRadius = (0.220 + pulseHarmonic * 0.070) * superchargeScale;
 
             this.laserCoreMat.opacity = THREE.MathUtils.damp(this.laserCoreMat.opacity, 0.96 + pulse1 * 0.04, 30.0, dt);
             this.laserGlowMat.opacity = THREE.MathUtils.damp(this.laserGlowMat.opacity, 0.88 + pulse2 * 0.10, 30.0, dt);
@@ -423,14 +424,14 @@ export class LaserCombat {
             this.laserGlowMesh.scale.set(glowRadius, actualDist, glowRadius);
 
             this.laserMuzzleFlare.position.copy(snoutPos);
-            const muzzleScale = 1.0 + pulseHarmonic * 0.35;
+            const muzzleScale = (1.0 + pulseHarmonic * 0.35) * superchargeScale;
             this.laserMuzzleFlare.scale.set(muzzleScale, muzzleScale, muzzleScale);
             this.muzzleFlareMat.opacity = 0.90 + pulse1 * 0.10;
 
             this.laserMat.opacity = 0.95;
             this.laserMat.color.setHex(0xffffff);
 
-            this.snoutMuzzleLight.intensity = THREE.MathUtils.damp(this.snoutMuzzleLight.intensity, 18.0 + pulseHarmonic * 8.0, 32.0, dt);
+            this.snoutMuzzleLight.intensity = THREE.MathUtils.damp(this.snoutMuzzleLight.intensity, (18.0 + pulseHarmonic * 8.0) * superchargeScale, 32.0, dt);
             this.snoutMuzzleLight.position.copy(snoutPos);
         } else {
             // MODO MIRA PASSIVO OU DISPARO BLOQUEADO
@@ -455,7 +456,7 @@ export class LaserCombat {
         }
 
         // Lâmpada de Impacto e Ponto Visual (Iluminação Dinâmica de Solda a Plasma)
-        const targetLightIntensity = this.isActuallyFiring ? (68.0 + pulseHarmonic * 26.0) : 0.0;
+        const targetLightIntensity = this.isActuallyFiring ? ((68.0 + pulseHarmonic * 26.0) * superchargeScale) : 0.0;
         this.aimTargetLight.intensity = THREE.MathUtils.damp(this.aimTargetLight.intensity, targetLightIntensity, 32.0, dt);
         this.aimTargetLight.position.copy(contactPoint).addScaledVector(contactNormal, 0.50);
 
@@ -465,7 +466,7 @@ export class LaserCombat {
 
         this.aimImpactRing.position.copy(contactPoint).addScaledVector(contactNormal, 0.03);
         this.aimImpactRing.quaternion.setFromUnitVectors(this.upVec, contactNormal);
-        const ringScale = this.isActuallyFiring ? (1.30 + pulseHarmonic * 0.28) : 1.0;
+        const ringScale = this.isActuallyFiring ? ((1.30 + pulseHarmonic * 0.28) * superchargeScale) : 1.0;
         this.aimImpactRing.scale.set(ringScale, ringScale, ringScale);
 
         this.aimCenterDot.position.copy(contactPoint).addScaledVector(contactNormal, 0.06);
@@ -476,7 +477,7 @@ export class LaserCombat {
             // [AJUSTE DE GLOW 1] — Clarão Central Incandescente (Tamanho ~1.4m a 1.9m)
             this.tipCoronaSprite.visible = true;
             this.tipCoronaSprite.position.copy(contactPoint).addScaledVector(contactNormal, 0.16);
-            const coronaScale = 1.90 + pulseHarmonic * 0.35 + Math.random() * 0.20;
+            const coronaScale = (1.90 + pulseHarmonic * 0.35 + Math.random() * 0.20) * superchargeScale;
             this.tipCoronaSprite.scale.set(coronaScale, coronaScale, coronaScale);
             this.tipCoronaMat.opacity = 0.95 + pulse1 * 0.05;
             this.tipCoronaSprite.material.rotation = elapsedTime * 1.6;
@@ -484,7 +485,7 @@ export class LaserCombat {
             // [AJUSTE DE GLOW 2] — Aura Volumétrica de Plasma Bloom (Tamanho ~3.0m a 4.0m)
             this.tipBloomSprite.visible = true;
             this.tipBloomSprite.position.copy(contactPoint).addScaledVector(contactNormal, 0.22);
-            const bloomScale = 4.00 + pulseHarmonic * 0.70 + Math.random() * 0.30;
+            const bloomScale = (4.00 + pulseHarmonic * 0.70 + Math.random() * 0.30) * superchargeScale;
             this.tipBloomSprite.scale.set(bloomScale, bloomScale, bloomScale);
             this.tipBloomMat.opacity = 0.58 + pulse2 * 0.12;
             this.tipBloomSprite.material.rotation = elapsedTime * -0.8;
@@ -515,7 +516,9 @@ export class LaserCombat {
 
         // 8. Emissão de Brasas e Faíscas de Solda em Arco (Welding Sparks Fountain)
         if (this.isActuallyFiring) {
-            const sparksToSpawn = Math.min(Math.floor(dt * 220) + (Math.random() < 0.7 ? 1 : 0), 9);
+            const spawnRate = isSupercharged ? 320 : 220;
+            const maxSparksPerFrame = isSupercharged ? 14 : 9;
+            const sparksToSpawn = Math.min(Math.floor(dt * spawnRate) + (Math.random() < 0.7 ? 1 : 0), maxSparksPerFrame);
             let spawned = 0;
             for (let i = 0; i < this.maxSparks && spawned < sparksToSpawn; i++) {
                 const s = this.sparks[i];

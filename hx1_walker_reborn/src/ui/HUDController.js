@@ -297,10 +297,28 @@ export class HUDController {
             if (this.labels.zoom) this.labels.zoom.innerText = `${Math.round(this.bot.walkerState.camDistance)}m`;
         });
 
+        // Alerta tático na barra de status
+        this.eventBus.on('ui:tacticalAlert', ({ text, color, duration = 3.0 }) => {
+            this.showTacticalAlert(text, color, duration);
+        });
+
         // Atualização contínua de telemetria a cada frame
         this.eventBus.on('bot:telemetry', (telemetry) => {
             this.updateTelemetry(telemetry);
         });
+    }
+
+    /**
+     * Exibe um alerta tático temporário na área de status central.
+     * @param {string} text Texto da mensagem
+     * @param {string} [color='#38bdf8'] Cor hex ou CSS
+     * @param {number} [duration=3.0] Duração em segundos
+     */
+    showTacticalAlert(text, color = '#38bdf8', duration = 3.0) {
+        if (!this.tacticalStatusText) return;
+        this.tacticalAlertTimer = duration;
+        this.tacticalAlertText = text;
+        this.tacticalAlertColor = color;
     }
 
     /**
@@ -341,38 +359,53 @@ export class HUDController {
 
         // 2. Atualizar Barra Gamer de Energia (EN)
         const safeEnergy = Math.max(0, energy);
-        const enRatio = THREE.MathUtils.clamp(safeEnergy / maxEnergy, 0.0, 1.0);
-        const enPercent = (enRatio * 100).toFixed(0);
+        const isSupercharged = safeEnergy > 100.0;
+        const enRatio = isSupercharged ? 1.0 : THREE.MathUtils.clamp(safeEnergy / maxEnergy, 0.0, 1.0);
+        const enPercent = isSupercharged ? Math.round(safeEnergy) : (enRatio * 100).toFixed(0);
 
         if (this.enFillBar) {
-            this.enFillBar.style.width = `${enPercent}%`;
+            this.enFillBar.style.width = isSupercharged ? '100%' : `${enPercent}%`;
         }
 
         if (this.enValueText) {
-            if (isEnergyDepleted) {
+            if (isSupercharged) {
+                this.enValueText.innerText = `⚡ ${enPercent}% [SUPERCHARGE]`;
+            } else if (isEnergyDepleted) {
                 this.enValueText.innerText = `${enPercent}% [RECARGA]`;
             } else {
                 this.enValueText.innerText = `${enPercent}%`;
             }
         }
 
-        // Trava de Laser Esgotado: pisca em vermelho alerta durante todo o processo de recarga até 100%
+        // Trava de Laser Esgotado ou Modo Supercharged
         if (this.enGaugeElem) {
-            if (isEnergyDepleted) {
+            if (isSupercharged) {
+                this.enGaugeElem.classList.add('supercharged');
+                this.enGaugeElem.classList.remove('depleted');
+            } else if (isEnergyDepleted) {
+                this.enGaugeElem.classList.remove('supercharged');
                 this.enGaugeElem.classList.add('depleted');
             } else {
+                this.enGaugeElem.classList.remove('supercharged');
                 this.enGaugeElem.classList.remove('depleted');
             }
         }
 
         // 3. Atualizar Status Tático Central
         if (this.tacticalStatusText) {
-            if (safeHp <= 0) {
+            if (this.tacticalAlertTimer && this.tacticalAlertTimer > 0) {
+                this.tacticalAlertTimer = Math.max(0, this.tacticalAlertTimer - 0.016);
+                this.tacticalStatusText.innerText = this.tacticalAlertText;
+                this.tacticalStatusText.style.color = this.tacticalAlertColor || '#38bdf8';
+            } else if (safeHp <= 0) {
                 this.tacticalStatusText.innerText = 'CRITICAL FAILURE';
                 this.tacticalStatusText.style.color = '#ef4444';
             } else if (hpRatio < 0.30) {
                 this.tacticalStatusText.innerText = 'WARNING: LOW INTEGRITY';
                 this.tacticalStatusText.style.color = '#ef4444';
+            } else if (isSupercharged) {
+                this.tacticalStatusText.innerText = '⚡ SUPERCHARGE ATIVO: 500% ENERGIA';
+                this.tacticalStatusText.style.color = '#00f0ff';
             } else if (isEnergyDepleted) {
                 this.tacticalStatusText.innerText = 'LASER OVERHEAT: RECHARGING';
                 this.tacticalStatusText.style.color = '#ef4444';

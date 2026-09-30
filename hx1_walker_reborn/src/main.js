@@ -22,6 +22,7 @@ import { HexaBot } from './bot/HexaBot.js';
 import { EnemyManager } from './combat/EnemyManager.js';
 import { TribalFX } from './combat/TribalFX.js';
 import { VictoryFX } from './combat/VictoryFX.js';
+import { SuperchargeManager } from './combat/SuperchargeManager.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { HUDController } from './ui/HUDController.js';
 import { ModelLoaderUI } from './ui/ModelLoaderUI.js';
@@ -61,6 +62,9 @@ function initApp() {
     // 8. Instanciar Gerador de Confetes e Luz Festiva da Dança da Vitória
     const victoryFX = new VictoryFX(engine.scene, globalEventBus);
 
+    // 8.1 Instanciar Gerenciador de Esferas de Supercharge
+    const superchargeManager = new SuperchargeManager(engine.scene, globalEventBus, terrainArena);
+
     // 9. Instanciar Controlador do Hexápode
     const hexaBot = new HexaBot(engine.scene, globalEventBus);
 
@@ -98,6 +102,9 @@ function initApp() {
 
         // Atualizar orquestrador de inimigos, cabines e bombas
         enemyManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, hexaBot.isDead);
+
+        // Atualizar esfera de plasma Supercharge nas torres e coleta
+        superchargeManager.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, inputManager.raycaster);
 
         // Atualizar efeitos visuais de fogo, fumaça e fogueira tribal
         tribalFX.update(dt, elapsedTime, hexaBot.robotMasterGroup.position, (x, z) => terrainArena.getTerrainHeight(x, z));

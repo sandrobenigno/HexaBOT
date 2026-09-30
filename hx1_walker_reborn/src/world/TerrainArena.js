@@ -84,6 +84,7 @@ export class TerrainArena {
         this.pillarsData = [];
         this.aimTargetableMeshes = [];
         this.boundaryBlocks = [];
+        this.towerTopPositions = [];
 
         // Precomputar valores constantes dos bumps para aceleração matemática
         this.bumps.forEach((b) => {
@@ -534,6 +535,7 @@ export class TerrainArena {
 
             this.decorativePillars.push(pGroup);
             this.pillarsData.push({ x: p.x, z: p.z, radius: p.radius });
+            this.towerTopPositions.push(new THREE.Vector3(p.x, p.baseY + p.height, p.z));
             this.arenaGroup.add(pGroup);
         });
     }
@@ -768,6 +770,9 @@ export class TerrainArena {
                 }
             });
 
+            // Registrar posição no topo da torre para spawn de supercharge
+            this.towerTopPositions.push(new THREE.Vector3(blockX, blockY + height + capH, blockZ));
+
             // Registrar colisor sólido no perímetro da arena
             this.pillarsData.push({
                 x: blockX,
@@ -965,5 +970,13 @@ export class TerrainArena {
             b.baseY = this.getBaseGroundMeshHeight(b.x, b.z);
             b.group.position.y = b.baseY + b.height * 0.5;
         });
+    }
+
+    /**
+     * Retorna a lista de posições 3D no topo das torres e monólitos da arena.
+     * @returns {Array<THREE.Vector3>}
+     */
+    getTowerTopPositions() {
+        return this.towerTopPositions;
     }
 }

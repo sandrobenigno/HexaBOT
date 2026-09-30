@@ -165,6 +165,10 @@ export class HexaBot {
         this.eventBus.on('bot:resetPosition', () => this.resetWalker());
         this.eventBus.on('bot:toggleXRay', () => this.toggleXRay());
         this.eventBus.on('combat:toggleLock', () => this.toggleTargetLock());
+        this.eventBus.on('combat:superchargeCollected', ({ energy }) => {
+            this.energy = energy || 500.0;
+            this.isEnergyDepleted = false;
+        });
         this.eventBus.on('combat:victory', () => this.triggerVictoryDance());
         this.eventBus.on('combat:continue', () => this.stopVictoryDance());
         this.eventBus.on('camera:orbit', ({ deltaAzimuth, deltaPitchDeg }) => {
@@ -1061,8 +1065,10 @@ export class HexaBot {
 
         // 9. Atualizar Sistema de Combate Laser (Bloqueia durante a Dança da Vitória, caso a energia zere ou se estiver morto)
         const canFireLaser = !this.isDead && !this.isVictoryDancing && !this.isEnergyDepleted && (this.energy > 0.0);
+        const isSupercharged = (this.energy > 100.0);
         const combatRes = this.combat.update(dt, elapsedTime, {
             isAimFiring: inputManager.isAimFiring && canFireLaser,
+            isSupercharged,
             bodyGroup: this.bodyGroup,
             aimWorldPoint: this.walkerState.aimWorldPoint,
             aimWorldNormal: this.walkerState.aimWorldNormal,
@@ -1081,11 +1087,14 @@ export class HexaBot {
                 this.isEnergyDepleted = true; // Trava o canhão até atingir 100% de carga
             }
         } else {
-            this.energy = Math.min(this.maxEnergy, this.energy + 15.0 * dt);
-            // Destrava quando a recarga for completa (100%)
-            if (this.isEnergyDepleted && this.energy >= this.maxEnergy) {
-                this.energy = this.maxEnergy;
-                this.isEnergyDepleted = false;
+            // Apenas regenera passivamente se a energia estiver abaixo da carga nominal (100%)
+            if (this.energy < this.maxEnergy) {
+                this.energy = Math.min(this.maxEnergy, this.energy + 15.0 * dt);
+                // Destrava quando a recarga for completa (100%)
+                if (this.isEnergyDepleted && this.energy >= this.maxEnergy) {
+                    this.energy = this.maxEnergy;
+                    this.isEnergyDepleted = false;
+                }
             }
         }
 

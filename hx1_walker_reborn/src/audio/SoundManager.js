@@ -254,6 +254,11 @@ export class SoundManager {
         this.eventBus.on('combat:continue', () => {
             this.stopFunkMusic(0.35);
         });
+
+        // Efeito sonoro de Coleta do Supercharge de Plasma
+        this.eventBus.on('combat:superchargeCollected', () => {
+            this.playSuperchargeCollectedSound(0.50);
+        });
     }
 
     /**
@@ -708,6 +713,33 @@ export class SoundManager {
         // Restaurar volume normal do ambiente de fundo
         if (this.ambientSound && this.ambientSound.isPlaying) {
             this.ambientSound.setVolume(0.35);
+        }
+    }
+
+    /**
+     * Reproduz o som estéreo de coleta do Supercharge com nó de áudio reutilizável (sem GC/travamentos).
+     * @param {number} [volume=0.50] Volume de reprodução
+     */
+    playSuperchargeCollectedSound(volume = 0.50) {
+        const buffer = this.audioBuffers.get('supercharge');
+        if (!buffer) return;
+
+        if (this.listener.context && this.listener.context.state === 'suspended') {
+            this.listener.context.resume();
+        }
+
+        try {
+            if (!this.superchargeSound) {
+                this.superchargeSound = new THREE.Audio(this.listener);
+                this.superchargeSound.setBuffer(buffer);
+            }
+            if (this.superchargeSound.isPlaying) {
+                this.superchargeSound.stop();
+            }
+            this.superchargeSound.setVolume(volume);
+            this.superchargeSound.play();
+        } catch (e) {
+            console.warn('[SoundManager] Erro ao reproduzir som de supercharge:', e);
         }
     }
 }
