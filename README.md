@@ -39,10 +39,9 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 | <kbd>Scroll do Mouse</kbd> | Ajuste de Zoom da câmera (50m a 100m) |
 | <kbd>P</kbd> | Pausar / Despausar a Simulação e Combate |
 | <kbd>H</kbd> | Abrir / Fechar Guia Central de Ajuda in-game (Pausa automática) |
-| <kbd>X</kbd> | Alternar Modo Raio-X Biomecânico |
 | <kbd>R</kbd> | Resetar Partida / Posição do Mech |
 | <kbd>Esc</kbd> | Fechar Janelas Modais / Pausar Jogo |
-| *(Oculto)* <kbd>O</kbd> | Exibir / Ocultar Painéis de Calibração e Sliders |
+| *(Oculto)* <kbd>O</kbd> | Exibir / Ocultar Painéis de Calibração, Sliders e Raio-X |
 
 ---
 
