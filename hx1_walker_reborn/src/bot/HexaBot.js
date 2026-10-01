@@ -475,8 +475,11 @@ export class HexaBot {
 
         this.walkerState.stanceSpread = this.activeBotManifest?.calibration?.stanceSpread ?? 1.10;
         this.walkerState.bodyHeight = this.activeBotManifest?.calibration?.defaultHeight ?? +(1.70 * canonicalRatio).toFixed(2);
-        this.walkerState.strideLength = +(2.00 * canonicalRatio).toFixed(2);
-        this.walkerState.stepHeight = +(0.50 * canonicalRatio).toFixed(2);
+        this.walkerState.pivotSpeed = this.activeBotManifest?.calibration?.pivotSpeed ?? 15.0;
+        const stepTurnDeg = this.activeBotManifest?.calibration?.stepTurnAngle ?? 16.0;
+        this.walkerState.stepTurnAngle = stepTurnDeg * (Math.PI / 180.0);
+        this.walkerState.strideLength = this.activeBotManifest?.calibration?.strideLength ?? +(2.00 * canonicalRatio).toFixed(2);
+        this.walkerState.stepHeight = this.activeBotManifest?.calibration?.stepHeight ?? +(0.50 * canonicalRatio).toFixed(2);
 
         this.bodyGroup.position.set(0, this.walkerState.bodyHeight, 0);
         this.bodyGroup.rotation.set(0, 0, 0);

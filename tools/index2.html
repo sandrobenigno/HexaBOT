@@ -841,6 +841,8 @@
                 <div class="telemetry-row"><span>Nó do Corpo:</span> <strong id="tel-body" style="color: #d2a8ff;">--</strong></div>
                 <div class="telemetry-row"><span>Altura Chassi (Y):</span> <strong id="tel-height">1.10 m</strong></div>
                 <div class="telemetry-row"><span>Elevação Coxa (γ):</span> <strong id="tel-coxa">20.0° (Auto)</strong></div>
+                <div class="telemetry-row"><span>Rumo Base:</span> <strong id="tel-heading" style="color: #38bdf8;">0.0°</strong></div>
+                <div class="telemetry-row"><span>Marcha Tripé:</span> <strong id="tel-gait" style="color: #34d399;">Apoio Total (Stance)</strong></div>
             </div>
         </div>
     </div>
@@ -910,6 +912,13 @@
             </div>
             <div class="modal-body">
                 <div class="shortcut-list">
+                    <div class="shortcut-row">
+                        <div class="shortcut-keys"><kbd>←</kbd> <kbd>→</kbd></div>
+                        <div class="shortcut-info">
+                            <strong>Pivoteamento de Âncoras (Marcha Tripé)</strong>
+                            <span>Gira a base sobre as âncoras no chão com alternância de grupos tripé A/B</span>
+                        </div>
+                    </div>
                     <div class="shortcut-row">
                         <div class="shortcut-keys"><kbd>H</kbd></div>
                         <div class="shortcut-info">
@@ -998,6 +1007,18 @@
         renderer.toneMappingExposure = 1.15;
         container.appendChild(renderer.domElement);
 
+        // --- PONTOS CANÔNICOS DE CONTATO DAS PATAS (HEXABOT TACTICAL ENGINE) ---
+        const CANONICAL_BASE_FOOTPRINTS = {
+            'FR': new THREE.Vector3(-5.8, 0.0,  3.2),
+            'MR': new THREE.Vector3(-6.4, 0.0, -0.4),
+            'BR': new THREE.Vector3(-5.2, 0.0, -4.0),
+            'FL': new THREE.Vector3( 5.8, 0.0,  3.2),
+            'ML': new THREE.Vector3( 6.4, 0.0, -0.4),
+            'BL': new THREE.Vector3( 5.2, 0.0, -4.0)
+        };
+
+        const _yAxis = new THREE.Vector3(0, 1, 0);
+
         // --- PARÂMETROS GLOBAIS E ESTADO ---
         const params = {
             bodyPosY: 1.10,
@@ -1010,6 +1031,12 @@
             adaptiveElevation: true,
             autoReachFallback: true,
             stanceSpread: 1.0,
+            // Pivoteamento e Marcha Tripé (Zero-Slip)
+            pivotSpeed: 15.0,
+            stepTurnAngle: 16.0,
+            stepHeight: 0.50,
+            baseHeadingDeg: 0.0,
+            // Auto Balanço
             autoSway: false,
             swaySpeed: 1.2,
             swayHeightCenter: 1.10,
@@ -1017,6 +1044,7 @@
             swayPitchRoll: 12.0,
             swayYaw: 15.0,
             swayShift: 0.35,
+            // Visibilidade
             xrayMode: false,
             showTelemetry: false,
             showFootTargets: false,
@@ -1025,6 +1053,26 @@
             envRotation: 0,
             ikEnabled: true,
             resetPose: () => resetPose()
+        };
+
+        // --- MÁQUINA DE ESTADOS DA MARCHA TRIPÉ (ZERO-SLIPPING) ---
+        const gaitState = {
+            isStepActive: false,
+            gaitProgress: 0.0,
+            activeTripodGroup: 0, // 0: Grupo A (FR, ML, BR) | 1: Grupo B (FL, MR, BL)
+            phaseStartHeading: 0.0,
+            phaseEndHeading: 0.0,
+            phaseStartPos: new THREE.Vector2(0, 0),
+            phaseEndPos: new THREE.Vector2(0, 0),
+            baseHeading: 0.0,
+            wantsTurn: false,
+            turnDir: 0
+        };
+
+        // Estado das teclas de navegação cursoras
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
         };
 
         const telemetryBox = document.getElementById('telemetry-box');
@@ -1517,9 +1565,24 @@
                 return parent.children.find(c => !c.userData?.isXrayHelper) || parent.children[0] || null;
             }
 
+            // Resetar estado de marcha e pivoteamento
+            gaitState.isStepActive = false;
+            gaitState.gaitProgress = 0.0;
+            gaitState.activeTripodGroup = 0;
+            gaitState.baseHeading = 0.0;
+            params.baseHeadingDeg = 0.0;
+
+            const rightSocketsCount = detectedSockets.filter(s => s.name.startsWith('D') || s.position.x <= 0).length || 3;
+
             detectedSockets.forEach((baseSocket, index) => {
                 const isRight = baseSocket.name.startsWith('D') || baseSocket.position.x <= 0;
                 const sideChar = isRight ? 'D' : 'E';
+
+                const legSubIndex = isRight ? index : (index - rightSocketsCount);
+                // Tripod Group alternado em X (Grupo 0: FR, ML, BR | Grupo 1: FL, MR, BL)
+                const tripodGroup = isRight
+                    ? (legSubIndex % 2 === 0 ? 0 : 1)
+                    : (legSubIndex % 2 === 0 ? 1 : 0);
 
                 // Escala de mundo do socket
                 const sVec = new THREE.Vector3();
@@ -1561,9 +1624,31 @@
                 sumL3 += l3Native;
                 validLegCount++;
 
+                const legId = baseSocket.name.startsWith('D0') ? `Pata_D${baseSocket.name.slice(2, 3) || index}` : (baseSocket.name.startsWith('E0') ? `Pata_E${baseSocket.name.slice(2, 3) || index}` : `Leg_${index}_${baseSocket.name}`);
+                const legReach = l1Native + l2Native + l3Native;
+                const canonicalRatio = legReach / 7.3219;
+
+                let baseOffset;
+                if (CANONICAL_BASE_FOOTPRINTS[legId]) {
+                    baseOffset = CANONICAL_BASE_FOOTPRINTS[legId].clone().multiplyScalar(canonicalRatio);
+                } else {
+                    const socketWorld = new THREE.Vector3();
+                    baseSocket.getWorldPosition(socketWorld);
+                    const relVec = new THREE.Vector3().subVectors(socketWorld, bodyGroup.position);
+                    const stanceReach = (l1Native * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (l2Native + l3Native));
+                    const dirH = new THREE.Vector2(relVec.x, relVec.z).normalize();
+                    baseOffset = new THREE.Vector3(relVec.x + dirH.x * stanceReach, 0.0, relVec.z + dirH.y * stanceReach);
+                }
+
+                const nominalOffset = baseOffset.clone().multiplyScalar(params.stanceSpread);
+                const currentTarget = nominalOffset.clone();
+                const stepStartTarget = nominalOffset.clone();
+                const stepEndTarget = nominalOffset.clone();
+
                 const legObj = {
-                    id: `Leg_${index}_${baseSocket.name}`,
+                    id: legId,
                     side: sideChar,
+                    group: tripodGroup,
                     baseNode: baseSocket,
                     j1Node,
                     j2Node,
@@ -1571,6 +1656,12 @@
                     L1: l1Native,
                     L2: l2Native,
                     L3: l3Native,
+                    baseOffset,
+                    nominalOffset,
+                    currentTarget,
+                    stepStartTarget,
+                    stepEndTarget,
+                    isStepping: false,
                     index
                 };
                 legs.push(legObj);
@@ -1704,40 +1795,28 @@
         // --- CÁLCULO PROCEDURAL DE ÂNCORAS RADIAIS ($P_3$) NO CHÃO ---
         function calculateProceduralFootTargets() {
             footTargets.length = 0;
-            bodyGroup.getWorldPosition(_tempVecBc);
-            bodyGroup.getWorldQuaternion(_qInvBody);
-            _qInvBody.invert();
+            const bodyCenter = new THREE.Vector3(params.bodyPosX, 0, params.bodyPosZ);
 
             legs.forEach((leg, index) => {
-                leg.baseNode.getWorldPosition(_tempVec1);
-
-                // Vetor do socket relativo ao corpo no espaço neutro sem rotação
-                const relVec = new THREE.Vector3().subVectors(_tempVec1, _tempVecBc);
-                relVec.applyQuaternion(_qInvBody);
-
-                const stanceReach = (leg.L1 * Math.cos(THREE.MathUtils.degToRad(35)) + 0.65 * (leg.L2 + leg.L3)) * params.stanceSpread;
-
-                const dirH = new THREE.Vector2(relVec.x, relVec.z);
-                if (dirH.length() < 0.01) {
-                    const angle = (index / legs.length) * Math.PI * 2;
-                    dirH.set(Math.sin(angle), Math.cos(angle));
-                } else {
-                    dirH.normalize();
+                if (leg.baseOffset) {
+                    leg.nominalOffset.copy(leg.baseOffset).multiplyScalar(params.stanceSpread);
                 }
 
-                const baseDist = new THREE.Vector2(relVec.x, relVec.z).length();
-                const totalRadialDist = baseDist + stanceReach;
+                if (!gaitState.isStepActive && !gaitState.wantsTurn) {
+                    const nominalWorld = _tempVec1.copy(leg.nominalOffset)
+                        .applyAxisAngle(_yAxis, gaitState.baseHeading)
+                        .add(bodyCenter);
+                    nominalWorld.y = 0.0;
 
-                const targetWorldPos = new THREE.Vector3(
-                    _tempVecBc.x + dirH.x * totalRadialDist,
-                    0.0,
-                    _tempVecBc.z + dirH.y * totalRadialDist
-                );
+                    leg.currentTarget.copy(nominalWorld);
+                    leg.stepStartTarget.copy(nominalWorld);
+                    leg.stepEndTarget.copy(nominalWorld);
+                }
 
-                footTargets.push(targetWorldPos);
+                footTargets.push(leg.currentTarget);
 
                 if (targetMeshes[index]) {
-                    targetMeshes[index].position.copy(targetWorldPos);
+                    targetMeshes[index].position.copy(leg.currentTarget);
                 }
             });
         }
@@ -1789,6 +1868,10 @@
                     coxaElevation: parseFloat(params.coxaElevation.toFixed(2)),
                     adaptiveElevation: params.adaptiveElevation,
                     autoReachFallback: params.autoReachFallback,
+                    pivotSpeed: parseFloat(params.pivotSpeed.toFixed(2)),
+                    stepTurnAngle: parseFloat(params.stepTurnAngle.toFixed(2)),
+                    stepHeight: parseFloat(params.stepHeight.toFixed(4)),
+                    strideLength: parseFloat((+(2.00 * ((currentAvgL1 + currentAvgL2 + currentAvgL3) / 7.3219))).toFixed(4)),
                     bodyPosX: parseFloat(params.bodyPosX.toFixed(4)),
                     bodyPosZ: parseFloat(params.bodyPosZ.toFixed(4)),
                     bodyPitch: parseFloat(params.bodyPitch.toFixed(2)),
@@ -2108,10 +2191,141 @@
             updateAllGuiDisplays();
         }
 
+        // --- MÁQUINA DE ESTADOS DA MARCHA TRIPÉ (PIVOTEAMENTO ZERO-SLIP) ---
+        function updateGait(dt) {
+            if (legs.length === 0) return;
+
+            // 1. Leitura das Teclas Cursoras (Esquerda / Direita)
+            let wantsTurn = false;
+            let turnDir = 0;
+            if (keys.ArrowLeft && !keys.ArrowRight) {
+                wantsTurn = true;
+                turnDir = 1; // Giro anti-horário (Esquerda / +Yaw)
+            } else if (keys.ArrowRight && !keys.ArrowLeft) {
+                wantsTurn = true;
+                turnDir = -1; // Giro horário (Direita / -Yaw)
+            }
+            gaitState.wantsTurn = wantsTurn;
+            gaitState.turnDir = turnDir;
+
+            const isGaitActive = gaitState.wantsTurn || gaitState.isStepActive;
+
+            if (isGaitActive) {
+                // 2. Iniciar um novo meio-passo de tripé se não houver um em andamento
+                if (!gaitState.isStepActive) {
+                    gaitState.isStepActive = true;
+                    gaitState.gaitProgress = 0.0;
+
+                    // Rumo e Posição de Início do Passo
+                    gaitState.phaseStartPos.set(params.bodyPosX, params.bodyPosZ);
+                    gaitState.phaseStartHeading = gaitState.baseHeading;
+
+                    // Calcular Rumo de Fim do Passo
+                    let deltaH = 0;
+                    if (gaitState.wantsTurn) {
+                        const stepAngleRad = THREE.MathUtils.degToRad(params.stepTurnAngle);
+                        deltaH = gaitState.turnDir * stepAngleRad;
+                    }
+                    gaitState.phaseEndHeading = gaitState.phaseStartHeading + deltaH;
+                    gaitState.phaseEndPos.set(params.bodyPosX, params.bodyPosZ);
+
+                    // Inicializar Pernas que vão executar Swing (no ar)
+                    const activeGroup = gaitState.activeTripodGroup;
+                    const endCenter = _tempVecBc.set(gaitState.phaseEndPos.x, 0, gaitState.phaseEndPos.y);
+
+                    legs.forEach((leg) => {
+                        if (leg.group === activeGroup) {
+                            leg.isStepping = true;
+                            leg.stepStartTarget.copy(leg.currentTarget);
+
+                            const nominalLanding = _tempVec1.copy(leg.nominalOffset)
+                                .applyAxisAngle(_yAxis, gaitState.phaseEndHeading)
+                                .add(endCenter);
+                            nominalLanding.y = 0.0;
+
+                            leg.stepEndTarget.copy(nominalLanding);
+                        } else {
+                            leg.isStepping = false;
+                        }
+                    });
+                }
+
+                // 3. Cadência do Passo modulada dinamicamente pelo slider de pivô
+                const stepCadence = 2.0 * (params.pivotSpeed / 4.0);
+                gaitState.gaitProgress += dt * stepCadence;
+                const t = THREE.MathUtils.clamp(gaitState.gaitProgress, 0, 1);
+                const smoothT = THREE.MathUtils.smoothstep(t, 0, 1);
+
+                // 4. O CORPO GIRA IMPULSIONADO PELAS ÂNCORAS DE APOIO (STANCE)
+                gaitState.baseHeading = THREE.MathUtils.lerp(
+                    gaitState.phaseStartHeading,
+                    gaitState.phaseEndHeading,
+                    smoothT
+                );
+                params.baseHeadingDeg = THREE.MathUtils.radToDeg(gaitState.baseHeading);
+
+                // 5. Atualizar Posição das Patas no Espaço Global
+                const activeGroup = gaitState.activeTripodGroup;
+                legs.forEach((leg, index) => {
+                    const isSwingLeg = (leg.group === activeGroup);
+
+                    if (isSwingLeg) {
+                        // Swing Leg: Arco parabólico suave no ar em direção ao pouso
+                        leg.currentTarget.lerpVectors(leg.stepStartTarget, leg.stepEndTarget, smoothT);
+                        const lift = Math.sin(t * Math.PI) * params.stepHeight;
+                        leg.currentTarget.y = lift;
+                    } else {
+                        // Stance Leg: 100% TRAVADA NA COORDENADA DO SOLO (SEM LERP / Zero Slipping!)
+                        leg.currentTarget.y = 0.0;
+                    }
+
+                    if (footTargets[index]) {
+                        footTargets[index].copy(leg.currentTarget);
+                    }
+                    if (targetMeshes[index]) {
+                        targetMeshes[index].position.copy(leg.currentTarget);
+                    }
+                });
+
+                // 6. Finalizar o Meio-Ciclo do Passo (Touchdown)
+                if (gaitState.gaitProgress >= 1.0) {
+                    gaitState.isStepActive = false;
+                    gaitState.gaitProgress = 0.0;
+                    legs.forEach((leg, index) => {
+                        if (leg.group === activeGroup) {
+                            leg.currentTarget.copy(leg.stepEndTarget);
+                            leg.isStepping = false;
+                            if (footTargets[index]) footTargets[index].copy(leg.currentTarget);
+                            if (targetMeshes[index]) targetMeshes[index].position.copy(leg.currentTarget);
+                        }
+                    });
+                    // Alternar grupo de tripé ativo para o próximo ciclo
+                    gaitState.activeTripodGroup = (gaitState.activeTripodGroup === 0) ? 1 : 0;
+                }
+            } else {
+                // Modo Estático (Totalmente Parado): Todas as 6 patas firmes no chão (Zero Slipping!)
+                legs.forEach((leg, index) => {
+                    leg.isStepping = false;
+                    leg.currentTarget.y = 0.0;
+                    if (footTargets[index]) footTargets[index].copy(leg.currentTarget);
+                    if (targetMeshes[index]) targetMeshes[index].position.copy(leg.currentTarget);
+                });
+            }
+        }
+
         function resetPose() {
             params.autoSway = false;
             const totalReach = (currentAvgL1 + currentAvgL2 + currentAvgL3) || 7.5;
             const recommendedHeight = +(Math.max(0.8, Math.min(3.5, totalReach * 0.18))).toFixed(2);
+
+            gaitState.isStepActive = false;
+            gaitState.gaitProgress = 0.0;
+            gaitState.activeTripodGroup = 0;
+            gaitState.baseHeading = 0.0;
+            params.baseHeadingDeg = 0.0;
+            params.pivotSpeed = 15.0;
+            params.stepTurnAngle = 16.0;
+            params.stepHeight = 0.50;
 
             params.bodyPosY = recommendedHeight;
             params.swayHeightCenter = recommendedHeight;
@@ -2135,6 +2349,52 @@
             updateAllGuiDisplays();
         }
 
+        // --- CARREGAR VALORES PADRÃO CANÔNICOS (SEM MANIFESTO) ---
+        function loadProportionalDefaults() {
+            params.autoSway = false;
+            const totalReach = (currentAvgL1 + currentAvgL2 + currentAvgL3) || 7.3219;
+            const canonicalRatio = totalReach / 7.3219;
+
+            const defaultH = +(1.70 * canonicalRatio).toFixed(2);
+            params.bodyPosY = defaultH;
+            params.swayHeightCenter = defaultH;
+            params.bodyPosX = 0.0;
+            params.bodyPosZ = 0.0;
+            params.bodyPitch = 0.0;
+            params.bodyRoll = 0.0;
+            params.bodyYaw = 0.0;
+            params.stanceSpread = 1.10;
+            params.coxaElevation = 20.0;
+            params.adaptiveElevation = true;
+            params.autoReachFallback = true;
+
+            // Parâmetros de marcha e pivoteamento padrão do jogo
+            params.pivotSpeed = 15.0;
+            params.stepTurnAngle = 16.0;
+            params.stepHeight = +(0.50 * canonicalRatio).toFixed(2);
+
+            gaitState.isStepActive = false;
+            gaitState.gaitProgress = 0.0;
+            gaitState.activeTripodGroup = 0;
+            gaitState.baseHeading = 0.0;
+            params.baseHeadingDeg = 0.0;
+
+            // Recalcular baseOffsets proporcionais canônicos para cada perna
+            legs.forEach(leg => {
+                if (CANONICAL_BASE_FOOTPRINTS[leg.id]) {
+                    leg.baseOffset = CANONICAL_BASE_FOOTPRINTS[leg.id].clone().multiplyScalar(canonicalRatio);
+                }
+            });
+
+            bodyGroup.position.set(0.0, defaultH, 0.0);
+            bodyGroup.rotation.set(0, 0, 0);
+            bodyGroup.updateMatrixWorld(true);
+
+            calculateProceduralFootTargets();
+            if (typeof updateHexaBOT === 'function') updateHexaBOT();
+            updateAllGuiDisplays();
+        }
+
         // --- LOOP DE ATUALIZAÇÃO ---
         function updateHexaBOT() {
             if (legs.length === 0) return;
@@ -2149,7 +2409,7 @@
 
             const pitchRad = THREE.MathUtils.degToRad(params.bodyPitch);
             const rollRad = THREE.MathUtils.degToRad(params.bodyRoll);
-            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw);
+            const yawRad = THREE.MathUtils.degToRad(params.bodyYaw) + gaitState.baseHeading;
             bodyGroup.rotation.set(pitchRad, yawRad, rollRad, 'YXZ');
             bodyGroup.updateMatrixWorld(true);
 
@@ -2186,9 +2446,26 @@
                 bodySpineMesh.geometry.setPositions(pos);
             }
 
-
-            document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
-            document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}${fallbackCount > 0 ? ` [${fallbackCount} em Fallback]` : ''}`;
+            if (params.showTelemetry) {
+                document.getElementById('tel-height').innerText = `${params.bodyPosY.toFixed(2)} m`;
+                document.getElementById('tel-coxa').innerText = `${currentElevation.toFixed(1)}° ${params.adaptiveElevation ? '(Auto)' : '(Manual)'}${fallbackCount > 0 ? ` [${fallbackCount} em Fallback]` : ''}`;
+                const elTelHeading = document.getElementById('tel-heading');
+                if (elTelHeading) {
+                    const deg = (THREE.MathUtils.radToDeg(gaitState.baseHeading) % 360);
+                    const normDeg = deg < 0 ? deg + 360 : deg;
+                    elTelHeading.innerText = `${normDeg.toFixed(1)}°`;
+                }
+                const elTelGait = document.getElementById('tel-gait');
+                if (elTelGait) {
+                    if (gaitState.isStepActive) {
+                        elTelGait.innerText = `Passo ${gaitState.activeTripodGroup === 0 ? 'Tripé A' : 'Tripé B'} (${(gaitState.gaitProgress * 100).toFixed(0)}%)`;
+                        elTelGait.style.color = '#fbbf24';
+                    } else {
+                        elTelGait.innerText = 'Apoio Total (Stance)';
+                        elTelGait.style.color = '#34d399';
+                    }
+                }
+            }
         }
 
         // --- GUI DE CONTROLES LIL-GUI ---
@@ -2204,6 +2481,15 @@
             const fLab = gui.addFolder('📦 Importador');
             fLab.add({ openLab: () => document.getElementById('importer-modal').classList.add('active') }, 'openLab').name('Carregar Outro Modelo');
             fLab.add(params, 'stanceSpread', 0.5, 2.0, 0.05).name('Abertura Patas').listen().onChange(calculateProceduralFootTargets);
+
+            const fGait = gui.addFolder('🔄 Marcha Tripé & Pivoteamento (Zero-Slip)');
+            fGait.add(params, 'pivotSpeed', 2.0, 30.0, 0.5).name('Velocidade Pivô').listen();
+            fGait.add(params, 'stepTurnAngle', 5.0, 35.0, 1.0).name('Ângulo Passo (°)').listen();
+            fGait.add(params, 'stepHeight', 0.1, 1.5, 0.05).name('Altura Passo (m)').listen();
+            fGait.add(params, 'baseHeadingDeg').name('Rumo Base (°)').listen().disable();
+            fGait.add({ pivotLeft: () => { keys.ArrowLeft = true; setTimeout(() => { keys.ArrowLeft = false; }, 200); } }, 'pivotLeft').name('◀ Passo Esquerda (←)');
+            fGait.add({ pivotRight: () => { keys.ArrowRight = true; setTimeout(() => { keys.ArrowRight = false; }, 200); } }, 'pivotRight').name('▶ Passo Direita (→)');
+            fGait.open();
 
             const fPosture = gui.addFolder('Postura & Curva Adaptativa');
             const cAdapt = fPosture.add(params, 'adaptiveElevation').name('Curva Adaptativa (Auto)').listen();
@@ -2260,6 +2546,7 @@
             fVis.close();
 
             gui.add(params, 'resetPose').name('↺ Resetar Postura (Tecla R)');
+            gui.add({ loadProportionalDefaults }, 'loadProportionalDefaults').name('⚠️ Carregar Valores Padrão (Sem Manifesto)');
 
             const fExport = gui.addFolder('💾 Exportar Modelo Calibrado');
             fExport.add({ exportGLB: () => exportBotGLB() }, 'exportGLB').name('📦 Baixar .glb (Com Manifesto)');
@@ -2396,7 +2683,13 @@
         // --- ATALHOS DE TECLADO ---
         window.addEventListener('keydown', (e) => {
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
-            if (e.key === 'h' || e.key === 'H') {
+            if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft') {
+                keys.ArrowLeft = true;
+                e.preventDefault();
+            } else if (e.code === 'ArrowRight' || e.key === 'ArrowRight') {
+                keys.ArrowRight = true;
+                e.preventDefault();
+            } else if (e.key === 'h' || e.key === 'H') {
                 toggleHelpModal();
             } else if (e.key === 'Escape') {
                 toggleHelpModal(false);
@@ -2413,11 +2706,25 @@
             }
         });
 
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft') {
+                keys.ArrowLeft = false;
+            } else if (e.code === 'ArrowRight' || e.key === 'ArrowRight') {
+                keys.ArrowRight = false;
+            }
+        });
+
+        window.addEventListener('blur', () => {
+            keys.ArrowLeft = false;
+            keys.ArrowRight = false;
+        });
+
         // --- ANIMAÇÃO E RENDER LOOP ---
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
 
+            const dt = Math.min(clock.getDelta(), 0.1);
             const elapsedTime = clock.getElapsedTime();
 
             if (params.autoSway) {
@@ -2429,6 +2736,9 @@
                 params.bodyPosX = Math.sin(t * 0.7) * params.swayShift;
                 params.bodyPosZ = Math.cos(t * 0.5) * params.swayShift;
             }
+
+            // Atualização da marcha tripé com pivoteamento de âncoras (Zero-Slip)
+            updateGait(dt);
 
             if (params.ikEnabled) {
                 updateHexaBOT();
