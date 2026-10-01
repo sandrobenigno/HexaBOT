@@ -1,8 +1,9 @@
 # 🎮 HX1 Walker: Reborn — Manual Tático & Arquitetura do Jogo
 
-[![Jogar Online](https://img.shields.io/badge/Jogar%20Online-GitHub%20Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)
+[![Jogar Online](https://img.shields.io/badge/Jogar_Online-GitHub_Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=for-the-badge&logo=three.js)](https://threejs.org/)
-[![Web Audio API](https://img.shields.io/badge/Web%20Audio-3D%20Spatial-blue?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+[![Web Audio API](https://img.shields.io/badge/Web_Audio_API-3D_Spatial-blue?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo real para navegador, construído sobre um motor de **Cinemática Inversa Vetorial (IK 3-DoF)** e renderização PBR em Three.js.
 
@@ -33,46 +34,52 @@ O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo r
 
 ### 1. Sistema de Marcha & Cinemática Inversa (IK 3-DoF)
 * **Zero Slipping:** As pernas em apoio (*Stance*) permanecem estritamente ancoradas nas coordenadas mundiais enquanto o corpo translada e gira.
-* **Auto-Reach Fallback (Tempo Constante O(1)):** Solução analítica para relaxamento de perna caso o alvo de apoio exceda o alcance nominal ($L_2 + L_3$):
-  $$
-  K = \frac{D_{\text{total}}^2 + L_1^2 - (L_2 + L_3)^2}{2 L_1 D_{\text{total}}} \implies \gamma_{\text{fallback}} = \theta_{\text{target}} + \arccos\Big(\text{clamp}\big(K, -1, 1\big)\Big)
-  $$
-* **Mira Dual-Tier:** Para desvios angulares $|\Delta\theta| \le 25^\circ$, apenas o tronco torce com IK; para $|\Delta\theta| > 25^\circ$, o mech executa passos de pivô dinâmicos preservando o alinhamento de tiro.
+* **Auto-Reach Fallback (Tempo Constante O(1)):** Solução analítica para relaxamento de perna caso o alvo de apoio exceda o alcance nominal (L2 + L3):
+
+$$
+K = \frac{D_{\text{total}}^2 + L_1^2 - (L_2 + L_3)^2}{2 L_1 D_{\text{total}}} \implies \gamma_{\text{fallback}} = \theta_{\text{target}} + \arccos\Big(\text{clamp}\big(K, -1, 1\big)\Big)
+$$
+
+* **Mira Dual-Tier:** Para desvios angulares |Δθ| ≤ 25°, apenas o tronco torce com IK; para |Δθ| > 25°, o mech executa passos de pivô dinâmicos preservando o alinhamento de tiro.
 
 ---
 
 ### 2. Canhão de Plasma Térmico & Efeitos de Faísca
-* **FOV Dinâmico de 60° ($\pm 30^\circ$):** Disparo liberado no cone de visada frontal:
-  $$
-  \cos(\theta) = \frac{\vec{D}_{\text{aim}} \cdot \vec{F}_{\text{body}}}{\|\vec{D}_{\text{aim}}\| \|\vec{F}_{\text{body}}\|} \ge \cos(30^\circ) \approx 0.866
-  $$
+* **FOV Dinâmico de 60° (±30°):** Disparo liberado no cone de visada frontal:
+
+$$
+\cos(\theta) = \frac{\vec{D}_{\text{aim}} \cdot \vec{F}_{\text{body}}}{\|\vec{D}_{\text{aim}}\| \|\vec{F}_{\text{body}}\|} \ge \cos(30^\circ) \approx 0.866
+$$
+
 * **Raycast de Colisão Real:** O feixe colide com o primeiro objeto sólido no trajeto (inimigos, cabines, blocos, pilares ou relevo).
 * **Welding Sparks Fountain (Brasas de Solda em Arco):** Partículas volumétricas incandescentes projetadas em trajetórias parabólicas balísticas com amortecimento de quique no solo:
-  $$
-  \vec{r}(t) = \vec{r}_0 + \vec{v}_0 t - \frac{1}{2} g t^2 \hat{j} \quad \text{onde} \quad g = 19.5\,\text{m/s}^2
-  $$
-  Inclui rastro inercial de movimento da mira e glow multi-camadas (clarão central, aura estendida e luz pontual ciano de $28\text{m}$).
+
+$$
+\vec{r}(t) = \vec{r}_0 + \vec{v}_0 t - \frac{1}{2} g t^2 \hat{j} \quad \text{onde} \quad g = 19.5\,\text{m/s}^2
+$$
+
+  Inclui rastro inercial de movimento da mira e glow multi-camadas (clarão central, aura estendida e luz pontual ciano de 28m).
 
 ---
 
 ### 3. Esferas de Plasma: Supercharge (Azul) & Regeneração (Vermelha)
-* **⚡ Supercharge ($500\%$ de Laser):** Surge no topo dos 28 monólitos fortaleza perimétricos com um feixe vertical sinalizador (*Sky Beacon*). Mirar na esfera e pressionar <kbd>Espaço</kbd> concede $500\%$ de potência e feixe volumétrico hiper-ampliado.
-* **❤️ Regeneração / Cura ($+500\text{ HP}$):** Surge no topo dos 16 tambores de colisão da arena com feixe vertical vermelho. Mirar na esfera e pressionar <kbd>Espaço</kbd> restaura instantaneamente $+500\text{ HP}$ de integridade estrutural com feedback sonoro espacial dedicado.
-* **Ciclos de Respawn Contínuos:** Ambos os orbes rotacionam de posição se não coletados em $14\text{s}$ e ressurgem dinamicamente ($3$ a $6\text{s}$) após a coleta.
+* **⚡ Supercharge (500% de Laser):** Surge no topo dos 28 monólitos fortaleza perimétricos com um feixe vertical sinalizador (*Sky Beacon*). Mirar na esfera e pressionar <kbd>Espaço</kbd> concede 500% de potência e feixe volumétrico hiper-ampliado.
+* **❤️ Regeneração / Cura (+500 HP):** Surge no topo dos 16 tambores de colisão da arena com feixe vertical vermelho. Mirar na esfera e pressionar <kbd>Espaço</kbd> restaura instantaneamente +500 HP de integridade estrutural com feedback sonoro espacial dedicado.
+* **Ciclos de Respawn Contínuos:** Ambos os orbes rotacionam de posição se não coletados em 14s e ressurgem dinamicamente (3 a 6s) após a coleta.
 
 ---
 
 ### 4. Inimigos, Cabines & Rituais
 * **Cabines Geradoras (Spawners):** Estruturas blindadas modulares com 4 portas que geram joaninhas robóticas periodicamente.
-* **Joaninhas Mecânicas (LadyBUG):** Perseguem o mech em bando, realizam animação procedural de abertura de carapaça, depositam minas de proximidade de $3\text{s}$ e possuem algoritmo de dispersão física suave (*Anti-Nesting*).
+* **Joaninhas Mecânicas (LadyBUG):** Perseguem o mech em bando, realizam animação procedural de abertura de carapaça, depositam minas de proximidade de 3s e possuem algoritmo de dispersão física suave (*Anti-Nesting*).
 * **Derrota (Cena Tribal):** Se o mech for destruído, os robôs inimigos formam um círculo de dança ao redor dos destroços com fogueira física e cântico tribal.
 * **Vitória (Comemoração & Confetes):** Ao aniquilar todas as cabines e inimigos, o mech executa coreografia comemorativa com trilha dedicada e chuva de confetes neon.
 
 ---
 
 ### 5. Cenário & Sky Dome
-* **Arena Tática PBR:** Terreno de $300\text{m} \times 300\text{m}$ com dunas, degraus sólidos escaláveis e blend contínuo entre o piso ladrilhado e o relevo rochoso.
-* **Sky Dome ($R = 148\text{m}$):** Abóbada hemisférica com shader atmosférico contendo campo de força hexagonal (*honeycomb*), anéis de latitude, varredura de radar ascendente e estrelas.
+* **Arena Tática PBR:** Terreno de 300m × 300m com dunas, degraus sólidos escaláveis e blend contínuo entre o piso ladrilhado e o relevo rochoso.
+* **Sky Dome (R = 148m):** Abóbada hemisférica com shader atmosférico contendo campo de força hexagonal (*honeycomb*), anéis de latitude, varredura de radar ascendente e estrelas.
 * **Contenção Esférica de Câmera:** Impede atravessamento da abóbada mantendo distância segura e foco ininterrupto no robô.
 
 ---

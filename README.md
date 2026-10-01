@@ -1,8 +1,8 @@
 # 🤖 HexaBOT — Tactical Mech Engine & IK Research
 
-[![GitHub Pages](https://img.shields.io/badge/Demo%20Online-GitHub%20Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/)
+[![GitHub Pages](https://img.shields.io/badge/Demo_Online-GitHub_Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/)
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=for-the-badge&logo=three.js)](https://threejs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 O **HexaBOT** é um projeto de pesquisa e simulação em computação gráfica 3D focado em **Cinemática Inversa Vetorial (IK 3-DoF)**, auto-rigging procedural e locomoção para robôs hexápodes. 
 
