@@ -19,14 +19,14 @@ A plataforma inclui uma suíte completa de ferramentas de calibração, diagnós
 
 ### Principais Destaques do Gameplay
 * **Marcha Tripé com IK Analítico 3-DoF:** Solucionador trigonométrico fechado com algoritmo *Auto-Reach Fallback* em tempo constante O(1), garantindo contato firme das 6 patas sem escorregamento (*Zero Slipping*) sob qualquer aclive ou desnível.
-* **Sistema de Combate & Laser de Plasma:** Disparo livre com restrição de FOV ($\pm 30^\circ$), recuo mecânico do chassi (*Shooting Shift*), colisão física por raycasting e *Welding Sparks Fountain* (faíscas incandescentes em arco parabólico com rastro inercial e glow multi-camadas).
-* **Esferas de Plasma (Supercharge & Healing):**
-  - **⚡ Supercharge (Azul):** Surge nos 28 monólitos perimétricos (sinalizador de 160m). Concede **500% de energia** e feixe ampliado.
-  - **❤️ Regeneração / Healing (Vermelha):** Surge nos 16 tambores/cilindros de colisão da arena. Restaura **+500 HP** de vida com áudio estéreo dedicado (`healing.mp3`).
-  - Coleta analítica ultrarrápida ($0\text{ms}$) ao mirar na orbe e pressionar <kbd>Espaço</kbd>.
-* **Inteligência Artificial & Inimigos:** Cabines geradoras modulares com 4 portas de saída e robôs joaninhas (*LadyBUG*) com animação procedural via *Shape Keys* (`DROP`), minas de proximidade de 3s e comportamento de bando com separação física (*Anti-Nesting*).
-* **Cenário Sci-Fi & Sky Dome:** Arena de $300\text{m} \times 300\text{m}$ cercada por 28 monólitos fortaleza e abóbada hemisférica de $148\text{m}$ com shader procedural GLSL (campo de força hexagonal *honeycomb*, radar ascendente e estrelas), com trava de câmera esférica anti-atravessamento.
-* **Áudio Espacial & Modulação Dinâmica:** Áudio posicional 3D via *Web Audio API*, modulação contínua do pitch dos servomotores pelo movimento do tronco, envelope ADSR no canhão laser e trilhas comemorativas para a vitória (dança funk com confetes) e derrota (ritual tribal com fogueira).
+* **Sistema de Combate & Laser de Plasma:** Disparo contínuo no campo de visão ($\pm 30^\circ$), recuo mecânico do chassi, colisão física por raycast e brasas de solda incandescentes em arcos parabólicos com rastro inercial.
+* **Esferas de Plasma (Supercharge & Cura):**
+  - **⚡ Supercharge (Azul):** Surge nos 28 monólitos perimétricos. Concede **500% de energia** e feixe ampliado.
+  - **❤️ Regeneração / Cura (Vermelha):** Surge nos 16 tambores de colisão da arena. Restaura **+500 HP** de integridade estrutural.
+  - Coleta imediata ao alinhar a mira com a orbe e pressionar <kbd>Espaço</kbd>.
+* **Inteligência Artificial & Inimigos:** Cabines geradoras com 4 portas de saída e robôs joaninhas (*LadyBUG*) com minas de proximidade e dispersão anti-aglomeração (*Anti-Nesting*).
+* **Cenário Sci-Fi & Sky Dome:** Arena de $300\text{m} \times 300\text{m}$ cercada por monólitos fortaleza e abóbada hemisférica de $148\text{m}$ com campo de força hexagonal e varredura de radar.
+* **Áudio Espacial & Modulação Dinâmica:** Áudio posicional 3D com modulação contínua do pitch dos servomotores pelo esforço do chassi e trilhas comemorativas para vitória e derrota.
 
 ### ⌨️ Controles do Jogo (HX1 Walker: Reborn)
 

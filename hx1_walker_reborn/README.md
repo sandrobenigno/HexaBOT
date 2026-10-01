@@ -55,24 +55,24 @@ O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo r
 
 ---
 
-### 3. Esferas de Plasma: Supercharge (Azul) & Regeneração / Healing (Vermelha)
-* **⚡ Supercharge ($500\%$ de Laser):** Surge no topo dos 28 monólitos fortaleza perimétricos com feixe vertical de $160\text{m}$ (*Sky Beacon Beam*). Mira + <kbd>Espaço</kbd> concede $500\%$ de energia e feixe hiper-ampliado.
-* **❤️ Regeneração / Healing ($+500\text{ HP}$):** Surge no topo dos 16 tambores/cilindros de colisão da arena com feixe vertical vermelho. Mira + <kbd>Espaço</kbd> restaura instantaneamente $+500\text{ HP}$ de integridade com áudio estéreo dedicado (`healing.mp3`).
-* **Ciclos de Respawn Contínuos:** Ambos os orbes possuem rotação automática se não coletados em $14\text{s}$ e ressurgem rapidamente ($3$ a $6\text{s}$) após a coleta.
+### 3. Esferas de Plasma: Supercharge (Azul) & Regeneração (Vermelha)
+* **⚡ Supercharge ($500\%$ de Laser):** Surge no topo dos 28 monólitos fortaleza perimétricos com um feixe vertical sinalizador (*Sky Beacon*). Mirar na esfera e pressionar <kbd>Espaço</kbd> concede $500\%$ de potência e feixe volumétrico hiper-ampliado.
+* **❤️ Regeneração / Cura ($+500\text{ HP}$):** Surge no topo dos 16 tambores de colisão da arena com feixe vertical vermelho. Mirar na esfera e pressionar <kbd>Espaço</kbd> restaura instantaneamente $+500\text{ HP}$ de integridade estrutural com feedback sonoro espacial dedicado.
+* **Ciclos de Respawn Contínuos:** Ambos os orbes rotacionam de posição se não coletados em $14\text{s}$ e ressurgem dinamicamente ($3$ a $6\text{s}$) após a coleta.
 
 ---
 
 ### 4. Inimigos, Cabines & Rituais
-* **Cabines Spawners:** Estruturas cúbicas com 4 portas que geram joaninhas robóticas periodicamente.
-* **Joaninhas (LadyBUG):** Perseguem o mech, realizam animação de elevação de pernas via ShapeKey `DROP`, depositam bombas de proximidade de $3\text{s}$ e possuem separação física suave anti-aglomeração (*Anti-Nesting*).
-* **Derrota (Cena Tribal):** Se o mech for destruído, as joaninhas formam um círculo de dança ao redor da carcaça com fogueira física e canto tribal.
-* **Vitória (Dança do Funk & Confetes):** Ao aniquilar todos os inimigos, o mech executa coreografia comemorativa ao som de funk e confetes coloridos neon.
+* **Cabines Geradoras (Spawners):** Estruturas blindadas modulares com 4 portas que geram joaninhas robóticas periodicamente.
+* **Joaninhas Mecânicas (LadyBUG):** Perseguem o mech em bando, realizam animação procedural de abertura de carapaça, depositam minas de proximidade de $3\text{s}$ e possuem algoritmo de dispersão física suave (*Anti-Nesting*).
+* **Derrota (Cena Tribal):** Se o mech for destruído, os robôs inimigos formam um círculo de dança ao redor dos destroços com fogueira física e cântico tribal.
+* **Vitória (Comemoração & Confetes):** Ao aniquilar todas as cabines e inimigos, o mech executa coreografia comemorativa com trilha dedicada e chuva de confetes neon.
 
 ---
 
 ### 5. Cenário & Sky Dome
-* **Arena PBR:** Terreno de $300\text{m} \times 300\text{m}$ com blend procedural de normais (azulejo vs. areia), dunas e blocos escaláveis.
-* **Sky Dome ($R = 148\text{m}$):** Abóbada hemisférica com shader GLSL atmosférico contendo campo de força hexagonal (*honeycomb*), anéis de latitude, varredura de radar ascendente e estrelas.
+* **Arena Tática PBR:** Terreno de $300\text{m} \times 300\text{m}$ com dunas, degraus sólidos escaláveis e blend contínuo entre o piso ladrilhado e o relevo rochoso.
+* **Sky Dome ($R = 148\text{m}$):** Abóbada hemisférica com shader atmosférico contendo campo de força hexagonal (*honeycomb*), anéis de latitude, varredura de radar ascendente e estrelas.
 * **Contenção Esférica de Câmera:** Impede atravessamento da abóbada mantendo distância segura e foco ininterrupto no robô.
 
 ---
