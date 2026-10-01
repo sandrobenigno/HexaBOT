@@ -1,6 +1,6 @@
 # 🔬 Laboratório de Cinemática Inversa (IK) & Ferramentas HexaBOT
 
-[![GitHub Pages](https://img.shields.io/badge/Demo_Online-GitHub_Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/)
+[![GitHub Pages](https://img.shields.io/badge/Demo_Online-GitHub_Pages-0284c7?style=for-the-badge&logo=github&logoColor=white)](https://sandrobenigno.github.io/HexaBOT/)
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=for-the-badge&logo=three.js)](https://threejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 

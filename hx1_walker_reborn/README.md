@@ -1,8 +1,8 @@
 # 🎮 HX1 Walker: Reborn — Manual Tático & Arquitetura do Jogo
 
-[![Jogar Online](https://img.shields.io/badge/Jogar_Online-GitHub_Pages-38bdf8?style=for-the-badge&logo=github)](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)
+[![Jogar Online](https://img.shields.io/badge/Jogar_Online-GitHub_Pages-0284c7?style=for-the-badge&logo=github&logoColor=white)](https://sandrobenigno.github.io/HexaBOT/hx1_walker_reborn/index.html)
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=for-the-badge&logo=three.js)](https://threejs.org/)
-[![Web Audio API](https://img.shields.io/badge/Web_Audio_API-3D_Spatial-blue?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+[![Web Audio API](https://img.shields.io/badge/Web_Audio_API-Spatial_3D-7c3aed?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo real para navegador, construído sobre um motor de **Cinemática Inversa Vetorial (IK 3-DoF)** e renderização PBR em Three.js.
