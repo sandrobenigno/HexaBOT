@@ -33,7 +33,7 @@ O **HX1 Walker: Reborn** é um simulador tático de combate robótico em tempo r
 ## ⚡ Mecânicas Principais
 
 ### 1. Sistema de Marcha & Cinemática Inversa (IK 3-DoF)
-* **Zero Slipping:** As pernas em apoio (*Stance*) permanecem estritamente ancoradas nas coordenadas mundiais enquanto o corpo translada e gira.
+* **Zero Slipping:** As pernas em apoio (*Stance*) permanecem estritamente ancoradas nas coordenadas globais enquanto o corpo translada e gira.
 * **Auto-Reach Fallback (Tempo Constante O(1)):** Solução analítica para relaxamento de perna caso o alvo de apoio exceda o alcance nominal (L2 + L3):
 
 $$

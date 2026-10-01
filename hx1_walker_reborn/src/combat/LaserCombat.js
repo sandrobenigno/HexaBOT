@@ -308,7 +308,7 @@ export class LaserCombat {
         fovDelta = Math.atan2(Math.sin(fovDelta), Math.cos(fovDelta));
         const isWithinFOV = Math.abs(fovDelta) <= THREE.MathUtils.degToRad(30.0);
 
-        // 2. Posição mundial do focinho/canhão
+        // 2. Posição global do focinho/canhão
         const snoutPos = this.tempSnout.set(0, 0.4, 0.6).applyMatrix4(bodyGroup.matrixWorld);
 
         this.laserRayDir.subVectors(aimWorldPoint, snoutPos);

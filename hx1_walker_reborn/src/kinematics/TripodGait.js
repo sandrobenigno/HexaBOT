@@ -176,7 +176,7 @@ export class TripodGait {
                 smoothT
             );
 
-            // 4. Atualizar Posição das Patas no Espaço Mundial
+            // 4. Atualizar Posição das Patas no Espaço Global
             const activeGroup = this.activeTripodGroup;
             legs.forEach((leg) => {
                 const isSwingLeg = (leg.group === activeGroup);

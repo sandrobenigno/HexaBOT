@@ -66,7 +66,7 @@ export class IKSolver {
     /**
      * Resolve a cinemática inversa de uma perna, posicionando os ossos J1, J2 e J3 com orientação Zero-Bank.
      * @param {import('./Leg.js').Leg} leg Instância da perna a ser resolvida
-     * @param {THREE.Vector3} worldTarget Posição mundial da âncora do pé (T)
+     * @param {THREE.Vector3} worldTarget Posição global da âncora do pé (T)
      * @param {number} currentElevationDeg Elevação adaptativa nominal da coxa (graus)
      * @param {boolean} [isXrayVisible=false] Se as linhas de esqueleto devem ser atualizadas
      */
@@ -74,7 +74,7 @@ export class IKSolver {
         const { baseNode, j1Node, j2Node, j3Node, L1, L2, L3, lineMesh, side } = leg;
         if (!baseNode || !j1Node || !j2Node || !j3Node) return;
 
-        // 1. Posição Mundial do Quadril (P0)
+        // 1. Posição Global do Quadril (P0)
         baseNode.getWorldPosition(_P0);
 
         // 2. Direção horizontal do Quadril até a Âncora no chão (dirH)

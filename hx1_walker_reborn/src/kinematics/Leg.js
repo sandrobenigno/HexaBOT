@@ -81,7 +81,7 @@ export class Leg {
         this.targetMesh = targetMesh;
         this.lineMesh = lineMesh;
 
-        // Coordenadas mundiais de apoio e interpolação de passos
+        // Coordenadas globais de apoio e interpolação de passos
         this.currentTarget = new THREE.Vector3();
         this.stepStartTarget = new THREE.Vector3();
         this.stepEndTarget = new THREE.Vector3();
